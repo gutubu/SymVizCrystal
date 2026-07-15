@@ -166,7 +166,7 @@ function CrystalCanvas({
     if (display.cell) {
       context.save();
       context.lineWidth = 1;
-      context.strokeStyle = "rgba(145, 175, 205, .42)";
+      context.strokeStyle = "rgba(71, 85, 105, .34)";
       context.setLineDash([4, 7]);
       for (const [from, to] of edges) {
         const a = project(corners[from]);
@@ -187,7 +187,7 @@ function CrystalCanvas({
         const span = Math.max(structure.cell.a, structure.cell.b, structure.cell.c) * 0.78;
         const a = project(vectorAdd(center, vectorScale(axisCart, -span)));
         const b = project(vectorAdd(center, vectorScale(axisCart, span)));
-        context.strokeStyle = "rgba(255, 186, 73, .92)";
+        context.strokeStyle = "rgba(183, 121, 31, .88)";
         context.lineWidth = 2;
         context.setLineDash([9, 6]);
         context.beginPath();
@@ -195,7 +195,7 @@ function CrystalCanvas({
         context.lineTo(b.x, b.y);
         context.stroke();
         context.setLineDash([]);
-        context.fillStyle = "#ffc45a";
+        context.fillStyle = "#b7791f";
         context.beginPath();
         context.arc(b.x, b.y, 4, 0, Math.PI * 2);
         context.fill();
@@ -212,8 +212,8 @@ function CrystalCanvas({
           vectorAdd(center, vectorAdd(vectorScale(u, span), vectorScale(v, span))),
           vectorAdd(center, vectorAdd(vectorScale(u, -span), vectorScale(v, span))),
         ].map(project);
-        context.fillStyle = "rgba(255, 184, 73, .10)";
-        context.strokeStyle = "rgba(255, 190, 80, .7)";
+        context.fillStyle = "rgba(183, 121, 31, .08)";
+        context.strokeStyle = "rgba(183, 121, 31, .62)";
         context.lineWidth = 1;
         context.beginPath();
         context.moveTo(plane[0].x, plane[0].y);
@@ -223,12 +223,12 @@ function CrystalCanvas({
         context.stroke();
       } else if (selectedOperation.kind === "inversion") {
         const point = project(center);
-        context.strokeStyle = "#ffc45a";
+        context.strokeStyle = "#b7791f";
         context.lineWidth = 2;
         context.beginPath();
         context.arc(point.x, point.y, 9, 0, Math.PI * 2);
         context.stroke();
-        context.fillStyle = "#ffc45a";
+        context.fillStyle = "#b7791f";
         context.beginPath();
         context.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
         context.fill();
@@ -250,8 +250,8 @@ function CrystalCanvas({
         const b = project(atomB.cart);
         const gradient = context.createLinearGradient(a.x, a.y, b.x, b.y);
         gradient.addColorStop(0, elementStyle(atomA.element).color);
-        gradient.addColorStop(0.48, "rgba(147, 163, 180, .62)");
-        gradient.addColorStop(0.52, "rgba(147, 163, 180, .62)");
+        gradient.addColorStop(0.48, "rgba(100, 116, 139, .52)");
+        gradient.addColorStop(0.52, "rgba(100, 116, 139, .52)");
         gradient.addColorStop(1, elementStyle(atomB.element).color);
         context.strokeStyle = gradient;
         context.globalAlpha = 0.64;
@@ -269,8 +269,8 @@ function CrystalCanvas({
       const source = project(fractToCart(selectedAtom.source.fract, structure.cell));
       const target = project(selectedAtom.cart);
       context.save();
-      context.strokeStyle = "rgba(105, 231, 255, .78)";
-      context.fillStyle = "#69e7ff";
+      context.strokeStyle = "rgba(15, 139, 141, .76)";
+      context.fillStyle = "#0f8b8d";
       context.lineWidth = 1.5;
       context.setLineDash([5, 5]);
       context.beginPath();
@@ -310,7 +310,7 @@ function CrystalCanvas({
         );
         gradient.addColorStop(0, "#ffffff");
         gradient.addColorStop(0.18, style.color);
-        gradient.addColorStop(1, "#111827");
+        gradient.addColorStop(1, "#475569");
         context.fillStyle = gradient;
         context.shadowColor = `${style.color}88`;
         context.shadowBlur = index === selectedAtomIndex ? 19 : 8;
@@ -318,12 +318,12 @@ function CrystalCanvas({
         context.arc(projection.x, projection.y, radius, 0, Math.PI * 2);
         context.fill();
         context.shadowBlur = 0;
-        context.strokeStyle = index === selectedAtomIndex ? "#ffffff" : "rgba(255,255,255,.28)";
+        context.strokeStyle = index === selectedAtomIndex ? "#0f6f72" : "rgba(71,85,105,.24)";
         context.lineWidth = index === selectedAtomIndex ? 2.2 : 0.7;
         context.stroke();
 
         if (display.labels && structure.atoms.length <= 120) {
-          context.fillStyle = index === selectedAtomIndex ? "#ffffff" : "rgba(219, 232, 244, .82)";
+          context.fillStyle = index === selectedAtomIndex ? "#0f5f62" : "rgba(51, 65, 85, .82)";
           context.font = `${index === selectedAtomIndex ? 650 : 500} 10px ui-monospace, monospace`;
           context.fillText(atom.label, projection.x + radius + 4, projection.y - radius - 1);
         }
