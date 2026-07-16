@@ -51,6 +51,11 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /projectedLength = maximumLength \* screenFraction/);
   assert.match(page, /沿笛卡尔正/);
   assert.match(page, /沿晶格正/);
+  assert.match(page, /元素图例/);
+  assert.match(page, /type="color"/);
+  assert.match(page, /axisAppearance\.lineWidth/);
+  assert.match(page, /字母字体/);
+  assert.match(page, /恢复坐标轴默认外观/);
   assert.doesNotMatch(page, /rotation\.current\.pitch/);
   assert.match(parser, /_space_group_symop_operation_xyz/);
   assert.match(parser, /_atom_site_fract_x/);

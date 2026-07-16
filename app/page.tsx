@@ -33,6 +33,10 @@ type ViewPreset = "x" | "y" | "z" | "a" | "b" | "c";
 type AtomFocusMode = "none" | "fade" | "isolate";
 type AtomFocus = { mode: AtomFocusMode; sourceLabel: string | null };
 type AtomContextMenu = { x: number; y: number; atomIndex: number };
+type ElementAppearance = Record<string, { color: string; scale: number }>;
+type AxisFont = "mono" | "sans" | "serif";
+type AxisAppearance = { lineWidth: number; length: number; font: AxisFont; fontSize: number };
+type AppearanceMenu = { kind: "element"; element: string; x: number; y: number } | { kind: "axis"; x: number; y: number };
 
 const defaultDisplay: DisplaySettings = {
   atoms: true,
@@ -42,6 +46,19 @@ const defaultDisplay: DisplaySettings = {
   symmetry: true,
   completeMolecules: true,
 };
+
+const defaultAxisAppearance: AxisAppearance = { lineWidth: 1.5, length: 25, font: "mono", fontSize: 10 };
+const axisFontFamilies: Record<AxisFont, string> = {
+  mono: "ui-monospace, SFMono-Regular, Consolas, monospace",
+  sans: '"Segoe UI", "PingFang SC", sans-serif',
+  serif: 'Georgia, "Times New Roman", serif',
+};
+
+function resolvedElementStyle(element: string, appearance: ElementAppearance) {
+  const base = elementStyle(element);
+  const custom = appearance[element];
+  return { ...base, color: custom?.color ?? base.color, scale: custom?.scale ?? 1 };
+}
 
 function prettyGroup(value: string) {
   const subscript: Record<string, string> = { "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆" };
@@ -253,8 +270,11 @@ function CrystalCanvas({
   selectedAtomIndex,
   selectedOperation,
   atomFocus,
+  elementAppearance,
+  axisAppearance,
   onSelectAtom,
   onRequestContextMenu,
+  onRequestAppearanceMenu,
   onClearAtomFocus,
 }: {
   structure: CrystalStructure;
@@ -262,18 +282,28 @@ function CrystalCanvas({
   selectedAtomIndex: number;
   selectedOperation: SymmetryOperation;
   atomFocus: AtomFocus;
+  elementAppearance: ElementAppearance;
+  axisAppearance: AxisAppearance;
   onSelectAtom: (index: number) => void;
   onRequestContextMenu: (menu: AtomContextMenu) => void;
+  onRequestAppearanceMenu: (menu: AppearanceMenu) => void;
   onClearAtomFocus: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const projectedAtoms = useRef<ProjectedAtom[]>([]);
+  const axesHitRegion = useRef({ x: 0, y: 0, radius: 42 });
   const rotation = useRef<Quaternion>(initialViewQuaternion());
   const zoom = useRef(1);
   const drag = useRef({ active: false, x: 0, y: 0, moved: 0 });
   const [orthographic, setOrthographic] = useState(false);
   const [viewPreset, setViewPreset] = useState<ViewPreset | null>(null);
   const [viewVersion, setViewVersion] = useState(0);
+
+  const legendElements = useMemo(() => {
+    const counts = new Map<string, number>();
+    structure.atoms.forEach((atom) => counts.set(atom.element, (counts.get(atom.element) ?? 0) + 1));
+    return [...counts.entries()].sort(([a], [b]) => hillElementOrder(a, b, counts.has("C")));
+  }, [structure]);
 
   const redraw = useCallback(() => setViewVersion((version) => version + 1), []);
 
@@ -489,12 +519,12 @@ function CrystalCanvas({
         context.stroke();
 
         context.lineWidth = lineWidth;
-        context.strokeStyle = shadeHex(elementStyle(atomA.element).color, 0.06);
+        context.strokeStyle = shadeHex(resolvedElementStyle(atomA.element, elementAppearance).color, 0.06);
         context.beginPath();
         context.moveTo(a.x, a.y);
         context.lineTo(midpoint.x, midpoint.y);
         context.stroke();
-        context.strokeStyle = shadeHex(elementStyle(atomB.element).color, 0.06);
+        context.strokeStyle = shadeHex(resolvedElementStyle(atomB.element, elementAppearance).color, 0.06);
         context.beginPath();
         context.moveTo(midpoint.x, midpoint.y);
         context.lineTo(b.x, b.y);
@@ -538,8 +568,8 @@ function CrystalCanvas({
       for (const { atom, index, projection } of atoms) {
         const focused = matchesFocus(atom);
         if (atomFocus.mode === "isolate" && !focused) continue;
-        const style = elementStyle(atom.element);
-        const radius = Math.max(4.5, Math.min(13.5, style.radius * projection.factor * worldScale * 0.9));
+        const style = resolvedElementStyle(atom.element, elementAppearance);
+        const radius = Math.max(3.2, Math.min(22, style.radius * style.scale * projection.factor * worldScale * 0.9));
         hitTargets.push({ index, x: projection.x, y: projection.y, radius: radius + 5, depth: projection.depth });
         context.save();
         context.globalAlpha = atomFocus.mode === "fade" && !focused ? 0.12 : 1;
@@ -578,6 +608,7 @@ function CrystalCanvas({
     projectedAtoms.current = hitTargets;
 
     const axesOrigin = { x: width - 54, y: height - 48 };
+    axesHitRegion.current = { x: axesOrigin.x, y: axesOrigin.y, radius: axisAppearance.length + 18 };
     const axes: Array<{ vector: Vec3; color: string; label: string }> = [
       { vector: normalize(aVector), color: "#ff647c", label: "a" },
       { vector: normalize(bVector), color: "#65df91", label: "b" },
@@ -589,7 +620,7 @@ function CrystalCanvas({
     context.fill();
     for (const axis of axes) {
       const rotated = rotate(vectorAdd(center, vectorScale(axis.vector, maxCell * 0.35)));
-      const maximumLength = 25;
+      const maximumLength = axisAppearance.length;
       const spatialLength = Math.hypot(...rotated) || 1;
       const screenNorm = Math.hypot(rotated[0], rotated[1]);
       const screenFraction = Math.min(1, screenNorm / spatialLength);
@@ -598,8 +629,8 @@ function CrystalCanvas({
       let labelY = axesOrigin.y - 5;
       context.strokeStyle = axis.color;
       context.fillStyle = axis.color;
-      context.lineWidth = 1.5;
-      context.font = "600 10px ui-monospace, monospace";
+      context.lineWidth = axisAppearance.lineWidth;
+      context.font = `600 ${axisAppearance.fontSize}px ${axisFontFamilies[axisAppearance.font]}`;
 
       if (screenNorm > 1e-6 && projectedLength > 0.3) {
         const x = axesOrigin.x + (rotated[0] / screenNorm) * projectedLength;
@@ -626,7 +657,7 @@ function CrystalCanvas({
       if (faceOnStrength > 0.04) {
         context.save();
         context.globalAlpha = Math.min(1, faceOnStrength * 1.45);
-        const markerRadius = 1.7 + faceOnStrength * 2.5;
+        const markerRadius = (1.7 + faceOnStrength * 2.5) * Math.max(0.72, axisAppearance.length / 25);
         context.beginPath();
         context.arc(axesOrigin.x, axesOrigin.y, markerRadius, 0, Math.PI * 2);
         context.stroke();
@@ -648,7 +679,7 @@ function CrystalCanvas({
       context.fillStyle = axis.color;
       context.fillText(axis.label, labelX, labelY);
     }
-  }, [structure, display, selectedAtomIndex, selectedOperation, atomFocus, orthographic, viewVersion]);
+  }, [structure, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion]);
 
   useEffect(() => {
     const resize = new ResizeObserver(() => redraw());
@@ -717,6 +748,17 @@ function CrystalCanvas({
     redraw();
   }
 
+  function requestElementAppearance(element: string, event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    onRequestAppearanceMenu({
+      kind: "element",
+      element,
+      x: event.type === "contextmenu" ? event.clientX : rect.right + 6,
+      y: event.type === "contextmenu" ? event.clientY : rect.top,
+    });
+  }
+
   return (
     <div className="viewer-stage">
       <canvas
@@ -730,6 +772,14 @@ function CrystalCanvas({
         onPointerCancel={() => { drag.current.active = false; }}
         onContextMenu={(event) => {
           event.preventDefault();
+          const rect = event.currentTarget.getBoundingClientRect();
+          const canvasX = event.clientX - rect.left;
+          const canvasY = event.clientY - rect.top;
+          const axes = axesHitRegion.current;
+          if (Math.hypot(canvasX - axes.x, canvasY - axes.y) <= axes.radius) {
+            onRequestAppearanceMenu({ kind: "axis", x: event.clientX, y: event.clientY });
+            return;
+          }
           const target = atomAt(event.clientX, event.clientY, event.currentTarget);
           if (!target) return;
           onSelectAtom(target.index);
@@ -778,7 +828,26 @@ function CrystalCanvas({
           </div>
         </div>
       </div>
-      <div className="gesture-hint">拖拽旋转 · 滚轮缩放 · 左键选择 · 右键聚焦</div>
+      <div className="element-legend" aria-label="元素颜色图例">
+        <div className="element-legend-head"><span>元素图例</span><small>单击或右键编辑</small></div>
+        <div className="element-legend-items">
+          {legendElements.map(([element, count]) => {
+            const style = resolvedElementStyle(element, elementAppearance);
+            return <button
+              type="button"
+              key={element}
+              title={`编辑 ${element} 的颜色和原子大小`}
+              onClick={(event) => requestElementAppearance(element, event)}
+              onContextMenu={(event) => requestElementAppearance(element, event)}
+            >
+              <i style={{ "--legend-color": style.color } as React.CSSProperties} />
+              <strong>{element}</strong>
+              <small>{count}</small>
+            </button>;
+          })}
+        </div>
+      </div>
+      <div className="gesture-hint">拖拽旋转 · 滚轮缩放 · 左键选择 · 右键聚焦 / 编辑坐标轴</div>
     </div>
   );
 }
@@ -813,12 +882,17 @@ export default function Home() {
   const [dragActive, setDragActive] = useState(false);
   const [atomFocus, setAtomFocus] = useState<AtomFocus>({ mode: "none", sourceLabel: null });
   const [contextMenu, setContextMenu] = useState<AtomContextMenu | null>(null);
+  const [elementAppearance, setElementAppearance] = useState<ElementAppearance>({});
+  const [axisAppearance, setAxisAppearance] = useState<AxisAppearance>(defaultAxisAppearance);
+  const [appearanceMenu, setAppearanceMenu] = useState<AppearanceMenu | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const appearanceMenuRef = useRef<HTMLDivElement>(null);
 
   const selectedAtom = structure.atoms[Math.min(selectedAtomIndex, structure.atoms.length - 1)];
   const selectedOperation = structure.operations.find((operation) => operation.id === selectedOperationId) ?? structure.operations[0];
   const calculatorOperation = structure.operations.find((operation) => operation.id === calculatorOperationId) ?? structure.operations[0];
+  const currentElementColor = (element: string) => resolvedElementStyle(element, elementAppearance).color;
 
   const filteredOperations = useMemo(() => {
     if (operationFilter === "all") return structure.operations;
@@ -864,10 +938,17 @@ export default function Home() {
 
   useEffect(() => {
     const closeMenu = (event: PointerEvent) => {
-      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(null);
+      const target = event.target as Node;
+      if (!contextMenuRef.current?.contains(target) && !appearanceMenuRef.current?.contains(target)) {
+        setContextMenu(null);
+        setAppearanceMenu(null);
+      }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setContextMenu(null);
+      if (event.key === "Escape") {
+        setContextMenu(null);
+        setAppearanceMenu(null);
+      }
     };
     document.addEventListener("pointerdown", closeMenu);
     document.addEventListener("keydown", closeOnEscape);
@@ -895,6 +976,7 @@ export default function Home() {
         : ["0", "0", "0"]);
       setAtomFocus({ mode: "none", sourceLabel: null });
       setContextMenu(null);
+      setAppearanceMenu(null);
       setNotice(`已解析 ${next.atoms.length} 个等价原子与 ${next.operations.length} 个对称操作`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "CIF 解析失败，请检查文件格式");
@@ -985,7 +1067,7 @@ export default function Home() {
           <div className="formula-card">
             <div><span>化学式 · 常规 / Hill 顺序</span><strong>{structure.formula}</strong></div>
             <div className="composition-dots">
-              {composition.map(([element, count]) => <span key={element} style={{ "--element-color": elementStyle(element).color } as React.CSSProperties}><i />{element}<small>{count}</small></span>)}
+              {composition.map(([element, count]) => <span key={element} style={{ "--element-color": currentElementColor(element) } as React.CSSProperties}><i />{element}<small>{count}</small></span>)}
             </div>
           </div>
           <div className="cell-grid">
@@ -1027,12 +1109,25 @@ export default function Home() {
           selectedAtomIndex={selectedAtomIndex}
           selectedOperation={selectedOperation}
           atomFocus={atomFocus}
+          elementAppearance={elementAppearance}
+          axisAppearance={axisAppearance}
           onSelectAtom={selectAtom}
-          onRequestContextMenu={(menu) => setContextMenu({
-            ...menu,
-            x: Math.max(10, Math.min(window.innerWidth - 286, menu.x)),
-            y: Math.max(10, Math.min(window.innerHeight - 236, menu.y)),
-          })}
+          onRequestContextMenu={(menu) => {
+            setAppearanceMenu(null);
+            setContextMenu({
+              ...menu,
+              x: Math.max(10, Math.min(window.innerWidth - 286, menu.x)),
+              y: Math.max(10, Math.min(window.innerHeight - 236, menu.y)),
+            });
+          }}
+          onRequestAppearanceMenu={(menu) => {
+            setContextMenu(null);
+            setAppearanceMenu({
+              ...menu,
+              x: Math.max(10, Math.min(window.innerWidth - 306, menu.x)),
+              y: Math.max(10, Math.min(window.innerHeight - (menu.kind === "axis" ? 380 : 285), menu.y)),
+            });
+          }}
           onClearAtomFocus={() => setAtomFocus({ mode: "none", sourceLabel: null })}
         />
 
@@ -1093,7 +1188,7 @@ export default function Home() {
             ))}
           </div>
           {selectedAtom && <div className="selected-detail">
-            <div className="detail-head"><span style={{ "--atom-color": elementStyle(selectedAtom.element).color } as React.CSSProperties}><i />{selectedAtom.label}</span><small>当前映射</small></div>
+            <div className="detail-head"><span style={{ "--atom-color": currentElementColor(selectedAtom.element) } as React.CSSProperties}><i />{selectedAtom.label}</span><small>当前映射</small></div>
             <div className="equation">
               <code>{coordinateText(selectedAtom.source.fract)}</code><b>— 操作 {selectedOperation.id} →</b><code>{coordinateText(transformedSelected as Vec3)}</code>
             </div>
@@ -1109,7 +1204,7 @@ export default function Home() {
           <div className="trace-intro"><span>点击任一原子</span><p>查看它从不对称单元中的哪个位点、经由哪项操作生成。</p></div>
           {structure.atoms.slice(0, 240).map((atom, index) => (
             <button type="button" key={atom.id} className={selectedAtomIndex === index ? "atom-row active" : "atom-row"} onClick={() => selectAtom(index)}>
-              <span className="atom-swatch" style={{ "--atom-color": elementStyle(atom.element).color } as React.CSSProperties}>{atom.element}</span>
+              <span className="atom-swatch" style={{ "--atom-color": currentElementColor(atom.element) } as React.CSSProperties}>{atom.element}</span>
               <span><strong>{atom.label}</strong><small>{coordinateText(atom.fract)}</small></span>
               <em>操作 {atom.operationIds[0]}</em>
             </button>
@@ -1199,6 +1294,78 @@ export default function Home() {
       </aside>
 
       {dragActive && <div className="drop-overlay"><div><span>⇣</span><strong>释放以解析 CIF</strong><small>文件只在本机浏览器中处理</small></div></div>}
+      {appearanceMenu && appearanceMenu.kind === "element" && (() => {
+        const element = appearanceMenu.element;
+        const style = resolvedElementStyle(element, elementAppearance);
+        return <div
+          ref={appearanceMenuRef}
+          className="appearance-context-menu"
+          role="dialog"
+          aria-label={`${element} 元素外观设置`}
+          style={{ left: appearanceMenu.x, top: appearanceMenu.y }}
+        >
+          <div className="appearance-menu-head">
+            <i style={{ "--preview-color": style.color } as React.CSSProperties} />
+            <span><strong>{element} 元素外观</strong><small>所有 {element} 原子与相连化学键实时更新</small></span>
+          </div>
+          <label className="appearance-color-row">
+            <span>元素颜色</span>
+            <input type="color" value={style.color} onChange={(event) => setElementAppearance((current) => ({
+              ...current,
+              [element]: { color: event.target.value, scale: current[element]?.scale ?? 1 },
+            }))} />
+            <code>{style.color.toUpperCase()}</code>
+          </label>
+          <label className="appearance-range-row">
+            <span>原子球大小</span><output>{Math.round(style.scale * 100)}%</output>
+            <input type="range" min="0.55" max="1.8" step="0.05" value={style.scale} onChange={(event) => setElementAppearance((current) => ({
+              ...current,
+              [element]: { color: current[element]?.color ?? elementStyle(element).color, scale: Number(event.target.value) },
+            }))} />
+          </label>
+          <button type="button" className="appearance-reset" onClick={() => setElementAppearance((current) => {
+            const next = { ...current };
+            delete next[element];
+            return next;
+          })}>恢复 {element} 默认外观</button>
+        </div>;
+      })()}
+      {appearanceMenu && appearanceMenu.kind === "axis" && <div
+        ref={appearanceMenuRef}
+        className="appearance-context-menu axis-appearance-menu"
+        role="dialog"
+        aria-label="坐标轴外观设置"
+        style={{ left: appearanceMenu.x, top: appearanceMenu.y }}
+      >
+        <div className="appearance-menu-head axis-head">
+          <div className="axis-miniature"><i /><b /><em /></div>
+          <span><strong>坐标轴外观</strong><small>修改右下角 a、b、c 晶格方向标记</small></span>
+        </div>
+        <div className="axis-preview" style={{ fontFamily: axisFontFamilies[axisAppearance.font], fontSize: `${axisAppearance.fontSize}px` }}>
+          <span>a</span><span>b</span><span>c</span>
+        </div>
+        <label className="appearance-range-row">
+          <span>轴线粗细</span><output>{axisAppearance.lineWidth.toFixed(1)} px</output>
+          <input type="range" min="0.6" max="4" step="0.1" value={axisAppearance.lineWidth} onChange={(event) => setAxisAppearance((current) => ({ ...current, lineWidth: Number(event.target.value) }))} />
+        </label>
+        <label className="appearance-range-row">
+          <span>整体大小</span><output>{axisAppearance.length} px</output>
+          <input type="range" min="14" max="52" step="1" value={axisAppearance.length} onChange={(event) => setAxisAppearance((current) => ({ ...current, length: Number(event.target.value) }))} />
+        </label>
+        <label className="appearance-select-row">
+          <span>字母字体</span>
+          <select value={axisAppearance.font} onChange={(event) => setAxisAppearance((current) => ({ ...current, font: event.target.value as AxisFont }))}>
+            <option value="mono">等宽字体</option>
+            <option value="sans">无衬线字体</option>
+            <option value="serif">衬线字体</option>
+          </select>
+        </label>
+        <label className="appearance-range-row">
+          <span>字母大小</span><output>{axisAppearance.fontSize} px</output>
+          <input type="range" min="7" max="20" step="1" value={axisAppearance.fontSize} onChange={(event) => setAxisAppearance((current) => ({ ...current, fontSize: Number(event.target.value) }))} />
+        </label>
+        <button type="button" className="appearance-reset" onClick={() => setAxisAppearance({ ...defaultAxisAppearance })}>恢复坐标轴默认外观</button>
+      </div>}
       {contextMenu && structure.atoms[contextMenu.atomIndex] && (() => {
         const atom = structure.atoms[contextMenu.atomIndex];
         return <div
@@ -1209,7 +1376,7 @@ export default function Home() {
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <div className="context-menu-head">
-            <span className="atom-swatch" style={{ "--atom-color": elementStyle(atom.element).color } as React.CSSProperties}>{atom.element}</span>
+            <span className="atom-swatch" style={{ "--atom-color": currentElementColor(atom.element) } as React.CSSProperties}>{atom.element}</span>
             <span><strong>{atom.label}</strong><small>不对称位点 {atom.source.label}</small></span>
           </div>
           <button type="button" role="menuitem" onClick={() => {
