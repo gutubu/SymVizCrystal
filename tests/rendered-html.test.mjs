@@ -45,6 +45,9 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /补全分子片段/);
   assert.match(page, /坐标计算器/);
   assert.match(page, /操作 1、操作 2/);
+  assert.match(page, /quaternionMultiply/);
+  assert.match(page, /normalize\(bVector\)/);
+  assert.doesNotMatch(page, /rotation\.current\.pitch/);
   assert.match(parser, /_space_group_symop_operation_xyz/);
   assert.match(parser, /_atom_site_fract_x/);
   assert.match(parser, /pointGroupFromNumber/);

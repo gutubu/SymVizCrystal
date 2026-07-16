@@ -28,6 +28,7 @@ type DisplaySettings = {
 };
 
 type ProjectedAtom = { index: number; x: number; y: number; radius: number; depth: number };
+type Quaternion = [number, number, number, number];
 type AtomFocusMode = "none" | "fade" | "isolate";
 type AtomFocus = { mode: AtomFocusMode; sourceLabel: string | null };
 type AtomContextMenu = { x: number; y: number; atomIndex: number };
@@ -87,6 +88,39 @@ function normalize(a: Vec3): Vec3 {
 
 function cross(a: Vec3, b: Vec3): Vec3 {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+function quaternionMultiply(a: Quaternion, b: Quaternion): Quaternion {
+  return [
+    a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
+    a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
+    a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
+    a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0],
+  ];
+}
+
+function quaternionFromAxis(axis: Vec3, angle: number): Quaternion {
+  const unit = normalize(axis);
+  const half = angle / 2;
+  const sine = Math.sin(half);
+  return [Math.cos(half), unit[0] * sine, unit[1] * sine, unit[2] * sine];
+}
+
+function normalizeQuaternion(value: Quaternion): Quaternion {
+  const length = Math.hypot(...value) || 1;
+  return value.map((component) => component / length) as Quaternion;
+}
+
+function rotateByQuaternion(vector: Vec3, quaternion: Quaternion): Vec3 {
+  const imaginary: Vec3 = [quaternion[1], quaternion[2], quaternion[3]];
+  const doubledCross = vectorScale(cross(imaginary, vector), 2);
+  return vectorAdd(vector, vectorAdd(vectorScale(doubledCross, quaternion[0]), cross(imaginary, doubledCross)));
+}
+
+function initialViewQuaternion() {
+  const yaw = quaternionFromAxis([0, 1, 0], -0.62);
+  const pitch = quaternionFromAxis([1, 0, 0], 0.48);
+  return normalizeQuaternion(quaternionMultiply(yaw, pitch));
 }
 
 function dot(a: Vec3, b: Vec3) {
@@ -182,7 +216,7 @@ function CrystalCanvas({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const projectedAtoms = useRef<ProjectedAtom[]>([]);
-  const rotation = useRef({ yaw: -0.62, pitch: 0.48 });
+  const rotation = useRef<Quaternion>(initialViewQuaternion());
   const zoom = useRef(1);
   const drag = useRef({ active: false, x: 0, y: 0, moved: 0 });
   const [orthographic, setOrthographic] = useState(false);
@@ -206,23 +240,17 @@ function CrystalCanvas({
     context.clearRect(0, 0, width, height);
 
     const center = fractToCart([0.5, 0.5, 0.5], structure.cell);
-    const [, , cVector] = latticeVectors(structure.cell);
+    const [aVector, bVector, cVector] = latticeVectors(structure.cell);
     const maxCell = Math.max(structure.cell.a, structure.cell.b, structure.cell.c, 1);
     const worldScale = 2.45 / maxCell;
-    const yaw = rotation.current.yaw;
-    const pitch = rotation.current.pitch;
-    const cosYaw = Math.cos(yaw);
-    const sinYaw = Math.sin(yaw);
-    const cosPitch = Math.cos(pitch);
-    const sinPitch = Math.sin(pitch);
 
     const rotate = (point: Vec3): Vec3 => {
-      const x = (point[0] - center[0]) * worldScale;
-      const y = (point[1] - center[1]) * worldScale;
-      const z = (point[2] - center[2]) * worldScale;
-      const x1 = x * cosYaw + z * sinYaw;
-      const z1 = -x * sinYaw + z * cosYaw;
-      return [x1, y * cosPitch - z1 * sinPitch, y * sinPitch + z1 * cosPitch];
+      const relative: Vec3 = [
+        (point[0] - center[0]) * worldScale,
+        (point[1] - center[1]) * worldScale,
+        (point[2] - center[2]) * worldScale,
+      ];
+      return rotateByQuaternion(relative, rotation.current);
     };
 
     const project = (point: Vec3) => {
@@ -498,26 +526,56 @@ function CrystalCanvas({
 
     const axesOrigin = { x: width - 54, y: height - 48 };
     const axes: Array<{ vector: Vec3; color: string; label: string }> = [
-      { vector: [1, 0, 0], color: "#ff647c", label: "a" },
-      { vector: [0, 1, 0], color: "#65df91", label: "b" },
+      { vector: normalize(aVector), color: "#ff647c", label: "a" },
+      { vector: normalize(bVector), color: "#65df91", label: "b" },
       { vector: normalize(cVector), color: "#5db5ff", label: "c" },
     ];
     for (const axis of axes) {
       const rotated = rotate(vectorAdd(center, vectorScale(axis.vector, maxCell * 0.35)));
       const length = 25;
-      const norm = Math.hypot(rotated[0], rotated[1]) || 1;
-      const x = axesOrigin.x + (rotated[0] / norm) * length;
-      const y = axesOrigin.y - (rotated[1] / norm) * length;
+      const norm = Math.hypot(rotated[0], rotated[1]);
       context.strokeStyle = axis.color;
       context.fillStyle = axis.color;
       context.lineWidth = 1.5;
-      context.beginPath();
-      context.moveTo(axesOrigin.x, axesOrigin.y);
-      context.lineTo(x, y);
-      context.stroke();
       context.font = "600 10px ui-monospace, monospace";
-      context.fillText(axis.label, x + 3, y - 2);
+      if (norm < 0.055) {
+        context.beginPath();
+        context.arc(axesOrigin.x, axesOrigin.y, 4, 0, Math.PI * 2);
+        context.stroke();
+        if (rotated[2] > 0) {
+          context.beginPath();
+          context.arc(axesOrigin.x, axesOrigin.y, 1.6, 0, Math.PI * 2);
+          context.fill();
+        } else {
+          context.beginPath();
+          context.moveTo(axesOrigin.x - 2.2, axesOrigin.y - 2.2);
+          context.lineTo(axesOrigin.x + 2.2, axesOrigin.y + 2.2);
+          context.moveTo(axesOrigin.x + 2.2, axesOrigin.y - 2.2);
+          context.lineTo(axesOrigin.x - 2.2, axesOrigin.y + 2.2);
+          context.stroke();
+        }
+        context.fillText(axis.label, axesOrigin.x + 7, axesOrigin.y - 5);
+      } else {
+        const x = axesOrigin.x + (rotated[0] / norm) * length;
+        const y = axesOrigin.y - (rotated[1] / norm) * length;
+        context.beginPath();
+        context.moveTo(axesOrigin.x, axesOrigin.y);
+        context.lineTo(x, y);
+        context.stroke();
+        const angle = Math.atan2(y - axesOrigin.y, x - axesOrigin.x);
+        context.beginPath();
+        context.moveTo(x, y);
+        context.lineTo(x - 5 * Math.cos(angle - 0.45), y - 5 * Math.sin(angle - 0.45));
+        context.lineTo(x - 5 * Math.cos(angle + 0.45), y - 5 * Math.sin(angle + 0.45));
+        context.closePath();
+        context.fill();
+        context.fillText(axis.label, x + 3, y - 2);
+      }
     }
+    context.fillStyle = "#64748b";
+    context.beginPath();
+    context.arc(axesOrigin.x, axesOrigin.y, 2, 0, Math.PI * 2);
+    context.fill();
   }, [structure, display, selectedAtomIndex, selectedOperation, atomFocus, orthographic, viewVersion]);
 
   useEffect(() => {
@@ -539,8 +597,9 @@ function CrystalCanvas({
     drag.current.x = event.clientX;
     drag.current.y = event.clientY;
     drag.current.moved += Math.abs(dx) + Math.abs(dy);
-    rotation.current.yaw += dx * 0.008;
-    rotation.current.pitch = Math.max(-1.45, Math.min(1.45, rotation.current.pitch + dy * 0.008));
+    const yawDelta = quaternionFromAxis([0, 1, 0], dx * 0.008);
+    const pitchDelta = quaternionFromAxis([1, 0, 0], dy * 0.008);
+    rotation.current = normalizeQuaternion(quaternionMultiply(pitchDelta, quaternionMultiply(yawDelta, rotation.current)));
     redraw();
   }
 
@@ -563,7 +622,7 @@ function CrystalCanvas({
   }
 
   function resetView() {
-    rotation.current = { yaw: -0.62, pitch: 0.48 };
+    rotation.current = initialViewQuaternion();
     zoom.current = 1;
     redraw();
   }
