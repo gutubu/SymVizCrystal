@@ -56,7 +56,14 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /axisAppearance\.lineWidth/);
   assert.match(page, /字母字体/);
   assert.match(page, /恢复坐标轴默认外观/);
-  assert.match(page, /氢键候选（深粉虚线）/);
+  assert.match(page, /显示氢原子/);
+  assert.match(page, /氢键候选/);
+  assert.doesNotMatch(page, /深粉虚线/);
+  assert.match(page, /sidebarCollapsed/);
+  assert.match(page, /收起边栏/);
+  assert.match(page, /hydrogenBondAppearance/);
+  assert.match(page, /虚线颜色/);
+  assert.match(page, /虚线粗细/);
   assert.match(page, /Steiner 保守/);
   assert.match(page, /H···A 最大距离/);
   assert.match(page, /D–H···A 最小角/);

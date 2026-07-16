@@ -71,6 +71,11 @@ canvas:focus-visible {
   backdrop-filter: blur(14px);
 }
 
+.app-shell.sidebar-collapsed { grid-template-columns: 52px minmax(520px, 1fr) 368px; }
+.app-shell.sidebar-collapsed .app-header { grid-template-columns: 52px minmax(0, 1fr) auto; }
+.app-shell.sidebar-collapsed .brand { justify-content: center; padding: 0; }
+.app-shell.sidebar-collapsed .brand > div { display: none; }
+
 .brand {
   display: flex;
   align-items: center;
@@ -205,6 +210,42 @@ canvas:focus-visible {
   padding: 15px 14px 22px;
   border-right: 1px solid var(--line);
 }
+
+.drawer-control {
+  position: sticky;
+  z-index: 3;
+  top: -7px;
+  display: flex;
+  justify-content: flex-end;
+  margin: -7px 0 8px;
+  padding: 2px 0 5px;
+  background: linear-gradient(#fff 74%, rgba(255, 255, 255, 0));
+}
+
+.drawer-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  height: 27px;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.drawer-control button:hover { border-color: #b8c3ce; color: var(--accent); background: var(--accent-soft); }
+.drawer-control button span { font-size: 15px; font-weight: 400; line-height: 1; }
+.drawer-control button b { font-weight: 600; }
+.app-shell.sidebar-collapsed .left-panel { padding: 10px 6px; overflow: hidden; }
+.app-shell.sidebar-collapsed .left-panel > :not(.drawer-control) { display: none; }
+.app-shell.sidebar-collapsed .drawer-control { position: static; justify-content: center; margin: 0; padding: 0; background: transparent; }
+.app-shell.sidebar-collapsed .drawer-control button { width: 38px; min-width: 38px; height: 38px; padding: 0; }
+.app-shell.sidebar-collapsed .drawer-control button span { font-size: 22px; }
 
 .panel-scroll {
   overflow-x: hidden;
@@ -486,7 +527,7 @@ canvas:focus-visible {
   font-size: 8px;
   box-shadow: 0 1px 3px rgba(16, 24, 40, .04);
 }
-.hydrogen-bond-chip i { width: 13px; height: 0; border-top: 2px dashed var(--hbond); }
+.hydrogen-bond-chip i { width: 13px; height: 0; border-top: 2px dashed var(--hbond-view-color, var(--hbond)); }
 
 .focus-chip {
   display: flex;
@@ -816,6 +857,19 @@ canvas:focus-visible {
 .hydrogen-ranges label > span { display: flex; align-items: center; justify-content: space-between; color: #475467; font-size: 8px; }
 .hydrogen-ranges output { color: var(--hbond); font-family: var(--font-geist-mono), monospace; font-size: 8px; }
 .hydrogen-ranges input[type="range"] { width: 100%; height: 4px; accent-color: var(--hbond); cursor: pointer; }
+.hydrogen-appearance { display: flex; flex-direction: column; gap: 8px; margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line); }
+.hydrogen-appearance-head { display: flex; align-items: center; justify-content: space-between; }
+.hydrogen-appearance-head span { color: #475467; font-size: 8px; font-weight: 620; }
+.hydrogen-appearance-head i { width: 62px; height: 0; border-top: var(--hbond-view-width, 2px) dashed var(--hbond-view-color, var(--hbond)); }
+.hydrogen-color-control { display: grid; grid-template-columns: 1fr 27px auto; align-items: center; gap: 7px; color: #475467; font-size: 8px; }
+.hydrogen-color-control input { width: 27px; height: 22px; padding: 2px; border: 1px solid var(--line); border-radius: 5px; background: #fff; cursor: pointer; }
+.hydrogen-color-control code { color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 7px; }
+.hydrogen-width-control { display: flex; flex-direction: column; gap: 5px; }
+.hydrogen-width-control > span { display: flex; align-items: center; justify-content: space-between; color: #475467; font-size: 8px; }
+.hydrogen-width-control output { color: var(--hbond); font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+.hydrogen-width-control input { width: 100%; height: 4px; accent-color: var(--hbond-view-color, var(--hbond)); cursor: pointer; }
+.hydrogen-appearance > button { align-self: flex-start; padding: 0; border: 0; color: var(--muted); background: transparent; font-size: 7px; text-decoration: underline; cursor: pointer; }
+.hydrogen-appearance > button:hover { color: var(--hbond); }
 .hydrogen-element-filter { margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line); }
 .hydrogen-element-filter > span { display: block; margin-bottom: 6px; color: #475467; font-size: 8px; font-weight: 620; }
 .hydrogen-element-filter > div { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -880,6 +934,8 @@ canvas:focus-visible {
 @media (max-width: 1230px) {
   .app-shell { grid-template-columns: 236px minmax(460px, 1fr) 326px; }
   .app-header { grid-template-columns: 236px minmax(0, 1fr) auto; }
+  .app-shell.sidebar-collapsed { grid-template-columns: 52px minmax(460px, 1fr) 326px; }
+  .app-shell.sidebar-collapsed .app-header { grid-template-columns: 52px minmax(0, 1fr) auto; }
   .left-panel { padding-right: 11px; padding-left: 11px; }
   .right-content { padding-right: 9px; padding-left: 9px; }
   .workspace-stats span:nth-child(2) { display: none; }
@@ -889,6 +945,8 @@ canvas:focus-visible {
   body { overflow: auto; }
   .app-shell { display: grid; grid-template-columns: 220px minmax(500px, 1fr); grid-template-rows: 66px 720px auto; width: 100%; min-width: 760px; height: auto; min-height: 100vh; overflow: visible; }
   .app-header { position: sticky; top: 0; grid-template-columns: 220px minmax(0, 1fr) auto; }
+  .app-shell.sidebar-collapsed { grid-template-columns: 52px minmax(500px, 1fr); }
+  .app-shell.sidebar-collapsed .app-header { grid-template-columns: 52px minmax(0, 1fr) auto; }
   .header-actions .ghost-button { display: none; }
   .left-panel { grid-column: 1; grid-row: 2 / 4; }
   .workspace { grid-column: 2; grid-row: 2; }
@@ -899,10 +957,13 @@ canvas:focus-visible {
 @media (max-width: 760px) {
   .app-shell { display: flex; min-width: 320px; flex-direction: column; }
   .app-header { display: grid; grid-template-columns: 1fr auto; height: 62px; flex: 0 0 62px; }
+  .app-shell.sidebar-collapsed .app-header { grid-template-columns: 52px 1fr; }
   .brand { border-right: 0; }
   .header-structure { display: none; }
   .header-actions { padding-right: 10px; }
   .left-panel { order: 2; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
+  .app-shell.sidebar-collapsed .left-panel { min-height: 48px; max-height: 48px; padding: 5px 10px; }
+  .app-shell.sidebar-collapsed .drawer-control button { width: 100%; height: 36px; }
   .workspace { order: 1; display: grid; min-height: 690px; grid-template-rows: 43px 470px 177px; }
   .right-panel { order: 3; min-height: 670px; }
   .workspace-stats { display: none; }
