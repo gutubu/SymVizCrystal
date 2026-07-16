@@ -712,17 +712,27 @@ export function parseCif(text: string): CrystalStructure {
   const ilabel = findColumn(atomLoop, ["_atom_site_label"]);
   const itype = findColumn(atomLoop, ["_atom_site_type_symbol"]);
   const iocc = findColumn(atomLoop, ["_atom_site_occupancy"]);
-  const imult = findColumn(atomLoop, ["_atom_site_symmetry_multiplicity"]);
-  const iwyckoff = findColumn(atomLoop, ["_atom_site_wyckoff_symbol", "_atom_site_wyckoff_label"]);
+  const imult = findColumn(atomLoop, [
+    "_atom_site_site_symmetry_multiplicity",
+    "_atom_site_symmetry_multiplicity",
+    "_atom_site.site_symmetry_multiplicity",
+    "_atom_site.symmetry_multiplicity",
+  ]);
+  const iwyckoff = findColumn(atomLoop, [
+    "_atom_site_wyckoff_symbol",
+    "_atom_site_wyckoff_label",
+    "_atom_site.wyckoff_symbol",
+  ]);
   const sites: AtomSite[] = atomLoop.rows.map((row, index) => {
     const label = ilabel >= 0 ? row[ilabel] : `A${index + 1}`;
+    const wyckoffValue = iwyckoff >= 0 ? row[iwyckoff]?.trim() : undefined;
     return {
       label,
       element: normalizeElement(itype >= 0 ? row[itype] : label),
       fract: [numeric(row[ix], 0), numeric(row[iy], 0), numeric(row[iz], 0)] as Vec3,
       occupancy: numeric(iocc >= 0 ? row[iocc] : undefined, 1),
       multiplicity: imult >= 0 ? numeric(row[imult], 0) || undefined : undefined,
-      wyckoff: iwyckoff >= 0 && row[iwyckoff] !== "." ? row[iwyckoff] : "—",
+      wyckoff: wyckoffValue && ![".", "?"].includes(wyckoffValue) ? wyckoffValue : "—",
     };
   }).filter((site) => site.occupancy > 0);
 

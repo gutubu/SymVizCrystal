@@ -49,6 +49,11 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /特征标表/);
   assert.match(page, /浏览 32 个晶体学点群/);
   assert.match(page, /如何阅读特征标表/);
+  assert.match(page, /什么是 Wyckoff 位置/);
+  assert.match(page, /字母未提供/);
+  assert.match(page, /siteSymmetryOrder/);
+  assert.match(page, /由对称操作算得/);
+  assert.doesNotMatch(page, /source\.multiplicity \?\? "\?"/);
   assert.match(page, /selectedCharacterTable\.classes/);
   assert.match(page, /对称等价位置生成/);
   assert.match(page, /className="mapping-help"/);
@@ -91,6 +96,8 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.doesNotMatch(page, /rotation\.current\.pitch/);
   assert.match(parser, /_space_group_symop_operation_xyz/);
   assert.match(parser, /_atom_site_fract_x/);
+  assert.match(parser, /_atom_site_site_symmetry_multiplicity/);
+  assert.match(parser, /_atom_site\.site_symmetry_multiplicity/);
   assert.match(parser, /pointGroupFromNumber/);
   assert.match(parser, /hillElementOrder/);
   assert.match(parser, /molecularDisplayFracts/);

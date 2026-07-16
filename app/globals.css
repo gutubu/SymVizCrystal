@@ -802,6 +802,7 @@ canvas:focus-visible {
 .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 10px; border-top: 1px solid var(--line); }
 .detail-grid span { display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 7px; color: var(--subtle); font-size: 7px; }
 .detail-grid strong { color: #475467; font-family: var(--font-geist-mono), monospace; font-size: 9px; font-weight: 520; }
+.detail-grid strong.wyckoff-value { max-width: 96px; font-size: 7.5px; line-height: 1.25; text-align: center; }
 
 .trace-intro { margin-bottom: 11px; padding: 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-soft); }
 .trace-intro span { color: #344054; font-size: 10px; font-weight: 620; }
@@ -820,15 +821,24 @@ canvas:focus-visible {
 .atom-row em { color: var(--accent); font-family: var(--font-geist-mono), monospace; font-size: 8px; font-style: normal; }
 
 .wyckoff-list { gap: 7px; }
+.wyckoff-help { border: 1px solid var(--line); border-radius: 7px; background: var(--panel-soft); }
+.wyckoff-help summary { padding: 8px 9px; color: #376f70; font-size: 8px; font-weight: 620; list-style: none; cursor: pointer; }
+.wyckoff-help summary::-webkit-details-marker { display: none; }
+.wyckoff-help[open] summary { border-bottom: 1px solid var(--line); }
+.wyckoff-help > div { padding: 8px 9px; }
+.wyckoff-help p { margin: 0; color: var(--muted); font-size: 7px; line-height: 1.55; }
+.wyckoff-help p + p { margin-top: 4px; }
+.wyckoff-help b { color: #344054; font-weight: 620; }
 .wyckoff-card { display: grid; grid-template-columns: 39px 1fr auto; align-items: center; gap: 10px; min-height: 59px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; text-align: left; cursor: pointer; }
 .wyckoff-card:hover { border-color: #b9d9d7; background: #f7fbfb; }
 .wyckoff-letter { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid #cce7e5; border-radius: 9px; color: var(--accent); background: var(--accent-soft); font-family: Georgia, serif; font-size: 18px; font-style: italic; }
+.wyckoff-letter.missing { color: #667085; background: #f8fafc; border-color: var(--line); font-family: var(--font-geist-mono), monospace; font-size: 6px; font-style: normal; }
 .wyckoff-card > span:nth-child(2) { gap: 3px; }
 .wyckoff-card > span:nth-child(2) strong { color: #344054; font-size: 9px; font-weight: 580; }
 .wyckoff-card > span:nth-child(2) small { overflow: hidden; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .wyckoff-count { display: flex; flex-direction: column; align-items: center; }
 .wyckoff-count strong { color: var(--amber); font-family: var(--font-geist-mono), monospace; font-size: 14px; font-weight: 560; }
-.wyckoff-count small { color: var(--subtle); font-size: 7px; }
+.wyckoff-count small { max-width: 58px; color: var(--subtle); font-size: 6.5px; line-height: 1.2; text-align: center; }
 
 .calculator-panel { display: flex; flex-direction: column; gap: 10px; }
 .calculator-intro { padding: 10px; border: 1px solid #d6e9e8; border-radius: 8px; background: #f7fbfb; }

@@ -1111,6 +1111,39 @@ export default function Home() {
   const selectedAtom = structure.atoms[Math.min(selectedAtomIndex, structure.atoms.length - 1)];
   const selectedOperation = structure.operations.find((operation) => operation.id === selectedOperationId) ?? structure.operations[0];
   const selectedCharacterTable = useMemo(() => characterTableForPointGroup(characterPointGroup), [characterPointGroup]);
+  const wyckoffSites = useMemo(() => {
+    const generatedCounts = new Map<string, number>();
+    structure.atoms.forEach((atom) => {
+      generatedCounts.set(atom.source.label, (generatedCounts.get(atom.source.label) ?? 0) + 1);
+    });
+    return structure.sites.map((site) => {
+      const generatedMultiplicity = generatedCounts.get(site.label) ?? 0;
+      const multiplicity = site.multiplicity ?? generatedMultiplicity;
+      const letter = site.wyckoff !== "—" && site.wyckoff !== "?" ? site.wyckoff : null;
+      const symmetryRatio = generatedMultiplicity ? structure.operations.length / generatedMultiplicity : 0;
+      const siteSymmetryOrder = symmetryRatio && Math.abs(symmetryRatio - Math.round(symmetryRatio)) < 1e-6
+        ? Math.round(symmetryRatio)
+        : null;
+      const positionType = siteSymmetryOrder === 1
+        ? "一般位置"
+        : siteSymmetryOrder && siteSymmetryOrder > 1
+          ? "特殊位置"
+          : "位置类型待定";
+      return {
+        site,
+        generatedMultiplicity,
+        multiplicity,
+        letter,
+        siteSymmetryOrder,
+        positionType,
+        multiplicitySource: site.multiplicity ? "CIF 提供" : "由对称操作算得",
+      };
+    });
+  }, [structure]);
+  const selectedWyckoffInfo = selectedAtom
+    ? wyckoffSites.find(({ site }) => site.label === selectedAtom.source.label)
+    : undefined;
+  const missingWyckoffCount = wyckoffSites.filter(({ letter }) => !letter).length;
   const calculatorOperation = structure.operations.find((operation) => operation.id === calculatorOperationId) ?? structure.operations[0];
   const currentElementColor = (element: string) => resolvedElementStyle(element, elementAppearance).color;
 
@@ -1586,7 +1619,9 @@ export default function Home() {
             </div>
             <div className="detail-grid">
               <span>母位点<strong>{selectedAtom.source.label}</strong></span>
-              <span>Wyckoff<strong>{selectedAtom.source.multiplicity ?? "?"}{selectedAtom.source.wyckoff}</strong></span>
+              <span>Wyckoff<strong className="wyckoff-value">{selectedWyckoffInfo?.letter
+                ? `${selectedWyckoffInfo.multiplicity}${selectedWyckoffInfo.letter}`
+                : `${selectedWyckoffInfo?.multiplicity ?? "—"} · 字母未提供`}</strong></span>
               <span>占有率<strong>{selectedAtom.source.occupancy.toFixed(2)}</strong></span>
             </div>
           </div>}
@@ -1651,16 +1686,26 @@ export default function Home() {
         </div>}
 
         {rightTab === "wyckoff" && <div className="right-content panel-scroll wyckoff-list">
-          <div className="trace-intro"><span>{structure.sites.length} 个不对称位点</span><p>每张卡片显示位点多重性、字母、占有率与坐标。</p></div>
-          {structure.sites.map((site) => {
-            const generated = structure.atoms.filter((atom) => atom.source.label === site.label).length;
+          <details className="wyckoff-help">
+            <summary>？ 什么是 Wyckoff 位置</summary>
+            <div>
+              <p><b>多重性</b>：一个独立位点经空间群操作生成的不同等价位置数。</p>
+              <p><b>字母</b>：International Tables 为每个空间群的标准位置分配的标签；不是从坐标随意生成的编号。</p>
+              <p><b>一般 / 特殊位置</b>：位点对称阶为 1 时是一般位置；大于 1 时是特殊位置。</p>
+              {missingWyckoffCount > 0 && <p><b>当前 CIF</b>：{missingWyckoffCount} 个位点没有提供字母。SymViz 会补算多重性，但不会猜测标准字母。</p>}
+            </div>
+          </details>
+          <div className="trace-intro"><span>{structure.sites.length} 个不对称位点</span><p>{missingWyckoffCount > 0
+            ? `${missingWyckoffCount} 个字母未提供 · 多重性已由对称操作补算`
+            : "CIF 已提供完整的 Wyckoff 标记"}</p></div>
+          {wyckoffSites.map(({ site, letter, multiplicity, multiplicitySource, positionType, siteSymmetryOrder }) => {
             return <button type="button" className="wyckoff-card" key={site.label} onClick={() => {
               const index = structure.atoms.findIndex((atom) => atom.source.label === site.label);
               if (index >= 0) selectAtom(index);
             }}>
-              <span className="wyckoff-letter">{site.wyckoff}</span>
-              <span><strong>{site.label} · {site.element}</strong><small>{coordinateText(site.fract)}</small></span>
-              <span className="wyckoff-count"><strong>{site.multiplicity ?? generated}</strong><small>等价位</small></span>
+              <span className={letter ? "wyckoff-letter" : "wyckoff-letter missing"}>{letter ?? "未提供"}</span>
+              <span><strong>{site.label} · {site.element}</strong><small>{coordinateText(site.fract)} · {positionType}{siteSymmetryOrder ? ` · 对称阶 ${siteSymmetryOrder}` : ""}</small></span>
+              <span className="wyckoff-count"><strong>{multiplicity}</strong><small>{multiplicitySource}</small></span>
             </button>;
           })}
         </div>}
