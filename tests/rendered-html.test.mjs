@@ -38,6 +38,10 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /<canvas/);
   assert.match(page, /loadFile\(file/);
   assert.match(page, /applyOperation/);
+  assert.match(page, /onContextMenu/);
+  assert.match(page, /聚焦该不对称位点/);
+  assert.match(page, /findSymmetryAxisOrigin/);
+  assert.match(page, /createLinearGradient/);
   assert.match(parser, /_space_group_symop_operation_xyz/);
   assert.match(parser, /_atom_site_fract_x/);
   assert.match(parser, /pointGroupFromNumber/);

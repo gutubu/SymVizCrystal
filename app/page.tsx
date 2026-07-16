@@ -25,6 +25,9 @@ type DisplaySettings = {
 };
 
 type ProjectedAtom = { index: number; x: number; y: number; radius: number; depth: number };
+type AtomFocusMode = "none" | "fade" | "isolate";
+type AtomFocus = { mode: AtomFocusMode; sourceLabel: string | null };
+type AtomContextMenu = { x: number; y: number; atomIndex: number };
 
 const defaultDisplay: DisplaySettings = {
   atoms: true,
@@ -64,6 +67,17 @@ function cross(a: Vec3, b: Vec3): Vec3 {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
+function dot(a: Vec3, b: Vec3) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function shadeHex(color: string, strength = 0.2) {
+  const match = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  if (!match) return color;
+  const channels = match.slice(1).map((value) => Math.round(Number.parseInt(value, 16) * (1 - strength)));
+  return `#${channels.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
 function findEigenDirection(operation: SymmetryOperation, eigenvalue: 1 | -1): Vec3 {
   const candidates: Vec3[] = [];
   for (let x = -2; x <= 2; x += 1) {
@@ -81,7 +95,48 @@ function findEigenDirection(operation: SymmetryOperation, eigenvalue: 1 | -1): V
       transformed[2] - eigenvalue * candidate[2],
     ) / vectorLength(candidate);
   };
-  return normalize(candidates.sort((a, b) => score(a) - score(b))[0] ?? [0, 0, 1]);
+  const direction = normalize(candidates.sort((a, b) => score(a) - score(b))[0] ?? [0, 0, 1]);
+  const firstNonZero = direction.find((value) => Math.abs(value) > 1e-6) ?? 1;
+  return firstNonZero < 0 ? vectorScale(direction, -1) : direction;
+}
+
+function findSymmetryAxisOrigin(operation: SymmetryOperation, axisFract: Vec3, structure: CrystalStructure): Vec3 {
+  const axisCart = normalize(fractToCart(axisFract, structure.cell));
+  let best: { point: Vec3; score: number } = { point: [0.5, 0.5, 0.5], score: Number.POSITIVE_INFINITY };
+  const divisions = 12;
+
+  for (let ix = 0; ix <= divisions; ix += 1) {
+    for (let iy = 0; iy <= divisions; iy += 1) {
+      for (let iz = 0; iz <= divisions; iz += 1) {
+        const point: Vec3 = [ix / divisions, iy / divisions, iz / divisions];
+        const rotated = operation.matrix.map((row, rowIndex) => (
+          row[0] * point[0] + row[1] * point[1] + row[2] * point[2] + operation.translation[rowIndex] - point[rowIndex]
+        )) as Vec3;
+        let residual = Number.POSITIVE_INFINITY;
+        for (let nx = -1; nx <= 1; nx += 1) {
+          for (let ny = -1; ny <= 1; ny += 1) {
+            for (let nz = -1; nz <= 1; nz += 1) {
+              const displacement = fractToCart([rotated[0] + nx, rotated[1] + ny, rotated[2] + nz], structure.cell);
+              const alongAxis = vectorScale(axisCart, dot(displacement, axisCart));
+              residual = Math.min(residual, vectorLength(vectorAdd(displacement, vectorScale(alongAxis, -1))));
+            }
+          }
+        }
+        const centerBias = Math.hypot(point[0] - 0.5, point[1] - 0.5, point[2] - 0.5) * 1e-4;
+        const score = residual + centerBias;
+        if (score < best.score) best = { point, score };
+      }
+    }
+  }
+  return best.point;
+}
+
+function screwTranslationText(operation: SymmetryOperation, axisFract: Vec3) {
+  const denominator = Math.max(2, operation.order);
+  const axisLengthSquared = dot(axisFract, axisFract) || 1;
+  const axial = ((dot(operation.translation, axisFract) / axisLengthSquared) % 1 + 1) % 1;
+  const numerator = Math.max(1, Math.round(axial * denominator));
+  return `${numerator}/${denominator}`;
 }
 
 function CrystalCanvas({
@@ -89,13 +144,19 @@ function CrystalCanvas({
   display,
   selectedAtomIndex,
   selectedOperation,
+  atomFocus,
   onSelectAtom,
+  onRequestContextMenu,
+  onClearAtomFocus,
 }: {
   structure: CrystalStructure;
   display: DisplaySettings;
   selectedAtomIndex: number;
   selectedOperation: SymmetryOperation;
+  atomFocus: AtomFocus;
   onSelectAtom: (index: number) => void;
+  onRequestContextMenu: (menu: AtomContextMenu) => void;
+  onClearAtomFocus: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const projectedAtoms = useRef<ProjectedAtom[]>([]);
@@ -184,21 +245,75 @@ function CrystalCanvas({
       if (["rotation", "screw", "rotoinversion"].includes(selectedOperation.kind)) {
         const axisFract = findEigenDirection(selectedOperation, 1);
         const axisCart = normalize(fractToCart(axisFract, structure.cell));
-        const span = Math.max(structure.cell.a, structure.cell.b, structure.cell.c) * 0.78;
-        const a = project(vectorAdd(center, vectorScale(axisCart, -span)));
-        const b = project(vectorAdd(center, vectorScale(axisCart, span)));
-        context.strokeStyle = "rgba(183, 121, 31, .88)";
-        context.lineWidth = 2;
-        context.setLineDash([9, 6]);
+        const axisOrigin = fractToCart(findSymmetryAxisOrigin(selectedOperation, axisFract, structure), structure.cell);
+        const span = maxCell * 0.72;
+        const a = project(vectorAdd(axisOrigin, vectorScale(axisCart, -span)));
+        const b = project(vectorAdd(axisOrigin, vectorScale(axisCart, span)));
+        context.strokeStyle = "rgba(168, 105, 18, .62)";
+        context.lineWidth = 1.4;
+        context.setLineDash([6, 5]);
         context.beginPath();
         context.moveTo(a.x, a.y);
         context.lineTo(b.x, b.y);
         context.stroke();
         context.setLineDash([]);
-        context.fillStyle = "#b7791f";
-        context.beginPath();
-        context.arc(b.x, b.y, 4, 0, Math.PI * 2);
-        context.fill();
+
+        if (selectedOperation.kind === "screw") {
+          const helper: Vec3 = Math.abs(axisCart[2]) < 0.82 ? [0, 0, 1] : [0, 1, 0];
+          const u = normalize(cross(axisCart, helper));
+          const v = normalize(cross(axisCart, u));
+          const radius = maxCell * 0.055;
+          const turns = Math.max(1.6, selectedOperation.order * 0.82);
+          const helixPoints = Array.from({ length: 97 }, (_, index) => {
+            const t = index / 96;
+            const angle = t * Math.PI * 2 * turns;
+            const axial = vectorScale(axisCart, (t - 0.5) * span * 1.75);
+            const radial = vectorAdd(vectorScale(u, Math.cos(angle) * radius), vectorScale(v, Math.sin(angle) * radius));
+            return project(vectorAdd(axisOrigin, vectorAdd(axial, radial)));
+          });
+
+          context.strokeStyle = "rgba(255, 255, 255, .92)";
+          context.lineWidth = 5.5;
+          context.lineJoin = "round";
+          context.beginPath();
+          context.moveTo(helixPoints[0].x, helixPoints[0].y);
+          helixPoints.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+          context.stroke();
+          context.strokeStyle = "#b76f12";
+          context.lineWidth = 2.8;
+          context.stroke();
+
+          const arrowTip = helixPoints[helixPoints.length - 1];
+          const arrowFrom = helixPoints[helixPoints.length - 5];
+          const arrowAngle = Math.atan2(arrowTip.y - arrowFrom.y, arrowTip.x - arrowFrom.x);
+          context.fillStyle = "#b76f12";
+          context.beginPath();
+          context.moveTo(arrowTip.x, arrowTip.y);
+          context.lineTo(arrowTip.x - 10 * Math.cos(arrowAngle - 0.5), arrowTip.y - 10 * Math.sin(arrowAngle - 0.5));
+          context.lineTo(arrowTip.x - 10 * Math.cos(arrowAngle + 0.5), arrowTip.y - 10 * Math.sin(arrowAngle + 0.5));
+          context.closePath();
+          context.fill();
+
+          const label = `${selectedOperation.label}  ·  旋转 ${Math.round(360 / selectedOperation.order)}°  +  轴向平移 ${screwTranslationText(selectedOperation, axisFract)}`;
+          context.font = "600 10px ui-monospace, monospace";
+          const labelWidth = context.measureText(label).width + 16;
+          const labelX = Math.max(10, Math.min(width - labelWidth - 10, b.x + 10));
+          const labelY = Math.max(36, Math.min(height - 30, b.y - 10));
+          context.fillStyle = "rgba(255, 250, 240, .96)";
+          context.strokeStyle = "rgba(183, 111, 18, .42)";
+          context.lineWidth = 1;
+          context.beginPath();
+          context.roundRect(labelX, labelY - 17, labelWidth, 25, 6);
+          context.fill();
+          context.stroke();
+          context.fillStyle = "#8a5310";
+          context.fillText(label, labelX + 8, labelY);
+        } else {
+          context.fillStyle = "#b7791f";
+          context.beginPath();
+          context.arc(b.x, b.y, 4, 0, Math.PI * 2);
+          context.fill();
+        }
       } else if (["mirror", "glide"].includes(selectedOperation.kind)) {
         const normalFract = findEigenDirection(selectedOperation, -1);
         const normal = normalize(fractToCart(normalFract, structure.cell));
@@ -236,28 +351,42 @@ function CrystalCanvas({
       context.restore();
     }
 
+    const matchesFocus = (atom: AtomInstance) => atomFocus.mode === "none" || atom.source.label === atomFocus.sourceLabel;
+
     if (display.bonds) {
       context.save();
       context.lineCap = "round";
       for (const bond of structure.bonds) {
         const atomA = structure.atoms[bond.a];
         const atomB = structure.atoms[bond.b];
+        const focusA = matchesFocus(atomA);
+        const focusB = matchesFocus(atomB);
+        if (atomFocus.mode === "isolate" && (!focusA || !focusB)) continue;
         const directDistance = Math.hypot(
           atomA.cart[0] - atomB.cart[0], atomA.cart[1] - atomB.cart[1], atomA.cart[2] - atomB.cart[2],
         );
         if (directDistance > bond.distance + 0.25) continue;
         const a = project(atomA.cart);
         const b = project(atomB.cart);
-        const gradient = context.createLinearGradient(a.x, a.y, b.x, b.y);
-        gradient.addColorStop(0, elementStyle(atomA.element).color);
-        gradient.addColorStop(0.48, "rgba(100, 116, 139, .52)");
-        gradient.addColorStop(0.52, "rgba(100, 116, 139, .52)");
-        gradient.addColorStop(1, elementStyle(atomB.element).color);
-        context.strokeStyle = gradient;
-        context.globalAlpha = 0.64;
-        context.lineWidth = Math.max(2, Math.min(5, (a.factor + b.factor) * worldScale * 0.11));
+        const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const lineWidth = Math.max(3.4, Math.min(7, (a.factor + b.factor) * worldScale * 0.13));
+        context.globalAlpha = atomFocus.mode === "fade" ? (focusA && focusB ? 1 : focusA || focusB ? 0.42 : 0.07) : 1;
+        context.strokeStyle = "rgba(51, 65, 85, .26)";
+        context.lineWidth = lineWidth + 1.8;
         context.beginPath();
         context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
+        context.stroke();
+
+        context.lineWidth = lineWidth;
+        context.strokeStyle = shadeHex(elementStyle(atomA.element).color, 0.06);
+        context.beginPath();
+        context.moveTo(a.x, a.y);
+        context.lineTo(midpoint.x, midpoint.y);
+        context.stroke();
+        context.strokeStyle = shadeHex(elementStyle(atomB.element).color, 0.06);
+        context.beginPath();
+        context.moveTo(midpoint.x, midpoint.y);
         context.lineTo(b.x, b.y);
         context.stroke();
       }
@@ -297,36 +426,43 @@ function CrystalCanvas({
     const hitTargets: ProjectedAtom[] = [];
     if (display.atoms) {
       for (const { atom, index, projection } of atoms) {
+        const focused = matchesFocus(atom);
+        if (atomFocus.mode === "isolate" && !focused) continue;
         const style = elementStyle(atom.element);
-        const radius = Math.max(6, Math.min(21, style.radius * projection.factor * worldScale * 1.3));
+        const radius = Math.max(4.5, Math.min(13.5, style.radius * projection.factor * worldScale * 0.9));
         hitTargets.push({ index, x: projection.x, y: projection.y, radius: radius + 5, depth: projection.depth });
-        const gradient = context.createRadialGradient(
-          projection.x - radius * 0.34,
-          projection.y - radius * 0.38,
-          radius * 0.08,
-          projection.x,
-          projection.y,
-          radius,
+        context.save();
+        context.globalAlpha = atomFocus.mode === "fade" && !focused ? 0.12 : 1;
+        const gradient = context.createLinearGradient(
+          projection.x - radius * 0.45,
+          projection.y - radius * 0.55,
+          projection.x + radius * 0.55,
+          projection.y + radius * 0.6,
         );
-        gradient.addColorStop(0, "#ffffff");
-        gradient.addColorStop(0.18, style.color);
-        gradient.addColorStop(1, "#475569");
+        gradient.addColorStop(0, style.color);
+        gradient.addColorStop(0.72, shadeHex(style.color, 0.08));
+        gradient.addColorStop(1, shadeHex(style.color, 0.24));
         context.fillStyle = gradient;
-        context.shadowColor = `${style.color}88`;
-        context.shadowBlur = index === selectedAtomIndex ? 19 : 8;
         context.beginPath();
         context.arc(projection.x, projection.y, radius, 0, Math.PI * 2);
         context.fill();
-        context.shadowBlur = 0;
-        context.strokeStyle = index === selectedAtomIndex ? "#0f6f72" : "rgba(71,85,105,.24)";
-        context.lineWidth = index === selectedAtomIndex ? 2.2 : 0.7;
+        context.strokeStyle = index === selectedAtomIndex ? "#08777a" : "rgba(30, 41, 59, .34)";
+        context.lineWidth = index === selectedAtomIndex ? 2.4 : 0.85;
         context.stroke();
+        if (index === selectedAtomIndex) {
+          context.strokeStyle = "rgba(15, 139, 141, .34)";
+          context.lineWidth = 2;
+          context.beginPath();
+          context.arc(projection.x, projection.y, radius + 4, 0, Math.PI * 2);
+          context.stroke();
+        }
 
         if (display.labels && structure.atoms.length <= 120) {
           context.fillStyle = index === selectedAtomIndex ? "#0f5f62" : "rgba(51, 65, 85, .82)";
           context.font = `${index === selectedAtomIndex ? 650 : 500} 10px ui-monospace, monospace`;
           context.fillText(atom.label, projection.x + radius + 4, projection.y - radius - 1);
         }
+        context.restore();
       }
     }
     projectedAtoms.current = hitTargets;
@@ -353,7 +489,7 @@ function CrystalCanvas({
       context.font = "600 10px ui-monospace, monospace";
       context.fillText(axis.label, x + 3, y - 2);
     }
-  }, [structure, display, selectedAtomIndex, selectedOperation, orthographic, viewVersion]);
+  }, [structure, display, selectedAtomIndex, selectedOperation, atomFocus, orthographic, viewVersion]);
 
   useEffect(() => {
     const resize = new ResizeObserver(() => redraw());
@@ -362,6 +498,7 @@ function CrystalCanvas({
   }, [redraw]);
 
   function pointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = { active: true, x: event.clientX, y: event.clientY, moved: 0 };
   }
@@ -378,14 +515,19 @@ function CrystalCanvas({
     redraw();
   }
 
+  function atomAt(clientX: number, clientY: number, canvas: HTMLCanvasElement) {
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    return [...projectedAtoms.current]
+      .sort((a, b) => b.depth - a.depth)
+      .find((atom) => Math.hypot(atom.x - x, atom.y - y) <= atom.radius);
+  }
+
   function pointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drag.current.active) return;
     if (drag.current.moved < 5) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      const target = [...projectedAtoms.current]
-        .sort((a, b) => b.depth - a.depth)
-        .find((atom) => Math.hypot(atom.x - x, atom.y - y) <= atom.radius);
+      const target = atomAt(event.clientX, event.clientY, event.currentTarget);
       if (target) onSelectAtom(target.index);
     }
     drag.current.active = false;
@@ -408,6 +550,13 @@ function CrystalCanvas({
         onPointerMove={pointerMove}
         onPointerUp={pointerUp}
         onPointerCancel={() => { drag.current.active = false; }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          const target = atomAt(event.clientX, event.clientY, event.currentTarget);
+          if (!target) return;
+          onSelectAtom(target.index);
+          onRequestContextMenu({ x: event.clientX, y: event.clientY, atomIndex: target.index });
+        }}
         onWheel={(event) => {
           event.preventDefault();
           zoom.current = Math.max(0.58, Math.min(2.2, zoom.current * (event.deltaY > 0 ? 0.92 : 1.08)));
@@ -415,14 +564,20 @@ function CrystalCanvas({
         }}
       />
       <div className="canvas-topbar">
-        <div className="view-chip"><span className="live-dot" /> 交互晶胞</div>
+        <div className="canvas-chip-group">
+          <div className="view-chip"><span className="live-dot" /> 交互晶胞</div>
+          {atomFocus.mode !== "none" && <div className="focus-chip">
+            <span>{atomFocus.mode === "fade" ? "聚焦" : "单独显示"} · {atomFocus.sourceLabel}</span>
+            <button type="button" onClick={onClearAtomFocus}>恢复全部</button>
+          </div>}
+        </div>
         <div className="canvas-actions">
           <button type="button" className={!orthographic ? "active" : ""} onClick={() => setOrthographic(false)}>透视</button>
           <button type="button" className={orthographic ? "active" : ""} onClick={() => setOrthographic(true)}>正交</button>
           <button type="button" onClick={resetView} aria-label="复位视图">↺</button>
         </div>
       </div>
-      <div className="gesture-hint">拖拽旋转 · 滚轮缩放 · 点击原子</div>
+      <div className="gesture-hint">拖拽旋转 · 滚轮缩放 · 左键选择 · 右键聚焦</div>
     </div>
   );
 }
@@ -450,7 +605,10 @@ export default function Home() {
   const [operationFilter, setOperationFilter] = useState("all");
   const [notice, setNotice] = useState("示例 CIF 已载入：α-石英");
   const [dragActive, setDragActive] = useState(false);
+  const [atomFocus, setAtomFocus] = useState<AtomFocus>({ mode: "none", sourceLabel: null });
+  const [contextMenu, setContextMenu] = useState<AtomContextMenu | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const selectedAtom = structure.atoms[Math.min(selectedAtomIndex, structure.atoms.length - 1)];
   const selectedOperation = structure.operations.find((operation) => operation.id === selectedOperationId) ?? structure.operations[0];
@@ -474,6 +632,21 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
+  useEffect(() => {
+    const closeMenu = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+
   async function loadFile(file: File) {
     if (!file.name.toLowerCase().endsWith(".cif")) {
       setNotice("请选择 .cif 格式的晶体结构文件");
@@ -486,6 +659,8 @@ export default function Home() {
       setFileName(file.name);
       setSelectedAtomIndex(0);
       setSelectedOperationId(next.operations[0]?.id ?? 1);
+      setAtomFocus({ mode: "none", sourceLabel: null });
+      setContextMenu(null);
       setNotice(`已解析 ${next.atoms.length} 个等价原子与 ${next.operations.length} 个对称操作`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "CIF 解析失败，请检查文件格式");
@@ -588,8 +763,8 @@ export default function Home() {
 
         <section className="side-section display-section">
           <div className="section-heading"><span>显示控制</span><small>VIEW LAYERS</small></div>
-          <Toggle label="原子球" hint={`${structure.atoms.length} 个等价原子`} checked={display.atoms} onChange={() => toggleDisplay("atoms")} />
-          <Toggle label="化学键" hint={`${structure.bonds.length} 组近邻`} checked={display.bonds} onChange={() => toggleDisplay("bonds")} />
+          <Toggle label="原子球（哑光 CPK）" hint={`${structure.atoms.length} 个等价原子`} checked={display.atoms} onChange={() => toggleDisplay("atoms")} />
+          <Toggle label="化学键（球棍）" hint={`${structure.bonds.length} 组共价近邻`} checked={display.bonds} onChange={() => toggleDisplay("bonds")} />
           <Toggle label="晶胞边界" hint="1 × 1 × 1" checked={display.cell} onChange={() => toggleDisplay("cell")} />
           <Toggle label="原子标签" hint="元素与编号" checked={display.labels} onChange={() => toggleDisplay("labels")} />
           <Toggle label="对称元素" hint="轴 / 面 / 映射轨迹" checked={display.symmetry} onChange={() => toggleDisplay("symmetry")} />
@@ -613,7 +788,14 @@ export default function Home() {
           display={display}
           selectedAtomIndex={selectedAtomIndex}
           selectedOperation={selectedOperation}
+          atomFocus={atomFocus}
           onSelectAtom={selectAtom}
+          onRequestContextMenu={(menu) => setContextMenu({
+            ...menu,
+            x: Math.max(10, Math.min(window.innerWidth - 286, menu.x)),
+            y: Math.max(10, Math.min(window.innerHeight - 236, menu.y)),
+          })}
+          onClearAtomFocus={() => setAtomFocus({ mode: "none", sourceLabel: null })}
         />
 
         <div className="symmetry-story">
@@ -711,6 +893,40 @@ export default function Home() {
       </aside>
 
       {dragActive && <div className="drop-overlay"><div><span>⇣</span><strong>释放以解析 CIF</strong><small>文件只在本机浏览器中处理</small></div></div>}
+      {contextMenu && structure.atoms[contextMenu.atomIndex] && (() => {
+        const atom = structure.atoms[contextMenu.atomIndex];
+        return <div
+          ref={contextMenuRef}
+          className="atom-context-menu"
+          role="menu"
+          aria-label={`${atom.label} 原子显示选项`}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div className="context-menu-head">
+            <span className="atom-swatch" style={{ "--atom-color": elementStyle(atom.element).color } as React.CSSProperties}>{atom.element}</span>
+            <span><strong>{atom.label}</strong><small>不对称位点 {atom.source.label}</small></span>
+          </div>
+          <button type="button" role="menuitem" onClick={() => {
+            setAtomFocus({ mode: "fade", sourceLabel: atom.source.label });
+            setContextMenu(null);
+          }}>
+            <span>聚焦该不对称位点</span><small>保留其对称轨道，虚化其它原子</small>
+          </button>
+          <button type="button" role="menuitem" onClick={() => {
+            setAtomFocus({ mode: "isolate", sourceLabel: atom.source.label });
+            setContextMenu(null);
+          }}>
+            <span>仅显示该对称轨道</span><small>隐藏不属于 {atom.source.label} 的原子</small>
+          </button>
+          <div className="context-menu-divider" />
+          <button type="button" role="menuitem" onClick={() => {
+            setAtomFocus({ mode: "none", sourceLabel: null });
+            setContextMenu(null);
+          }}>
+            <span>恢复全部原子</span><small>取消聚焦或单独显示</small>
+          </button>
+        </div>;
+      })()}
       {notice && <div className="toast"><i>✓</i><span>{notice}</span></div>}
       {structure.warnings.length > 0 && <div className="warning-ribbon">{structure.warnings[0]}</div>}
     </main>

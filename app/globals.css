@@ -412,6 +412,8 @@ canvas:focus-visible {
   pointer-events: none;
 }
 
+.canvas-chip-group { display: flex; align-items: center; gap: 7px; min-width: 0; }
+
 .view-chip {
   display: inline-flex;
   align-items: center;
@@ -427,6 +429,24 @@ canvas:focus-visible {
 }
 
 .live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+
+.focus-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 4px 0 9px;
+  border: 1px solid #b9dddb;
+  border-radius: 6px;
+  color: #0b6668;
+  background: rgba(239, 249, 248, .96);
+  font-size: 8px;
+  pointer-events: auto;
+}
+
+.focus-chip span { overflow: hidden; max-width: 155px; text-overflow: ellipsis; white-space: nowrap; }
+.focus-chip button { height: 19px; padding: 0 6px; border: 0; border-radius: 4px; color: #0b6668; background: #d9efed; font-size: 7px; cursor: pointer; }
+.focus-chip button:hover { background: #c8e7e4; }
 
 .canvas-actions {
   display: flex;
@@ -444,6 +464,36 @@ canvas:focus-visible {
 .canvas-actions button:hover { color: var(--text); background: #f2f4f7; }
 
 .gesture-hint { position: absolute; z-index: 4; bottom: 12px; left: 50%; padding: 5px 10px; border: 1px solid var(--line); border-radius: 5px; color: var(--subtle); background: rgba(255, 255, 255, .86); font-size: 8px; transform: translateX(-50%); pointer-events: none; }
+
+.atom-context-menu {
+  position: fixed;
+  z-index: 80;
+  width: 276px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 14px 36px rgba(16, 24, 40, .16), 0 2px 8px rgba(16, 24, 40, .08);
+  backdrop-filter: blur(12px);
+}
+
+.context-menu-head {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+.context-menu-head > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.context-menu-head strong { color: var(--text); font-size: 10px; }
+.context-menu-head small { color: var(--subtle); font-size: 8px; }
+.atom-context-menu > button { display: flex; width: 100%; flex-direction: column; gap: 3px; padding: 9px 10px; border: 0; border-radius: 6px; text-align: left; background: transparent; cursor: pointer; }
+.atom-context-menu > button:hover { color: #0b6668; background: var(--accent-soft); }
+.atom-context-menu > button span { font-size: 9px; font-weight: 620; }
+.atom-context-menu > button small { color: var(--subtle); font-size: 7.5px; }
+.context-menu-divider { height: 1px; margin: 3px 5px; background: var(--line); }
 
 .symmetry-story {
   position: relative;
@@ -546,7 +596,7 @@ canvas:focus-visible {
 .atom-row { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 9px; width: 100%; min-height: 45px; padding: 5px 8px; border: 1px solid transparent; border-radius: 7px; background: var(--panel-soft); text-align: left; cursor: pointer; }
 .atom-row:hover,
 .atom-row.active { border-color: #b9d9d7; background: #f2faf9; }
-.atom-swatch { display: grid; width: 29px; height: 29px; place-items: center; border: 1px solid color-mix(in srgb, var(--atom-color), #fff 55%); border-radius: 50%; color: #fff; background: color-mix(in srgb, var(--atom-color), #475569 32%); font-family: var(--font-geist-mono), monospace; font-size: 8px; box-shadow: inset -4px -4px 8px rgba(0, 0, 0, .14); }
+.atom-swatch { display: grid; width: 29px; height: 29px; place-items: center; border: 1px solid color-mix(in srgb, var(--atom-color), #334155 22%); border-radius: 50%; color: #fff; background: color-mix(in srgb, var(--atom-color), #334155 10%); font-family: var(--font-geist-mono), monospace; font-size: 8px; text-shadow: 0 1px 1px rgba(0, 0, 0, .25); }
 .atom-row > span:nth-child(2) { gap: 2px; }
 .atom-row strong { color: #344054; font-size: 9px; font-weight: 580; }
 .atom-row small { overflow: hidden; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }

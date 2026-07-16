@@ -311,9 +311,34 @@ function describeOperation(matrix: Mat3, translation: Vec3) {
       : { kind: "mirror" as const, label: "m", name: "镜面反射", order: 2 };
   }
   if (det > 0) {
-    return hasFractionalTranslation
-      ? { kind: "screw" as const, label: `${order}${subscripts["1"] ?? "₁"}`, name: `${order} 重螺旋旋转`, order }
-      : { kind: "rotation" as const, label: `C${subscripts[String(order)] ?? order}`, name: `${order} 重旋转`, order };
+    if (hasFractionalTranslation) {
+      const axisCandidates: Vec3[] = [];
+      for (let x = -2; x <= 2; x += 1) {
+        for (let y = -2; y <= 2; y += 1) {
+          for (let z = -2; z <= 2; z += 1) {
+            if (!x && !y && !z) continue;
+            const candidate: Vec3 = [x, y, z];
+            const transformed = multiply(matrix, candidate);
+            const residual = Math.hypot(
+              transformed[0] - candidate[0],
+              transformed[1] - candidate[1],
+              transformed[2] - candidate[2],
+            );
+            if (residual < 1e-5) axisCandidates.push(candidate);
+          }
+        }
+      }
+      let axis = axisCandidates.sort((a, b) => Math.hypot(...a) - Math.hypot(...b))[0] ?? [0, 0, 1] as Vec3;
+      const firstNonZero = axis.find((value) => Math.abs(value) > 1e-6) ?? 1;
+      if (firstNonZero < 0) axis = axis.map((value) => -value) as Vec3;
+      const axisLengthSquared = axis[0] ** 2 + axis[1] ** 2 + axis[2] ** 2 || 1;
+      const axialTranslation = translation.reduce((sum, value, index) => sum + value * axis[index], 0) / axisLengthSquared;
+      const wrappedTranslation = ((axialTranslation % 1) + 1) % 1;
+      const screwIndex = Math.max(1, Math.min(order - 1, Math.round(wrappedTranslation * order) || 1));
+      const screwLabel = `${order}${subscripts[String(screwIndex)] ?? screwIndex}`;
+      return { kind: "screw" as const, label: screwLabel, name: `${screwLabel} 螺旋轴`, order };
+    }
+    return { kind: "rotation" as const, label: `C${subscripts[String(order)] ?? order}`, name: `${order} 重旋转`, order };
   }
   return { kind: "rotoinversion" as const, label: `S${subscripts[String(order)] ?? order}`, name: "旋转反演", order };
 }
