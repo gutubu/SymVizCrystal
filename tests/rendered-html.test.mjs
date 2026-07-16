@@ -42,9 +42,15 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /聚焦该不对称位点/);
   assert.match(page, /findSymmetryAxisOrigin/);
   assert.match(page, /createLinearGradient/);
+  assert.match(page, /补全分子片段/);
+  assert.match(page, /坐标计算器/);
+  assert.match(page, /操作 1、操作 2/);
   assert.match(parser, /_space_group_symop_operation_xyz/);
   assert.match(parser, /_atom_site_fract_x/);
   assert.match(parser, /pointGroupFromNumber/);
+  assert.match(parser, /hillElementOrder/);
+  assert.match(parser, /molecularDisplayFracts/);
+  assert.doesNotMatch(page, /g\{String\(operation\.id\)/);
   assert.match(layout, /lang="zh-CN"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));

@@ -44,6 +44,7 @@ export type Bond = {
   a: number;
   b: number;
   distance: number;
+  imageShift: Vec3;
 };
 
 export type CrystalStructure = {
@@ -434,10 +435,59 @@ function generateBonds(atoms: AtomInstance[], cell: UnitCell) {
     for (let b = a + 1; b < atoms.length; b += 1) {
       const distance = distancePeriodic(atoms[a], atoms[b], cell);
       const threshold = (elementStyle(atoms[a].element).covalent + elementStyle(atoms[b].element).covalent) * 1.22;
-      if (distance > 0.35 && distance <= threshold) bonds.push({ a, b, distance });
+      if (distance > 0.35 && distance <= threshold) {
+        const imageShift = atoms[b].fract.map((value, index) => -Math.round(value - atoms[a].fract[index])) as Vec3;
+        bonds.push({ a, b, distance, imageShift });
+      }
     }
   }
   return bonds;
+}
+
+export function molecularDisplayFracts(atoms: AtomInstance[], bonds: Bond[]) {
+  const adjacency: Array<Array<{ target: number; shift: Vec3 }>> = Array.from({ length: atoms.length }, () => []);
+  bonds.forEach((bond) => {
+    adjacency[bond.a].push({ target: bond.b, shift: bond.imageShift });
+    adjacency[bond.b].push({ target: bond.a, shift: bond.imageShift.map((value) => -value) as Vec3 });
+  });
+
+  const assigned: Array<Vec3 | undefined> = Array(atoms.length);
+  const result = atoms.map((atom) => [...atom.fract] as Vec3);
+
+  for (let start = 0; start < atoms.length; start += 1) {
+    if (assigned[start]) continue;
+    assigned[start] = [0, 0, 0];
+    const queue = [start];
+    const component: number[] = [];
+    let periodicNetwork = false;
+
+    while (queue.length) {
+      const current = queue.shift()!;
+      component.push(current);
+      const currentShift = assigned[current]!;
+      adjacency[current].forEach(({ target, shift }) => {
+        const expected = currentShift.map((value, index) => value + shift[index]) as Vec3;
+        if (!assigned[target]) {
+          assigned[target] = expected;
+          queue.push(target);
+        } else if (assigned[target]!.some((value, index) => Math.abs(value - expected[index]) > 1e-6)) {
+          periodicNetwork = true;
+        }
+      });
+    }
+
+    if (periodicNetwork) continue;
+    const centroid = component.reduce<Vec3>((sum, index) => {
+      const shift = assigned[index]!;
+      return sum.map((value, axis) => value + atoms[index].fract[axis] + shift[axis]) as Vec3;
+    }, [0, 0, 0]).map((value) => value / component.length) as Vec3;
+    const centerShift = centroid.map((value) => Math.round(0.5 - value)) as Vec3;
+    component.forEach((index) => {
+      result[index] = atoms[index].fract.map((value, axis) => value + assigned[index]![axis] + centerShift[axis]) as Vec3;
+    });
+  }
+
+  return result;
 }
 
 function normalizeElement(value: string) {
@@ -474,16 +524,47 @@ function greatestCommonDivisor(a: number, b: number): number {
   return b ? greatestCommonDivisor(b, a % b) : a;
 }
 
+const unicodeDigits: Record<string, string> = { "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉", ".": "." };
+
+function formulaSubscript(value: number) {
+  return value > 1 ? String(value).split("").map((digit) => unicodeDigits[digit] ?? digit).join("") : "";
+}
+
+function formulaFromCif(value?: string) {
+  if (!value) return null;
+  const counts = new Map<string, number>();
+  for (const match of value.matchAll(/([A-Z][a-z]?)\s*(\d+(?:\.\d+)?)?/g)) {
+    const element = match[1];
+    const count = match[2] ? Number(match[2]) : 1;
+    counts.set(element, (counts.get(element) ?? 0) + count);
+  }
+  if (!counts.size) return null;
+  return [...counts.entries()]
+    .sort(([a], [b]) => hillElementOrder(a, b, counts.has("C")))
+    .map(([element, count]) => element + formulaSubscript(count))
+    .join("");
+}
+
 function formulaFromAtoms(atoms: AtomInstance[]) {
   const counts = new Map<string, number>();
   atoms.forEach((atom) => counts.set(atom.element, (counts.get(atom.element) ?? 0) + 1));
   const values = [...counts.values()];
   const divisor = values.reduce((result, count) => greatestCommonDivisor(result, count), values[0] ?? 1);
-  const unicodeDigits: Record<string, string> = { "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉" };
-  return [...counts.entries()].map(([element, count]) => {
+  return [...counts.entries()].sort(([a], [b]) => hillElementOrder(a, b, counts.has("C"))).map(([element, count]) => {
     const reduced = count / divisor;
-    return element + (reduced > 1 ? String(reduced).split("").map((digit) => unicodeDigits[digit]).join("") : "");
+    return element + formulaSubscript(reduced);
   }).join("");
+}
+
+export function hillElementOrder(a: string, b: string, containsCarbon = true) {
+  if (!containsCarbon) return 0;
+  if (containsCarbon) {
+    if (a === "C") return b === "C" ? 0 : -1;
+    if (b === "C") return 1;
+    if (a === "H") return b === "H" ? 0 : -1;
+    if (b === "H") return 1;
+  }
+  return a.localeCompare(b, "en");
 }
 
 export function parseCif(text: string): CrystalStructure {
@@ -500,6 +581,7 @@ export function parseCif(text: string): CrystalStructure {
   const spaceGroup = firstTag(tags, ["_space_group_name_h-m_alt", "_symmetry_space_group_name_h-m", "_space_group_name_h-m_ref"]) ?? "P 1";
   const spaceGroupNumber = numeric(firstTag(tags, ["_space_group_it_number", "_symmetry_int_tables_number"]), 0) || undefined;
   const explicitPointGroup = firstTag(tags, ["_space_group_point_group_h-m", "_symmetry_point_group_name_h-m"]);
+  const explicitFormula = firstTag(tags, ["_chemical_formula_sum", "_chemical_formula_structural"]);
 
   const atomLoop = loops.find((loop) => findColumn(loop, ["_atom_site_fract_x"]) >= 0 && findColumn(loop, ["_atom_site_fract_y"]) >= 0 && findColumn(loop, ["_atom_site_fract_z"]) >= 0);
   if (!atomLoop) throw new Error("CIF 中没有找到分数坐标 _atom_site_fract_x/y/z。");
@@ -548,7 +630,7 @@ export function parseCif(text: string): CrystalStructure {
     operations,
     atoms,
     bonds,
-    formula: formulaFromAtoms(atoms),
+    formula: formulaFromCif(explicitFormula) ?? formulaFromAtoms(atoms),
     warnings,
   };
 }

@@ -11,7 +11,9 @@ import {
   elementStyle,
   formatFractional,
   fractToCart,
+  hillElementOrder,
   latticeVectors,
+  molecularDisplayFracts,
   operationKindLabel,
   parseCif,
 } from "./crystal-data";
@@ -22,6 +24,7 @@ type DisplaySettings = {
   cell: boolean;
   labels: boolean;
   symmetry: boolean;
+  completeMolecules: boolean;
 };
 
 type ProjectedAtom = { index: number; x: number; y: number; radius: number; depth: number };
@@ -35,6 +38,7 @@ const defaultDisplay: DisplaySettings = {
   cell: true,
   labels: true,
   symmetry: true,
+  completeMolecules: true,
 };
 
 function prettyGroup(value: string) {
@@ -44,6 +48,24 @@ function prettyGroup(value: string) {
 
 function coordinateText(value: Vec3) {
   return `(${value.map(formatFractional).join(", ")})`;
+}
+
+function decimalCoordinateText(value: Vec3) {
+  return `(${value.map((coordinate) => coordinate.toFixed(4)).join(", ")})`;
+}
+
+function operationTitle(operation: SymmetryOperation) {
+  return `操作 ${operation.id}（${operation.name}）`;
+}
+
+function parseCoordinateInput(value: string) {
+  const normalized = value.trim().replace(/−/g, "-");
+  const fraction = normalized.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*\/\s*(\d+(?:\.\d*)?)$/);
+  if (fraction) {
+    const denominator = Number(fraction[2]);
+    return denominator ? Number(fraction[1]) / denominator : Number.NaN;
+  }
+  return Number(normalized);
 }
 
 function vectorAdd(a: Vec3, b: Vec3): Vec3 {
@@ -217,6 +239,11 @@ function CrystalCanvas({
       };
     };
 
+    const displayFracts = display.completeMolecules
+      ? molecularDisplayFracts(structure.atoms, structure.bonds)
+      : structure.atoms.map((atom) => atom.fract);
+    const displayCarts = displayFracts.map((fract) => fractToCart(fract, structure.cell));
+
     const fractionalCorners: Vec3[] = [
       [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
       [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1],
@@ -362,12 +389,14 @@ function CrystalCanvas({
         const focusA = matchesFocus(atomA);
         const focusB = matchesFocus(atomB);
         if (atomFocus.mode === "isolate" && (!focusA || !focusB)) continue;
+        const cartA = displayCarts[bond.a];
+        const cartB = displayCarts[bond.b];
         const directDistance = Math.hypot(
-          atomA.cart[0] - atomB.cart[0], atomA.cart[1] - atomB.cart[1], atomA.cart[2] - atomB.cart[2],
+          cartA[0] - cartB[0], cartA[1] - cartB[1], cartA[2] - cartB[2],
         );
         if (directDistance > bond.distance + 0.25) continue;
-        const a = project(atomA.cart);
-        const b = project(atomB.cart);
+        const a = project(cartA);
+        const b = project(cartB);
         const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         const lineWidth = Math.max(3.4, Math.min(7, (a.factor + b.factor) * worldScale * 0.13));
         context.globalAlpha = atomFocus.mode === "fade" ? (focusA && focusB ? 1 : focusA || focusB ? 0.42 : 0.07) : 1;
@@ -396,7 +425,7 @@ function CrystalCanvas({
     const selectedAtom = structure.atoms[selectedAtomIndex];
     if (display.symmetry && selectedAtom) {
       const source = project(fractToCart(selectedAtom.source.fract, structure.cell));
-      const target = project(selectedAtom.cart);
+      const target = project(displayCarts[selectedAtomIndex] ?? selectedAtom.cart);
       context.save();
       context.strokeStyle = "rgba(15, 139, 141, .76)";
       context.fillStyle = "#0f8b8d";
@@ -416,12 +445,12 @@ function CrystalCanvas({
       context.fill();
       if (Math.hypot(target.x - source.x, target.y - source.y) > 30) {
         context.font = "600 11px ui-monospace, monospace";
-        context.fillText(`g${selectedOperation.id}`, (source.x + target.x) / 2 + 5, (source.y + target.y) / 2 - 5);
+        context.fillText(`操作 ${selectedOperation.id}`, (source.x + target.x) / 2 + 5, (source.y + target.y) / 2 - 5);
       }
       context.restore();
     }
 
-    const atoms = structure.atoms.map((atom, index) => ({ atom, index, projection: project(atom.cart) }))
+    const atoms = structure.atoms.map((atom, index) => ({ atom, index, projection: project(displayCarts[index]) }))
       .sort((a, b) => a.projection.depth - b.projection.depth);
     const hitTargets: ProjectedAtom[] = [];
     if (display.atoms) {
@@ -601,8 +630,13 @@ export default function Home() {
   const [display, setDisplay] = useState(defaultDisplay);
   const [selectedAtomIndex, setSelectedAtomIndex] = useState(0);
   const [selectedOperationId, setSelectedOperationId] = useState(1);
-  const [rightTab, setRightTab] = useState<"operations" | "atoms" | "wyckoff">("operations");
+  const [rightTab, setRightTab] = useState<"operations" | "atoms" | "wyckoff" | "calculator">("operations");
   const [operationFilter, setOperationFilter] = useState("all");
+  const [calculatorInput, setCalculatorInput] = useState<[string, string, string]>(() => {
+    const firstSite = structure.sites[0];
+    return firstSite ? firstSite.fract.map((value) => value.toFixed(6)) as [string, string, string] : ["0", "0", "0"];
+  });
+  const [calculatorOperationId, setCalculatorOperationId] = useState(1);
   const [notice, setNotice] = useState("示例 CIF 已载入：α-石英");
   const [dragActive, setDragActive] = useState(false);
   const [atomFocus, setAtomFocus] = useState<AtomFocus>({ mode: "none", sourceLabel: null });
@@ -612,6 +646,7 @@ export default function Home() {
 
   const selectedAtom = structure.atoms[Math.min(selectedAtomIndex, structure.atoms.length - 1)];
   const selectedOperation = structure.operations.find((operation) => operation.id === selectedOperationId) ?? structure.operations[0];
+  const calculatorOperation = structure.operations.find((operation) => operation.id === calculatorOperationId) ?? structure.operations[0];
 
   const filteredOperations = useMemo(() => {
     if (operationFilter === "all") return structure.operations;
@@ -623,8 +658,31 @@ export default function Home() {
   const composition = useMemo(() => {
     const counts = new Map<string, number>();
     structure.atoms.forEach((atom) => counts.set(atom.element, (counts.get(atom.element) ?? 0) + 1));
-    return [...counts.entries()];
+    return [...counts.entries()].sort(([a], [b]) => hillElementOrder(a, b, counts.has("C")));
   }, [structure]);
+
+  const calculator = useMemo(() => {
+    const input = calculatorInput.map(parseCoordinateInput) as Vec3;
+    const valid = input.every(Number.isFinite);
+    if (!valid) return { valid: false, input, raw: [0, 0, 0] as Vec3, wrapped: [0, 0, 0] as Vec3, matchIndex: -1 };
+    const raw = calculatorOperation.matrix.map((row, index) => (
+      row[0] * input[0] + row[1] * input[1] + row[2] * input[2] + calculatorOperation.translation[index]
+    )) as Vec3;
+    const wrapped = applyOperation(calculatorOperation, input);
+    let matchIndex = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    structure.atoms.forEach((atom, index) => {
+      const distance = Math.hypot(...atom.fract.map((value, axis) => {
+        const delta = value - wrapped[axis];
+        return delta - Math.round(delta);
+      }));
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        matchIndex = index;
+      }
+    });
+    return { valid: true, input, raw, wrapped, matchIndex: bestDistance < 2e-3 ? matchIndex : -1 };
+  }, [calculatorInput, calculatorOperation, structure]);
 
   useEffect(() => {
     if (!notice) return;
@@ -659,6 +717,10 @@ export default function Home() {
       setFileName(file.name);
       setSelectedAtomIndex(0);
       setSelectedOperationId(next.operations[0]?.id ?? 1);
+      setCalculatorOperationId(next.operations[0]?.id ?? 1);
+      setCalculatorInput(next.sites[0]
+        ? next.sites[0].fract.map((value) => value.toFixed(6)) as [string, string, string]
+        : ["0", "0", "0"]);
       setAtomFocus({ mode: "none", sourceLabel: null });
       setContextMenu(null);
       setNotice(`已解析 ${next.atoms.length} 个等价原子与 ${next.operations.length} 个对称操作`);
@@ -669,13 +731,16 @@ export default function Home() {
 
   function selectOperation(operation: SymmetryOperation) {
     setSelectedOperationId(operation.id);
+    setCalculatorOperationId(operation.id);
     const matchingAtom = structure.atoms.findIndex((atom) => atom.operationIds.includes(operation.id));
     if (matchingAtom >= 0) setSelectedAtomIndex(matchingAtom);
   }
 
   function selectAtom(index: number) {
     setSelectedAtomIndex(index);
-    setSelectedOperationId(structure.atoms[index].operationIds[0] ?? 1);
+    const operationId = structure.atoms[index].operationIds[0] ?? 1;
+    setSelectedOperationId(operationId);
+    setCalculatorOperationId(operationId);
   }
 
   function toggleDisplay(key: keyof DisplaySettings) {
@@ -746,7 +811,7 @@ export default function Home() {
         <section className="side-section">
           <div className="section-heading"><span>结构概览</span><small>ASYMMETRIC UNIT</small></div>
           <div className="formula-card">
-            <div><span>化学式</span><strong>{structure.formula}</strong></div>
+            <div><span>化学式 · 常规 / Hill 顺序</span><strong>{structure.formula}</strong></div>
             <div className="composition-dots">
               {composition.map(([element, count]) => <span key={element} style={{ "--element-color": elementStyle(element).color } as React.CSSProperties}><i />{element}<small>{count}</small></span>)}
             </div>
@@ -765,6 +830,7 @@ export default function Home() {
           <div className="section-heading"><span>显示控制</span><small>VIEW LAYERS</small></div>
           <Toggle label="原子球（哑光 CPK）" hint={`${structure.atoms.length} 个等价原子`} checked={display.atoms} onChange={() => toggleDisplay("atoms")} />
           <Toggle label="化学键（球棍）" hint={`${structure.bonds.length} 组共价近邻`} checked={display.bonds} onChange={() => toggleDisplay("bonds")} />
+          <Toggle label="补全分子片段" hint={display.completeMolecules ? "跨晶胞键已重新拼接" : "当前按晶胞边界截断"} checked={display.completeMolecules} onChange={() => toggleDisplay("completeMolecules")} />
           <Toggle label="晶胞边界" hint="1 × 1 × 1" checked={display.cell} onChange={() => toggleDisplay("cell")} />
           <Toggle label="原子标签" hint="元素与编号" checked={display.labels} onChange={() => toggleDisplay("labels")} />
           <Toggle label="对称元素" hint="轴 / 面 / 映射轨迹" checked={display.symmetry} onChange={() => toggleDisplay("symmetry")} />
@@ -781,7 +847,7 @@ export default function Home() {
       <section className="workspace">
         <div className="workspace-toolbar">
           <div className="mode-tabs"><button type="button" className="active">结构 + 对称</button><button type="button">操作轨迹</button></div>
-          <div className="workspace-stats"><span><i />{structure.atoms.length} 原子</span><span>{structure.bonds.length} 键</span><span>晶胞 1×1×1</span></div>
+          <div className="workspace-stats"><span><i />{structure.atoms.length} 原子</span><span>{structure.bonds.length} 键</span><span>{display.completeMolecules ? "完整分子" : "晶胞截断"}</span></div>
         </div>
         <CrystalCanvas
           structure={structure}
@@ -801,7 +867,7 @@ export default function Home() {
         <div className="symmetry-story">
           <div className="story-title">
             <div><span className="eyebrow">SYMMETRY MAPPING</span><strong>从不对称位点到等价原子</strong></div>
-            <span className="story-count">g{String(selectedOperation.id).padStart(2, "0")} / {String(structure.operations.length).padStart(2, "0")}</span>
+            <span className="story-count">第 {selectedOperation.id} / {structure.operations.length} 项操作</span>
           </div>
           <div className="mapping-row">
             <div className="mapping-node source"><span>源位点</span><strong>{selectedAtom?.source.label}</strong><small>{selectedAtom ? coordinateText(selectedAtom.source.fract) : "—"}</small></div>
@@ -830,9 +896,11 @@ export default function Home() {
           <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>对称操作</button>
           <button type="button" className={rightTab === "atoms" ? "active" : ""} onClick={() => setRightTab("atoms")}>原子轨迹</button>
           <button type="button" className={rightTab === "wyckoff" ? "active" : ""} onClick={() => setRightTab("wyckoff")}>Wyckoff</button>
+          <button type="button" className={rightTab === "calculator" ? "active" : ""} onClick={() => setRightTab("calculator")}>坐标计算器</button>
         </nav>
 
         {rightTab === "operations" && <div className="right-content panel-scroll">
+          <div className="notation-note"><strong>操作编号</strong><span>这里按 CIF 中的顺序写作“操作 1、操作 2”。群论或程序中也常简写为 gᵢ。</span></div>
           <div className="filter-row">
             {[['all', '全部'], ['rotation', '旋转'], ['reflection', '反射 / 反演']].map(([value, label]) => (
               <button key={value} type="button" className={operationFilter === value ? "active" : ""} onClick={() => setOperationFilter(value)}>{label}</button>
@@ -847,7 +915,7 @@ export default function Home() {
                 onClick={() => selectOperation(operation)}
               >
                 <span className={`operation-symbol ${operation.kind}`}>{operation.label}</span>
-                <span className="operation-copy"><strong>g{String(operation.id).padStart(2, "0")} · {operation.name}</strong><code>{operation.xyz}</code></span>
+                <span className="operation-copy"><strong>{operationTitle(operation)}</strong><code>{operation.xyz}</code></span>
                 <span className="operation-kind">{operationKindLabel(operation.kind)}</span>
               </button>
             ))}
@@ -855,7 +923,7 @@ export default function Home() {
           {selectedAtom && <div className="selected-detail">
             <div className="detail-head"><span style={{ "--atom-color": elementStyle(selectedAtom.element).color } as React.CSSProperties}><i />{selectedAtom.label}</span><small>当前映射</small></div>
             <div className="equation">
-              <code>{coordinateText(selectedAtom.source.fract)}</code><b>— g{selectedOperation.id} →</b><code>{coordinateText(transformedSelected as Vec3)}</code>
+              <code>{coordinateText(selectedAtom.source.fract)}</code><b>— 操作 {selectedOperation.id} →</b><code>{coordinateText(transformedSelected as Vec3)}</code>
             </div>
             <div className="detail-grid">
               <span>母位点<strong>{selectedAtom.source.label}</strong></span>
@@ -871,7 +939,7 @@ export default function Home() {
             <button type="button" key={atom.id} className={selectedAtomIndex === index ? "atom-row active" : "atom-row"} onClick={() => selectAtom(index)}>
               <span className="atom-swatch" style={{ "--atom-color": elementStyle(atom.element).color } as React.CSSProperties}>{atom.element}</span>
               <span><strong>{atom.label}</strong><small>{coordinateText(atom.fract)}</small></span>
-              <em>g{atom.operationIds[0]}</em>
+              <em>操作 {atom.operationIds[0]}</em>
             </button>
           ))}
         </div>}
@@ -889,6 +957,72 @@ export default function Home() {
               <span className="wyckoff-count"><strong>{site.multiplicity ?? generated}</strong><small>等价位</small></span>
             </button>;
           })}
+        </div>}
+
+        {rightTab === "calculator" && <div className="right-content panel-scroll calculator-panel">
+          <div className="calculator-intro">
+            <span>对称位点计算器</span>
+            <p>输入分数坐标 r，逐步验证 r′ = Rr + t，并将结果折回 [0, 1) 晶胞范围。</p>
+          </div>
+
+          <label className="calculator-field">
+            <span>选择对称操作</span>
+            <select value={calculatorOperation.id} onChange={(event) => setCalculatorOperationId(Number(event.target.value))}>
+              {structure.operations.map((operation) => <option key={operation.id} value={operation.id}>{operationTitle(operation)} · {operation.xyz}</option>)}
+            </select>
+          </label>
+
+          <div className="calculator-coordinate-head">
+            <span>输入分数坐标 r</span>
+            <button type="button" onClick={() => {
+              if (!selectedAtom) return;
+              setCalculatorInput(selectedAtom.source.fract.map((value) => value.toFixed(6)) as [string, string, string]);
+              setCalculatorOperationId(selectedOperation.id);
+            }}>填入当前原子</button>
+          </div>
+          <div className="calculator-inputs">
+            {(["x", "y", "z"] as const).map((axis, index) => <label key={axis}>
+              <span>{axis}</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={calculatorInput[index]}
+                aria-label={`${axis} 分数坐标`}
+                onChange={(event) => setCalculatorInput((current) => current.map((value, axisIndex) => axisIndex === index ? event.target.value : value) as [string, string, string])}
+              />
+            </label>)}
+          </div>
+
+          <div className="calculator-operation-card">
+            <div className="calculator-step-head"><i>1</i><span>代入操作表达式</span></div>
+            <code>{calculatorOperation.xyz}</code>
+            <div className="matrix-equation" aria-label="旋转矩阵和平移向量">
+              <span className="matrix-bracket">R</span>
+              <span className="matrix-values">{calculatorOperation.matrix.flat().map((value, index) => <b key={index}>{value}</b>)}</span>
+              <span className="matrix-plus">+</span>
+              <span className="translation-values">{calculatorOperation.translation.map((value, index) => <b key={index}>{value.toFixed(4)}</b>)}</span>
+            </div>
+          </div>
+
+          {!calculator.valid ? <div className="calculator-invalid">请输入十进制或分数，例如 0.25、1/3、−0.5。</div> : <>
+            <div className="calculator-result-row">
+              <div><span><i>2</i> 未折回结果</span><code>{decimalCoordinateText(calculator.raw)}</code></div>
+              <b>→</b>
+              <div className="wrapped"><span><i>3</i> 晶胞内结果</span><code>{decimalCoordinateText(calculator.wrapped)}</code></div>
+            </div>
+            <div className={calculator.matchIndex >= 0 ? "calculator-match found" : "calculator-match"}>
+              <span>匹配晶体中的原子</span>
+              {calculator.matchIndex >= 0 ? <>
+                <strong>{structure.atoms[calculator.matchIndex].label}</strong>
+                <small>母位点 {structure.atoms[calculator.matchIndex].source.label} · {coordinateText(structure.atoms[calculator.matchIndex].fract)}</small>
+                <button type="button" onClick={() => {
+                  setSelectedAtomIndex(calculator.matchIndex);
+                  setSelectedOperationId(calculatorOperation.id);
+                  setNotice(`已定位 ${structure.atoms[calculator.matchIndex].label}`);
+                }}>在三维视图中定位</button>
+              </> : <><strong>未找到</strong><small>当前结果与 CIF 原子位点的容差大于 0.002。</small></>}
+            </div>
+          </>}
         </div>}
       </aside>
 
