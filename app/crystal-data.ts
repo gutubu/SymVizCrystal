@@ -464,7 +464,7 @@ function generateBonds(atoms: AtomInstance[], cell: UnitCell) {
   return bonds;
 }
 
-function molecularComponentIds(atoms: AtomInstance[], bonds: Bond[]) {
+export function molecularComponentIds(atoms: AtomInstance[], bonds: Bond[]) {
   const adjacency: number[][] = Array.from({ length: atoms.length }, () => []);
   bonds.forEach((bond) => {
     adjacency[bond.a].push(bond.b);

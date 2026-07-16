@@ -16,6 +16,7 @@ import {
   fractToCart,
   hillElementOrder,
   latticeVectors,
+  molecularComponentIds,
   molecularDisplayFracts,
   operationKindLabel,
   parseCif,
@@ -43,6 +44,15 @@ type AxisAppearance = { lineWidth: number; length: number; font: AxisFont; fontS
 type AppearanceMenu = { kind: "element"; element: string; x: number; y: number } | { kind: "axis"; x: number; y: number };
 type RightTab = "operations" | "atoms" | "wyckoff" | "hydrogen" | "calculator";
 type HydrogenPreset = "strict" | "steiner" | "broad";
+type SupercellSettings = { a: number; b: number; c: number };
+type DisplayAtomInstance = {
+  atom: AtomInstance;
+  index: number;
+  fract: Vec3;
+  cart: Vec3;
+  translation: Vec3;
+  translationKey: string;
+};
 
 const defaultDisplay: DisplaySettings = {
   atoms: true,
@@ -80,6 +90,69 @@ const hydrogenBondPresets: Record<HydrogenPreset, HydrogenBondCriteria> = {
 };
 const defaultHydrogenBondCriteria = hydrogenBondPresets.steiner;
 const hydrogenStrengthLabels: Record<HydrogenBond["strength"], string> = { strong: "强", moderate: "中等", weak: "弱" };
+const defaultSupercell: SupercellSettings = { a: 1, b: 1, c: 1 };
+
+function supercellText(value: SupercellSettings) {
+  const format = (extent: number) => Number.isInteger(extent) ? String(extent) : extent.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `${format(value.a)} × ${format(value.b)} × ${format(value.c)}`;
+}
+
+function isCrystallographicSupercell(value: SupercellSettings) {
+  return [value.a, value.b, value.c].every((extent) => Number.isInteger(extent));
+}
+
+function buildDisplayAtomInstances(
+  structure: CrystalStructure,
+  baseDisplayFracts: Vec3[],
+  supercell: SupercellSettings,
+  completeMolecules: boolean,
+) {
+  const extents: Vec3 = [supercell.a, supercell.b, supercell.c];
+  const results: DisplayAtomInstance[] = [];
+  const componentIds = molecularComponentIds(structure.atoms, structure.bonds);
+  const components = new Map<number, number[]>();
+  componentIds.forEach((componentId, index) => components.set(componentId, [...(components.get(componentId) ?? []), index]));
+  const crystallographic = isCrystallographicSupercell(supercell);
+  const minimumTranslation = completeMolecules && !crystallographic ? -1 : 0;
+  const maximumTranslations = extents.map((extent) => (
+    crystallographic ? extent - 1 : completeMolecules ? Math.ceil(extent) : Math.ceil(extent) - 1
+  )) as Vec3;
+
+  for (let tx = minimumTranslation; tx <= maximumTranslations[0]; tx += 1) {
+    for (let ty = minimumTranslation; ty <= maximumTranslations[1]; ty += 1) {
+      for (let tz = minimumTranslation; tz <= maximumTranslations[2]; tz += 1) {
+        const translation: Vec3 = [tx, ty, tz];
+        const translationKey = translation.join(",");
+        if (completeMolecules) {
+          components.forEach((indices) => {
+            const fracts = indices.map((index) => baseDisplayFracts[index].map((value, axis) => value + translation[axis]) as Vec3);
+            const intersects = crystallographic || [0, 1, 2].every((axis) => {
+              const values = fracts.map((fract) => fract[axis]);
+              return Math.max(...values) >= -1e-7 && Math.min(...values) < extents[axis] - 1e-7;
+            });
+            if (!intersects) return;
+            indices.forEach((index, localIndex) => results.push({
+              atom: structure.atoms[index],
+              index,
+              fract: fracts[localIndex],
+              cart: fractToCart(fracts[localIndex], structure.cell),
+              translation,
+              translationKey,
+            }));
+          });
+        } else {
+          structure.atoms.forEach((atom, index) => {
+            const fract = baseDisplayFracts[index].map((value, axis) => value + translation[axis]) as Vec3;
+            const inside = fract.every((value, axis) => value >= -1e-7 && value < extents[axis] - 1e-7);
+            if (!inside) return;
+            results.push({ atom, index, fract, cart: fractToCart(fract, structure.cell), translation, translationKey });
+          });
+        }
+      }
+    }
+  }
+  return results;
+}
 const axisFontFamilies: Record<AxisFont, string> = {
   mono: "ui-monospace, SFMono-Regular, Consolas, monospace",
   sans: '"Segoe UI", "PingFang SC", sans-serif',
@@ -299,6 +372,7 @@ function screwTranslationText(operation: SymmetryOperation, axisFract: Vec3) {
 function CrystalCanvas({
   structure,
   hydrogenBonds,
+  supercell,
   display,
   selectedAtomIndex,
   selectedOperation,
@@ -312,6 +386,7 @@ function CrystalCanvas({
 }: {
   structure: CrystalStructure;
   hydrogenBonds: HydrogenBond[];
+  supercell: SupercellSettings;
   display: DisplaySettings;
   selectedAtomIndex: number;
   selectedOperation: SymmetryOperation;
@@ -356,9 +431,16 @@ function CrystalCanvas({
     const height = rect.height;
     context.clearRect(0, 0, width, height);
 
-    const center = fractToCart([0.5, 0.5, 0.5], structure.cell);
+    const supercellExtents: Vec3 = [supercell.a, supercell.b, supercell.c];
+    const center = fractToCart(supercellExtents.map((extent) => extent / 2) as Vec3, structure.cell);
     const [aVector, bVector, cVector] = latticeVectors(structure.cell);
-    const maxCell = Math.max(structure.cell.a, structure.cell.b, structure.cell.c, 1);
+    const baseMaxCell = Math.max(structure.cell.a, structure.cell.b, structure.cell.c, 1);
+    const maxCell = Math.max(
+      structure.cell.a * supercell.a,
+      structure.cell.b * supercell.b,
+      structure.cell.c * supercell.c,
+      1,
+    );
     const worldScale = 2.45 / maxCell;
 
     const rotate = (point: Vec3): Vec3 => {
@@ -384,16 +466,15 @@ function CrystalCanvas({
       };
     };
 
-    const displayFracts = display.completeMolecules
+    const baseDisplayFracts = display.completeMolecules
       ? molecularDisplayFracts(structure.atoms, structure.bonds)
       : structure.atoms.map((atom) => atom.fract);
-    const displayCarts = displayFracts.map((fract) => fractToCart(fract, structure.cell));
+    const displayAtoms = buildDisplayAtomInstances(structure, baseDisplayFracts, supercell, display.completeMolecules);
+    const displayAtomMap = new Map(displayAtoms.map((instance) => [`${instance.translationKey}:${instance.index}`, instance]));
+    const displayTranslations = [...new Map(displayAtoms.map((instance) => [instance.translationKey, instance.translation])).values()];
+    const instancesByAtom = new Map<number, DisplayAtomInstance[]>();
+    displayAtoms.forEach((instance) => instancesByAtom.set(instance.index, [...(instancesByAtom.get(instance.index) ?? []), instance]));
 
-    const fractionalCorners: Vec3[] = [
-      [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
-      [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1],
-    ];
-    const corners: Vec3[] = fractionalCorners.map((fract) => fractToCart(fract, structure.cell));
     const edges = [[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
 
     if (display.cell) {
@@ -401,13 +482,28 @@ function CrystalCanvas({
       context.lineWidth = 1;
       context.strokeStyle = "rgba(71, 85, 105, .34)";
       context.setLineDash([4, 7]);
-      for (const [from, to] of edges) {
-        const a = project(corners[from]);
-        const b = project(corners[to]);
-        context.beginPath();
-        context.moveTo(a.x, a.y);
-        context.lineTo(b.x, b.y);
-        context.stroke();
+      for (let ix = 0; ix < Math.ceil(supercell.a); ix += 1) {
+        for (let iy = 0; iy < Math.ceil(supercell.b); iy += 1) {
+          for (let iz = 0; iz < Math.ceil(supercell.c); iz += 1) {
+            const x1 = Math.min(ix + 1, supercell.a);
+            const y1 = Math.min(iy + 1, supercell.b);
+            const z1 = Math.min(iz + 1, supercell.c);
+            if (x1 <= ix || y1 <= iy || z1 <= iz) continue;
+            const fractionalCorners: Vec3[] = [
+              [ix, iy, iz], [x1, iy, iz], [ix, y1, iz], [x1, y1, iz],
+              [ix, iy, z1], [x1, iy, z1], [ix, y1, z1], [x1, y1, z1],
+            ];
+            const corners = fractionalCorners.map((fract) => fractToCart(fract, structure.cell));
+            for (const [from, to] of edges) {
+              const a = project(corners[from]);
+              const b = project(corners[to]);
+              context.beginPath();
+              context.moveTo(a.x, a.y);
+              context.lineTo(b.x, b.y);
+              context.stroke();
+            }
+          }
+        }
       }
       context.restore();
     }
@@ -417,7 +513,8 @@ function CrystalCanvas({
       if (["rotation", "screw", "rotoinversion"].includes(selectedOperation.kind)) {
         const axisFract = findEigenDirection(selectedOperation, 1);
         const axisCart = normalize(fractToCart(axisFract, structure.cell));
-        const axisOrigin = fractToCart(findSymmetryAxisOrigin(selectedOperation, axisFract, structure), structure.cell);
+        const baseAxisOrigin = findSymmetryAxisOrigin(selectedOperation, axisFract, structure);
+        const axisOrigin = fractToCart(baseAxisOrigin.map((value, axis) => value + Math.floor(supercellExtents[axis] / 2)) as Vec3, structure.cell);
         const span = maxCell * 0.72;
         const a = project(vectorAdd(axisOrigin, vectorScale(axisCart, -span)));
         const b = project(vectorAdd(axisOrigin, vectorScale(axisCart, span)));
@@ -434,7 +531,7 @@ function CrystalCanvas({
           const helper: Vec3 = Math.abs(axisCart[2]) < 0.82 ? [0, 0, 1] : [0, 1, 0];
           const u = normalize(cross(axisCart, helper));
           const v = normalize(cross(axisCart, u));
-          const radius = maxCell * 0.055;
+          const radius = baseMaxCell * 0.055;
           const turns = Math.max(1.6, selectedOperation.order * 0.82);
           const helixPoints = Array.from({ length: 97 }, (_, index) => {
             const t = index / 96;
@@ -528,41 +625,45 @@ function CrystalCanvas({
     if (display.bonds) {
       context.save();
       context.lineCap = "round";
-      for (const bond of structure.bonds) {
-        const atomA = structure.atoms[bond.a];
-        const atomB = structure.atoms[bond.b];
-        const focusA = matchesFocus(atomA);
-        const focusB = matchesFocus(atomB);
-        if (atomFocus.mode === "isolate" && (!focusA || !focusB)) continue;
-        const cartA = displayCarts[bond.a];
-        const cartB = displayCarts[bond.b];
-        const directDistance = Math.hypot(
-          cartA[0] - cartB[0], cartA[1] - cartB[1], cartA[2] - cartB[2],
-        );
-        if (directDistance > bond.distance + 0.25) continue;
-        const a = project(cartA);
-        const b = project(cartB);
-        const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        const lineWidth = Math.max(3.4, Math.min(7, (a.factor + b.factor) * worldScale * 0.13));
-        context.globalAlpha = atomFocus.mode === "fade" ? (focusA && focusB ? 1 : focusA || focusB ? 0.42 : 0.07) : 1;
-        context.strokeStyle = "rgba(51, 65, 85, .26)";
-        context.lineWidth = lineWidth + 1.8;
-        context.beginPath();
-        context.moveTo(a.x, a.y);
-        context.lineTo(b.x, b.y);
-        context.stroke();
+      for (const translation of displayTranslations) {
+        const translationKey = translation.join(",");
+        for (const bond of structure.bonds) {
+          const instanceA = displayAtomMap.get(`${translationKey}:${bond.a}`);
+          const instanceB = displayAtomMap.get(`${translationKey}:${bond.b}`);
+          if (!instanceA || !instanceB) continue;
+          const atomA = instanceA.atom;
+          const atomB = instanceB.atom;
+          const focusA = matchesFocus(atomA);
+          const focusB = matchesFocus(atomB);
+          if (atomFocus.mode === "isolate" && (!focusA || !focusB)) continue;
+          const directDistance = Math.hypot(
+            instanceA.cart[0] - instanceB.cart[0], instanceA.cart[1] - instanceB.cart[1], instanceA.cart[2] - instanceB.cart[2],
+          );
+          if (directDistance > bond.distance + 0.25) continue;
+          const a = project(instanceA.cart);
+          const b = project(instanceB.cart);
+          const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const lineWidth = Math.max(2.2, Math.min(7, (a.factor + b.factor) * worldScale * 0.13));
+          context.globalAlpha = atomFocus.mode === "fade" ? (focusA && focusB ? 1 : focusA || focusB ? 0.42 : 0.07) : 1;
+          context.strokeStyle = "rgba(51, 65, 85, .26)";
+          context.lineWidth = lineWidth + 1.8;
+          context.beginPath();
+          context.moveTo(a.x, a.y);
+          context.lineTo(b.x, b.y);
+          context.stroke();
 
-        context.lineWidth = lineWidth;
-        context.strokeStyle = shadeHex(resolvedElementStyle(atomA.element, elementAppearance).color, 0.06);
-        context.beginPath();
-        context.moveTo(a.x, a.y);
-        context.lineTo(midpoint.x, midpoint.y);
-        context.stroke();
-        context.strokeStyle = shadeHex(resolvedElementStyle(atomB.element, elementAppearance).color, 0.06);
-        context.beginPath();
-        context.moveTo(midpoint.x, midpoint.y);
-        context.lineTo(b.x, b.y);
-        context.stroke();
+          context.lineWidth = lineWidth;
+          context.strokeStyle = shadeHex(resolvedElementStyle(atomA.element, elementAppearance).color, 0.06);
+          context.beginPath();
+          context.moveTo(a.x, a.y);
+          context.lineTo(midpoint.x, midpoint.y);
+          context.stroke();
+          context.strokeStyle = shadeHex(resolvedElementStyle(atomB.element, elementAppearance).color, 0.06);
+          context.beginPath();
+          context.moveTo(midpoint.x, midpoint.y);
+          context.lineTo(b.x, b.y);
+          context.stroke();
+        }
       }
       context.restore();
     }
@@ -579,41 +680,41 @@ function CrystalCanvas({
         const focusH = matchesFocus(hydrogenAtom);
         const focusA = matchesFocus(acceptorAtom);
         if (atomFocus.mode === "isolate" && !focusD && !focusH && !focusA) continue;
-        const hydrogenFract = displayFracts[hydrogenBond.hydrogen];
-        const acceptorImageFract = hydrogenFract.map((value, axis) => (
-          value + acceptorAtom.fract[axis] + hydrogenBond.acceptorImageShift[axis] - hydrogenAtom.fract[axis]
-        )) as Vec3;
-        const hydrogenCart = displayCarts[hydrogenBond.hydrogen];
-        const acceptorImageCart = fractToCart(acceptorImageFract, structure.cell);
-        const start = project(hydrogenCart);
-        const end = project(acceptorImageCart);
-        const focused = focusD || focusH || focusA;
-        context.globalAlpha = atomFocus.mode === "fade" ? (focused ? 1 : 0.08) : 0.94;
-        context.strokeStyle = "rgba(255, 255, 255, .96)";
-        context.lineWidth = 4.4;
-        context.beginPath();
-        context.moveTo(start.x, start.y);
-        context.lineTo(end.x, end.y);
-        context.stroke();
-        context.strokeStyle = "#c2185b";
-        context.lineWidth = 1.8;
-        context.stroke();
-
-        const displayedAcceptor = displayCarts[hydrogenBond.acceptor];
-        if (Math.hypot(
-          acceptorImageCart[0] - displayedAcceptor[0],
-          acceptorImageCart[1] - displayedAcceptor[1],
-          acceptorImageCart[2] - displayedAcceptor[2],
-        ) > 0.24) {
-          context.setLineDash([]);
-          context.fillStyle = "rgba(255, 255, 255, .92)";
+        for (const hydrogenInstance of instancesByAtom.get(hydrogenBond.hydrogen) ?? []) {
+          const acceptorImageFract = hydrogenInstance.fract.map((value, axis) => (
+            value + acceptorAtom.fract[axis] + hydrogenBond.acceptorImageShift[axis] - hydrogenAtom.fract[axis]
+          )) as Vec3;
+          const acceptorImageCart = fractToCart(acceptorImageFract, structure.cell);
+          const start = project(hydrogenInstance.cart);
+          const end = project(acceptorImageCart);
+          const focused = focusD || focusH || focusA;
+          context.globalAlpha = atomFocus.mode === "fade" ? (focused ? 1 : 0.08) : 0.94;
+          context.strokeStyle = "rgba(255, 255, 255, .96)";
+          context.lineWidth = 4.4;
           context.beginPath();
-          context.arc(end.x, end.y, 3.8, 0, Math.PI * 2);
-          context.fill();
-          context.strokeStyle = "#c2185b";
-          context.lineWidth = 1.4;
+          context.moveTo(start.x, start.y);
+          context.lineTo(end.x, end.y);
           context.stroke();
-          context.setLineDash([5, 4]);
+          context.strokeStyle = "#c2185b";
+          context.lineWidth = 1.8;
+          context.stroke();
+
+          const hasDisplayedAcceptor = (instancesByAtom.get(hydrogenBond.acceptor) ?? []).some((instance) => Math.hypot(
+            acceptorImageCart[0] - instance.cart[0],
+            acceptorImageCart[1] - instance.cart[1],
+            acceptorImageCart[2] - instance.cart[2],
+          ) <= 0.24);
+          if (!hasDisplayedAcceptor) {
+            context.setLineDash([]);
+            context.fillStyle = "rgba(255, 255, 255, .92)";
+            context.beginPath();
+            context.arc(end.x, end.y, 3.8, 0, Math.PI * 2);
+            context.fill();
+            context.strokeStyle = "#c2185b";
+            context.lineWidth = 1.4;
+            context.stroke();
+            context.setLineDash([5, 4]);
+          }
         }
       }
       context.restore();
@@ -621,8 +722,9 @@ function CrystalCanvas({
 
     const selectedAtom = structure.atoms[selectedAtomIndex];
     if (display.symmetry && selectedAtom) {
-      const source = project(fractToCart(selectedAtom.source.fract, structure.cell));
-      const target = project(displayCarts[selectedAtomIndex] ?? selectedAtom.cart);
+      const selectedTranslation = supercellExtents.map((extent) => Math.floor(extent / 2)) as Vec3;
+      const source = project(fractToCart(selectedAtom.source.fract.map((value, axis) => value + selectedTranslation[axis]) as Vec3, structure.cell));
+      const target = project(fractToCart(baseDisplayFracts[selectedAtomIndex].map((value, axis) => value + selectedTranslation[axis]) as Vec3, structure.cell));
       context.save();
       context.strokeStyle = "rgba(15, 139, 141, .76)";
       context.fillStyle = "#0f8b8d";
@@ -647,7 +749,7 @@ function CrystalCanvas({
       context.restore();
     }
 
-    const atoms = structure.atoms.map((atom, index) => ({ atom, index, projection: project(displayCarts[index]) }))
+    const atoms = displayAtoms.map(({ atom, index, cart }) => ({ atom, index, projection: project(cart) }))
       .sort((a, b) => a.projection.depth - b.projection.depth);
     const hitTargets: ProjectedAtom[] = [];
     if (display.atoms) {
@@ -683,7 +785,7 @@ function CrystalCanvas({
           context.stroke();
         }
 
-        if (display.labels && structure.atoms.length <= 120) {
+        if (display.labels && displayAtoms.length <= 120) {
           context.fillStyle = index === selectedAtomIndex ? "#0f5f62" : "rgba(51, 65, 85, .82)";
           context.font = `${index === selectedAtomIndex ? 650 : 500} 10px ui-monospace, monospace`;
           context.fillText(atom.label, projection.x + radius + 4, projection.y - radius - 1);
@@ -765,7 +867,7 @@ function CrystalCanvas({
       context.fillStyle = axis.color;
       context.fillText(axis.label, labelX, labelY);
     }
-  }, [structure, hydrogenBonds, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion]);
+  }, [structure, hydrogenBonds, supercell, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion]);
 
   useEffect(() => {
     const resize = new ResizeObserver(() => redraw());
@@ -880,6 +982,9 @@ function CrystalCanvas({
       <div className="canvas-topbar">
         <div className="canvas-chip-group">
           <div className="view-chip"><span className="live-dot" /> 交互晶胞</div>
+          <div className={isCrystallographicSupercell(supercell) ? "supercell-chip" : "supercell-chip fractional"}>
+            <i />{isCrystallographicSupercell(supercell) ? "超胞" : "分数范围"} {supercellText(supercell)}
+          </div>
           {display.hydrogenBonds && <div className="hydrogen-bond-chip"><i /> 氢键候选 {hydrogenBonds.length}</div>}
           {atomFocus.mode !== "none" && <div className="focus-chip">
             <span>{atomFocus.mode === "fade" ? "聚焦" : "单独显示"} · {atomFocus.sourceLabel}</span>
@@ -956,6 +1061,7 @@ export default function Home() {
   const [structure, setStructure] = useState<CrystalStructure>(() => parseCif(DEFAULT_CIF));
   const [fileName, setFileName] = useState("alpha-quartz.cif");
   const [display, setDisplay] = useState(defaultDisplay);
+  const [supercell, setSupercell] = useState<SupercellSettings>(defaultSupercell);
   const [selectedAtomIndex, setSelectedAtomIndex] = useState(0);
   const [selectedOperationId, setSelectedOperationId] = useState(1);
   const [rightTab, setRightTab] = useState<RightTab>("operations");
@@ -1009,6 +1115,12 @@ export default function Home() {
     intermolecular: hydrogenBonds.filter((bond) => bond.kind === "intermolecular").length,
   }), [hydrogenBonds]);
   const hasExplicitHydrogens = structure.atoms.some((atom) => atom.element === "H");
+  const displayedAtomCount = useMemo(() => {
+    const baseFracts = display.completeMolecules
+      ? molecularDisplayFracts(structure.atoms, structure.bonds)
+      : structure.atoms.map((atom) => atom.fract);
+    return buildDisplayAtomInstances(structure, baseFracts, supercell, display.completeMolecules).length;
+  }, [structure, supercell, display.completeMolecules]);
 
   const calculator = useMemo(() => {
     const input = calculatorInput.map(parseCoordinateInput) as Vec3;
@@ -1104,6 +1216,17 @@ export default function Home() {
     setDisplay((current) => ({ ...current, [key]: !current[key] }));
   }
 
+  function applySupercellPreset(a: number, b: number, c: number) {
+    setSupercell({ a, b, c });
+    setNotice(`显示范围已设为 ${supercellText({ a, b, c })}`);
+  }
+
+  function updateSupercellExtent(axis: keyof SupercellSettings, value: number) {
+    if (!Number.isFinite(value)) return;
+    const clamped = Math.max(0.25, Math.min(6, Math.round(value * 100) / 100));
+    setSupercell((current) => ({ ...current, [axis]: clamped }));
+  }
+
   function applyHydrogenBondPreset(preset: HydrogenPreset) {
     const values = hydrogenBondPresets[preset];
     setHydrogenBondCriteria({
@@ -1141,6 +1264,11 @@ export default function Home() {
       pointGroup: structure.pointGroup,
       crystalSystem: structure.crystalSystem,
       unitCell: structure.cell,
+      displayedSupercell: {
+        extents: supercell,
+        crystallographicSupercell: isCrystallographicSupercell(supercell),
+        displayedAtomCount,
+      },
       asymmetricSites: structure.sites,
       symmetryOperations: structure.operations.map(({ id, xyz, kind, name }) => ({ id, xyz, kind, name })),
       generatedAtoms: structure.atoms.map(({ label, element, fract, source, operationIds }) => ({ label, element, fract, source: source.label, operationIds })),
@@ -1226,6 +1354,46 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="side-section supercell-section">
+          <div className="section-heading"><span>超胞 / 显示范围</span><small>SUPERCELL</small></div>
+          <div className="supercell-card">
+            <div className="supercell-presets" aria-label="常用超胞预设">
+              {([
+                [1, 1, 1, "1×1×1"],
+                [2, 1, 1, "2×1"],
+                [2, 2, 1, "2×2"],
+                [3, 3, 1, "3×3"],
+                [2, 2, 2, "2×2×2"],
+                [3, 3, 3, "3×3×3"],
+              ] as Array<[number, number, number, string]>).map(([a, b, c, label]) => {
+                const active = supercell.a === a && supercell.b === b && supercell.c === c;
+                return <button type="button" key={label} className={active ? "active" : ""} onClick={() => applySupercellPreset(a, b, c)}>{label}</button>;
+              })}
+            </div>
+            <div className="supercell-inputs">
+              {(["a", "b", "c"] as Array<keyof SupercellSettings>).map((axis) => <label key={axis} className={axis}>
+                <span>{axis}</span>
+                <input
+                  type="number"
+                  min="0.25"
+                  max="6"
+                  step="0.25"
+                  value={supercell[axis]}
+                  aria-label={`${axis} 方向显示倍数`}
+                  onChange={(event) => updateSupercellExtent(axis, Number(event.target.value))}
+                />
+              </label>)}
+            </div>
+            <div className={isCrystallographicSupercell(supercell) ? "supercell-status" : "supercell-status fractional"}>
+              <i>{isCrystallographicSupercell(supercell) ? "✓" : "≈"}</i>
+              <span><strong>{isCrystallographicSupercell(supercell) ? "晶体学超胞" : "分数显示范围"}</strong><small>{isCrystallographicSupercell(supercell)
+                ? `${supercell.a * supercell.b * supercell.c} 个原胞 · 当前显示 ${displayedAtomCount} 原子`
+                : `按 ${supercellText(supercell)} 裁切视图，不改变晶格周期`}</small></span>
+            </div>
+            <p className="supercell-note">可输入 0.25–6；整数倍构成周期超胞，非整数倍用于观察指定分数范围。</p>
+          </div>
+        </section>
+
         <section className="side-section display-section">
           <div className="section-heading"><span>显示控制</span><small>VIEW LAYERS</small></div>
           <Toggle label="原子球（哑光 CPK）" hint={`${structure.atoms.length} 个等价原子`} checked={display.atoms} onChange={() => toggleDisplay("atoms")} />
@@ -1240,7 +1408,7 @@ export default function Home() {
             }}
           />
           <Toggle label="补全分子片段" hint={display.completeMolecules ? "跨晶胞键已重新拼接" : "当前按晶胞边界截断"} checked={display.completeMolecules} onChange={() => toggleDisplay("completeMolecules")} />
-          <Toggle label="晶胞边界" hint="1 × 1 × 1" checked={display.cell} onChange={() => toggleDisplay("cell")} />
+          <Toggle label="晶胞边界" hint={supercellText(supercell)} checked={display.cell} onChange={() => toggleDisplay("cell")} />
           <Toggle label="原子标签" hint="元素与编号" checked={display.labels} onChange={() => toggleDisplay("labels")} />
           <Toggle label="对称元素" hint="轴 / 面 / 映射轨迹" checked={display.symmetry} onChange={() => toggleDisplay("symmetry")} />
         </section>
@@ -1256,11 +1424,12 @@ export default function Home() {
       <section className="workspace">
         <div className="workspace-toolbar">
           <div className="mode-tabs"><button type="button" className="active">结构 + 对称</button><button type="button">操作轨迹</button></div>
-          <div className="workspace-stats"><span><i />{structure.atoms.length} 原子</span><span>{structure.bonds.length} 键 · {hydrogenBonds.length} 氢键候选</span><span>{display.completeMolecules ? "完整分子" : "晶胞截断"}</span></div>
+          <div className="workspace-stats"><span><i />{displayedAtomCount} 显示原子</span><span>{structure.bonds.length} 键 · {hydrogenBonds.length} 氢键类型</span><span>{supercellText(supercell)} · {display.completeMolecules ? "完整分子" : "晶胞截断"}</span></div>
         </div>
         <CrystalCanvas
           structure={structure}
           hydrogenBonds={hydrogenBonds}
+          supercell={supercell}
           display={display}
           selectedAtomIndex={selectedAtomIndex}
           selectedOperation={selectedOperation}
