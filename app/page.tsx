@@ -21,6 +21,7 @@ import {
   operationKindLabel,
   parseCif,
 } from "./crystal-data";
+import { characterTableForPointGroup, characterTables, normalizePointGroup } from "./character-tables";
 
 type DisplaySettings = {
   atoms: boolean;
@@ -43,7 +44,7 @@ type ElementAppearance = Record<string, { color: string; scale: number }>;
 type AxisFont = "mono" | "sans" | "serif";
 type AxisAppearance = { lineWidth: number; length: number; font: AxisFont; fontSize: number };
 type AppearanceMenu = { kind: "element"; element: string; x: number; y: number } | { kind: "axis"; x: number; y: number };
-type RightTab = "operations" | "atoms" | "wyckoff" | "hydrogen" | "calculator";
+type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "hydrogen" | "calculator";
 type HydrogenPreset = "strict" | "steiner" | "broad";
 type HydrogenBondAppearance = { color: string; lineWidth: number };
 type SupercellSettings = { a: number; b: number; c: number };
@@ -184,6 +185,11 @@ function decimalCoordinateText(value: Vec3) {
 
 function operationTitle(operation: SymmetryOperation) {
   return `操作 ${operation.id}（${operation.name}）`;
+}
+
+function IrrepLabel({ value }: { value: string }) {
+  const [symbol, suffix] = value.split("_");
+  return <>{symbol}{suffix && <sub>{suffix}</sub>}</>;
 }
 
 function parseCoordinateInput(value: string) {
@@ -1076,6 +1082,7 @@ export default function Home() {
   const [selectedAtomIndex, setSelectedAtomIndex] = useState(0);
   const [selectedOperationId, setSelectedOperationId] = useState(1);
   const [rightTab, setRightTab] = useState<RightTab>("operations");
+  const [characterPointGroup, setCharacterPointGroup] = useState(() => structure.pointGroup);
   const [operationFilter, setOperationFilter] = useState("all");
   const [calculatorInput, setCalculatorInput] = useState<[string, string, string]>(() => {
     const firstSite = structure.sites[0];
@@ -1103,6 +1110,7 @@ export default function Home() {
 
   const selectedAtom = structure.atoms[Math.min(selectedAtomIndex, structure.atoms.length - 1)];
   const selectedOperation = structure.operations.find((operation) => operation.id === selectedOperationId) ?? structure.operations[0];
+  const selectedCharacterTable = useMemo(() => characterTableForPointGroup(characterPointGroup), [characterPointGroup]);
   const calculatorOperation = structure.operations.find((operation) => operation.id === calculatorOperationId) ?? structure.operations[0];
   const currentElementColor = (element: string) => resolvedElementStyle(element, elementAppearance).color;
 
@@ -1200,6 +1208,7 @@ export default function Home() {
       setFileName(file.name);
       setSelectedAtomIndex(0);
       setSelectedOperationId(next.operations[0]?.id ?? 1);
+      setCharacterPointGroup(next.pointGroup);
       setCalculatorOperationId(next.operations[0]?.id ?? 1);
       setCalculatorInput(next.sites[0]
         ? next.sites[0].fract.map((value) => value.toFixed(6)) as [string, string, string]
@@ -1543,6 +1552,7 @@ export default function Home() {
 
         <nav className="right-tabs" aria-label="对称性信息">
           <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>对称操作</button>
+          <button type="button" className={rightTab === "characters" ? "active" : ""} onClick={() => setRightTab("characters")}>特征标表</button>
           <button type="button" className={rightTab === "atoms" ? "active" : ""} onClick={() => setRightTab("atoms")}>原子轨迹</button>
           <button type="button" className={rightTab === "wyckoff" ? "active" : ""} onClick={() => setRightTab("wyckoff")}>Wyckoff</button>
           <button type="button" className={rightTab === "hydrogen" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>氢键</button>
@@ -1550,7 +1560,6 @@ export default function Home() {
         </nav>
 
         {rightTab === "operations" && <div className="right-content panel-scroll">
-          <div className="notation-note"><strong>操作编号</strong><span>这里按 CIF 中的顺序写作“操作 1、操作 2”。群论或程序中也常简写为 gᵢ。</span></div>
           <div className="filter-row">
             {[['all', '全部'], ['rotation', '旋转'], ['reflection', '反射 / 反演']].map(([value, label]) => (
               <button key={value} type="button" className={operationFilter === value ? "active" : ""} onClick={() => setOperationFilter(value)}>{label}</button>
@@ -1581,6 +1590,53 @@ export default function Home() {
               <span>占有率<strong>{selectedAtom.source.occupancy.toFixed(2)}</strong></span>
             </div>
           </div>}
+        </div>}
+
+        {rightTab === "characters" && <div className="right-content panel-scroll character-panel">
+          <div className="character-toolbar">
+            <div>
+              <span>{selectedCharacterTable.system}晶系</span>
+              <strong>{selectedCharacterTable.hm}<small>{selectedCharacterTable.schoenflies}</small></strong>
+            </div>
+            {normalizePointGroup(structure.pointGroup) !== selectedCharacterTable.hm && <button
+              type="button"
+              onClick={() => setCharacterPointGroup(structure.pointGroup)}
+            >返回当前点群 {structure.pointGroup}</button>}
+          </div>
+
+          <label className="character-selector">
+            <span>浏览 32 个晶体学点群</span>
+            <select value={selectedCharacterTable.hm} onChange={(event) => setCharacterPointGroup(event.target.value)}>
+              {(["三斜", "单斜", "正交", "四方", "三方", "六方", "立方"] as const).map((system) => <optgroup key={system} label={`${system}晶系`}>
+                {characterTables.filter((table) => table.system === system).map((table) => <option key={table.hm} value={table.hm}>{table.hm} · {table.schoenflies}</option>)}
+              </optgroup>)}
+            </select>
+          </label>
+
+          <details className="character-help">
+            <summary>？ 如何阅读特征标表</summary>
+            <div>
+              <p>每列是一类共轭对称操作，每行是一种不可约表示；数字是表示矩阵的迹 χ。</p>
+              <p>χ(E) 等于表示维数。g/u 表示反演偶/奇，′/″ 表示对水平镜面对称/反对称。</p>
+              <p>基函数采用主轴为 z 的常规方向；二维实表示合并共轭复表示。</p>
+            </div>
+          </details>
+
+          <div className="character-table-scroll">
+            <table className="character-table">
+              <thead><tr>
+                <th>不可约表示</th>
+                {selectedCharacterTable.classes.map((operationClass) => <th key={operationClass}>{operationClass}</th>)}
+                <th>常用基函数</th>
+              </tr></thead>
+              <tbody>{selectedCharacterTable.rows.map((characterRow) => <tr key={characterRow.irrep}>
+                <th><IrrepLabel value={characterRow.irrep} /></th>
+                {characterRow.characters.map((character, index) => <td key={`${characterRow.irrep}-${selectedCharacterTable.classes[index]}`}>{character < 0 ? `−${Math.abs(character)}` : character}</td>)}
+                <td>{characterRow.basis || "—"}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+          <p className="character-source-note">实基函数约定 · 主轴 z · R 表示轴矢量分量</p>
         </div>}
 
         {rightTab === "atoms" && <div className="right-content panel-scroll atom-trace-list">

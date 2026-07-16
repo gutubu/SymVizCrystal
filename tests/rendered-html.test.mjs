@@ -28,9 +28,10 @@ test("server-renders the SymViz application shell", async () => {
 });
 
 test("ships CIF parsing and the interactive crystal viewer without starter assets", async () => {
-  const [page, parser, layout, packageJson] = await Promise.all([
+  const [page, parser, characterTableSource, layout, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/crystal-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/character-tables.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
@@ -44,7 +45,11 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /createLinearGradient/);
   assert.match(page, /补全分子片段/);
   assert.match(page, /坐标计算器/);
-  assert.match(page, /操作 1、操作 2/);
+  assert.doesNotMatch(page, /操作编号/);
+  assert.match(page, /特征标表/);
+  assert.match(page, /浏览 32 个晶体学点群/);
+  assert.match(page, /如何阅读特征标表/);
+  assert.match(page, /selectedCharacterTable\.classes/);
   assert.match(page, /对称等价位置生成/);
   assert.match(page, /className="mapping-help"/);
   assert.match(page, /？ 说明/);
@@ -92,6 +97,10 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(parser, /findHydrogenBonds/);
   assert.match(parser, /molecularComponentIds/);
   assert.match(parser, /acceptorImageShift/);
+  assert.equal([...characterTableSource.matchAll(/^\s+hm: "/gm)].length, 32);
+  assert.match(characterTableSource, /hm: "6\/mmm"/);
+  assert.match(characterTableSource, /hm: "m-3m"/);
+  assert.match(characterTableSource, /characterTableForPointGroup/);
   assert.doesNotMatch(page, /g\{String\(operation\.id\)/);
   assert.match(layout, /lang="zh-CN"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
