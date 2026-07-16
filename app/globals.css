@@ -420,7 +420,7 @@ canvas:focus-visible {
   display: grid;
   grid-column: 2;
   grid-row: 2;
-  grid-template-rows: 45px minmax(330px, 1fr) 164px;
+  grid-template-rows: 45px minmax(330px, 1fr) 216px;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -663,7 +663,7 @@ canvas:focus-visible {
 
 .symmetry-story {
   position: relative;
-  padding: 14px 18px 16px;
+  padding: 12px 18px 14px;
   border-top: 1px solid var(--line);
   background: #fff;
 }
@@ -673,20 +673,31 @@ canvas:focus-visible {
 .eyebrow { color: var(--accent); font-family: var(--font-geist-mono), monospace; font-size: 7px; letter-spacing: .13em; }
 .story-title strong { margin-top: 3px; color: #344054; font-size: 11px; font-weight: 630; }
 .story-count { color: var(--subtle); font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.mapping-intro { margin: 5px 0 0; color: var(--muted); font-size: 8px; line-height: 1.4; }
 
-.mapping-row { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(190px, 1.5fr) minmax(110px, .8fr); align-items: center; gap: 14px; margin-top: 11px; }
-.mapping-node { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 8px; min-width: 0; height: 56px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-soft); }
-.mapping-node span { color: var(--subtle); font-size: 8px; }
+.mapping-row { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(230px, 1.5fr) minmax(140px, .8fr); align-items: center; gap: 14px; margin-top: 8px; }
+.mapping-node { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 8px; min-width: 0; min-height: 70px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-soft); }
+.mapping-node span { display: inline-flex; align-items: center; gap: 5px; color: var(--subtle); font-size: 8px; }
+.mapping-node span b { display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #fff; background: var(--accent); font-family: var(--font-geist-mono), monospace; font-size: 7px; }
 .mapping-node strong { color: var(--accent); font-family: var(--font-geist-mono), monospace; font-size: 13px; }
-.mapping-node small { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-node small { grid-column: 1 / -1; overflow: hidden; color: var(--subtle); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-node small code { color: #667085; font-family: var(--font-geist-mono), monospace; }
+.mapping-node em { grid-column: 1 / -1; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 8px; font-style: normal; }
 .mapping-node.target strong { color: var(--amber); }
+.mapping-node.target span b { background: var(--amber); }
 
-.mapping-operation { display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 5px 9px; min-width: 0; }
-.mapping-operation > span { grid-row: 1 / 3; display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #dfbd84; border-radius: 50%; color: var(--amber); background: var(--amber-soft); font-family: Georgia, serif; font-size: 13px; }
-.mapping-operation > div { position: relative; height: 1px; background: #d6e9e8; }
-.mapping-operation > div::after { position: absolute; top: -3px; right: 0; width: 7px; height: 7px; content: ""; border-top: 1px solid var(--accent); border-right: 1px solid var(--accent); transform: rotate(45deg); }
-.mapping-operation > div i { position: absolute; top: 0; left: 0; height: 1px; background: var(--accent); transition: width .25s ease; }
-.mapping-operation small { overflow: hidden; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-operation { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 5px 9px; min-width: 0; }
+.mapping-operation > span { grid-row: 1 / 3; display: flex; align-items: center; flex-direction: column; justify-content: center; width: 42px; height: 42px; gap: 1px; border: 1px solid #dfbd84; border-radius: 50%; color: var(--amber); background: var(--amber-soft); font-family: Georgia, serif; font-size: 13px; }
+.mapping-operation > span b { color: #9a6a20; font-family: var(--font-geist-mono), monospace; font-size: 6px; font-weight: 650; }
+.mapping-operation-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.mapping-operation-copy strong { overflow: hidden; color: #475467; font-size: 8px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-operation-copy code { overflow: hidden; color: var(--amber); font-family: var(--font-geist-mono), monospace; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-operation-copy small { overflow: hidden; color: var(--subtle); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-arrow { position: relative; height: 1px; background: #d6e9e8; }
+.mapping-arrow::after { position: absolute; top: -3px; right: 0; width: 7px; height: 7px; content: ""; border-top: 1px solid var(--accent); border-right: 1px solid var(--accent); transform: rotate(45deg); }
+.mapping-arrow i { position: absolute; top: 0; left: 0; height: 1px; background: var(--accent); transition: width .25s ease; }
+.mapping-label-help { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 4px 7px; margin-top: 8px; padding: 6px 8px; border: 1px solid #d6e9e8; border-radius: 6px; color: var(--muted); background: #f7fbfb; font-size: 7px; line-height: 1.35; }
+.mapping-label-help b { color: #0d7476; font-family: var(--font-geist-mono), monospace; font-size: 7px; white-space: nowrap; }
 
 .right-panel {
   display: grid;
@@ -964,15 +975,26 @@ canvas:focus-visible {
   .left-panel { order: 2; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .app-shell.sidebar-collapsed .left-panel { min-height: 48px; max-height: 48px; padding: 5px 10px; }
   .app-shell.sidebar-collapsed .drawer-control button { width: 100%; height: 36px; }
-  .workspace { order: 1; display: grid; min-height: 690px; grid-template-rows: 43px 470px 177px; }
+  .workspace { order: 1; display: grid; min-height: 743px; grid-template-rows: 43px 470px 230px; }
   .right-panel { order: 3; min-height: 670px; }
   .workspace-stats { display: none; }
-  .mapping-row { grid-template-columns: 1fr 90px 1fr; gap: 7px; }
-  .mapping-operation { grid-template-columns: 25px 1fr; gap: 4px; }
-  .mapping-operation > span { width: 25px; height: 25px; }
+  .mapping-row { grid-template-columns: 1fr minmax(120px, .9fr) 1fr; gap: 7px; }
+  .mapping-operation { grid-template-columns: 34px minmax(0, 1fr); gap: 4px; }
+  .mapping-operation > span { width: 34px; height: 34px; }
+  .mapping-label-help { grid-template-columns: auto minmax(0, 1fr); }
   .canvas-topbar { right: 8px; left: 8px; }
   .view-presets > span { display: none; }
   .element-legend { right: 8px; bottom: 45px; left: 8px; max-width: none; }
+}
+
+@media (max-width: 520px) {
+  .workspace { min-height: 900px; grid-template-rows: 43px 430px 427px; }
+  .symmetry-story { overflow-y: auto; }
+  .story-count { display: none; }
+  .mapping-row { grid-template-columns: 1fr; }
+  .mapping-operation { grid-template-columns: 42px minmax(0, 1fr); padding: 2px 8px; }
+  .mapping-operation > span { width: 42px; height: 42px; }
+  .mapping-node { min-height: 66px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
