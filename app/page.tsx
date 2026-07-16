@@ -1493,15 +1493,23 @@ export default function Home() {
 
         <div className="symmetry-story">
           <div className="story-title">
-            <div><span className="eyebrow">SYMMETRY MAPPING</span><strong>当前原子是怎样由 CIF 原始位点生成的？</strong></div>
-            <span className="story-count">操作 {selectedOperation.id} / 共 {structure.operations.length} 项</span>
+            <div><span className="eyebrow">SYMMETRY MAPPING</span><strong>对称等价位置生成</strong></div>
+            <div className="story-tools">
+              <details className="mapping-help">
+                <summary>？ 说明</summary>
+                {selectedAtom && <div className="mapping-help-box">
+                  <p><b>{selectedAtom.source.label}</b>：CIF 位点标签；<b>{selectedAtom.label}</b>：SymViz 生成编号。</p>
+                  <p>中间公式变换坐标，结果按周期折回 [0, 1)。</p>
+                </div>}
+              </details>
+              <span className="story-count">操作 {selectedOperation.id} / 共 {structure.operations.length} 项</span>
+            </div>
           </div>
-          <p className="mapping-intro">从 CIF 不对称单元中的一个独立位点出发，应用空间群对称操作；变换后的坐标按晶格周期折回当前晶胞。</p>
           <div className="mapping-row">
             <div className="mapping-node source">
               <span><b>1</b>CIF 原始位点</span>
               <strong>{selectedAtom?.source.label}</strong>
-              <small>元素 {selectedAtom?.element ?? "—"} · <code>_atom_site_label</code></small>
+              <small>CIF 标签 · 元素 {selectedAtom?.element ?? "—"}</small>
               <em>{selectedAtom ? coordinateText(selectedAtom.source.fract) : "—"}</em>
             </div>
             <div className="mapping-operation">
@@ -1509,23 +1517,16 @@ export default function Home() {
               <div className="mapping-operation-copy">
                 <strong>{operationTitle(selectedOperation)} · {operationKindLabel(selectedOperation.kind)}</strong>
                 <code>{selectedOperation.xyz}</code>
-                <small>代入坐标，并按周期折回 [0, 1)</small>
               </div>
               <div className="mapping-arrow"><i style={{ width: `${completion}%` }} /></div>
             </div>
             <div className="mapping-node target">
               <span><b>3</b>生成的等价原子</span>
               <strong>{selectedAtom?.label}</strong>
-              <small>SymViz 视图编号</small>
+              <small>SymViz 编号</small>
               <em>{coordinateText(transformedSelected as Vec3)}</em>
             </div>
           </div>
-          {selectedAtom && <div className="mapping-label-help">
-            <b>{selectedAtom.source.label} 是什么？</b>
-            <span>它是 CIF 文件提供的原子位点名称，不是对称符号；首字母通常表示元素，其余编号或后缀由作者、数据库或精修软件决定。</span>
-            <b>{selectedAtom.label} 是什么？</b>
-            <span>它是 SymViz 展开全部对称等价位置后分配的显示编号。</span>
-          </div>}
         </div>
       </section>
 

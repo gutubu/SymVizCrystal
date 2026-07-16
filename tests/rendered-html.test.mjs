@@ -45,11 +45,13 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /补全分子片段/);
   assert.match(page, /坐标计算器/);
   assert.match(page, /操作 1、操作 2/);
-  assert.match(page, /当前原子是怎样由 CIF 原始位点生成的/);
-  assert.match(page, /_atom_site_label/);
-  assert.match(page, /不是对称符号/);
-  assert.match(page, /SymViz 展开全部对称等价位置后分配的显示编号/);
-  assert.match(page, /代入坐标，并按周期折回 \[0, 1\)/);
+  assert.match(page, /对称等价位置生成/);
+  assert.match(page, /className="mapping-help"/);
+  assert.match(page, /？ 说明/);
+  assert.match(page, /CIF 位点标签/);
+  assert.match(page, /SymViz 生成编号/);
+  assert.doesNotMatch(page, /当前原子是怎样由 CIF 原始位点生成的/);
+  assert.doesNotMatch(page, /不是对称符号/);
   assert.match(page, /quaternionMultiply/);
   assert.match(page, /quaternionForView/);
   assert.match(page, /normalize\(bVector\)/);

@@ -420,7 +420,7 @@ canvas:focus-visible {
   display: grid;
   grid-column: 2;
   grid-row: 2;
-  grid-template-rows: 45px minmax(330px, 1fr) 216px;
+  grid-template-rows: 45px minmax(330px, 1fr) 164px;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -673,10 +673,19 @@ canvas:focus-visible {
 .eyebrow { color: var(--accent); font-family: var(--font-geist-mono), monospace; font-size: 7px; letter-spacing: .13em; }
 .story-title strong { margin-top: 3px; color: #344054; font-size: 11px; font-weight: 630; }
 .story-count { color: var(--subtle); font-family: var(--font-geist-mono), monospace; font-size: 9px; }
-.mapping-intro { margin: 5px 0 0; color: var(--muted); font-size: 8px; line-height: 1.4; }
+.story-tools { position: relative; display: flex; align-items: center; gap: 10px; }
+.mapping-help { position: relative; }
+.mapping-help summary { display: inline-flex; align-items: center; height: 25px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: #fff; font-size: 8px; font-weight: 600; list-style: none; cursor: pointer; }
+.mapping-help summary::-webkit-details-marker { display: none; }
+.mapping-help[open] summary { border-color: #b8dedd; color: var(--accent); background: var(--accent-soft); }
+.mapping-help-box { position: absolute; z-index: 12; top: 31px; right: 0; width: 300px; padding: 9px 10px; border: 1px solid #b8dedd; border-radius: 7px; color: var(--muted); background: #fff; box-shadow: 0 10px 24px rgba(16, 24, 40, .12); font-size: 8px; line-height: 1.45; }
+.mapping-help-box::before { position: absolute; top: -5px; right: 20px; width: 8px; height: 8px; content: ""; border-top: 1px solid #b8dedd; border-left: 1px solid #b8dedd; background: #fff; transform: rotate(45deg); }
+.mapping-help-box p { margin: 0; }
+.mapping-help-box p + p { margin-top: 4px; }
+.mapping-help-box b { color: #0d7476; font-family: var(--font-geist-mono), monospace; }
 
-.mapping-row { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(230px, 1.5fr) minmax(140px, .8fr); align-items: center; gap: 14px; margin-top: 8px; }
-.mapping-node { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 8px; min-width: 0; min-height: 70px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-soft); }
+.mapping-row { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(230px, 1.5fr) minmax(140px, .8fr); align-items: center; gap: 14px; margin-top: 11px; }
+.mapping-node { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 8px; min-width: 0; min-height: 66px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-soft); }
 .mapping-node span { display: inline-flex; align-items: center; gap: 5px; color: var(--subtle); font-size: 8px; }
 .mapping-node span b { display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #fff; background: var(--accent); font-family: var(--font-geist-mono), monospace; font-size: 7px; }
 .mapping-node strong { color: var(--accent); font-family: var(--font-geist-mono), monospace; font-size: 13px; }
@@ -692,12 +701,9 @@ canvas:focus-visible {
 .mapping-operation-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
 .mapping-operation-copy strong { overflow: hidden; color: #475467; font-size: 8px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .mapping-operation-copy code { overflow: hidden; color: var(--amber); font-family: var(--font-geist-mono), monospace; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.mapping-operation-copy small { overflow: hidden; color: var(--subtle); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .mapping-arrow { position: relative; height: 1px; background: #d6e9e8; }
 .mapping-arrow::after { position: absolute; top: -3px; right: 0; width: 7px; height: 7px; content: ""; border-top: 1px solid var(--accent); border-right: 1px solid var(--accent); transform: rotate(45deg); }
 .mapping-arrow i { position: absolute; top: 0; left: 0; height: 1px; background: var(--accent); transition: width .25s ease; }
-.mapping-label-help { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 4px 7px; margin-top: 8px; padding: 6px 8px; border: 1px solid #d6e9e8; border-radius: 6px; color: var(--muted); background: #f7fbfb; font-size: 7px; line-height: 1.35; }
-.mapping-label-help b { color: #0d7476; font-family: var(--font-geist-mono), monospace; font-size: 7px; white-space: nowrap; }
 
 .right-panel {
   display: grid;
@@ -975,22 +981,22 @@ canvas:focus-visible {
   .left-panel { order: 2; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .app-shell.sidebar-collapsed .left-panel { min-height: 48px; max-height: 48px; padding: 5px 10px; }
   .app-shell.sidebar-collapsed .drawer-control button { width: 100%; height: 36px; }
-  .workspace { order: 1; display: grid; min-height: 743px; grid-template-rows: 43px 470px 230px; }
+  .workspace { order: 1; display: grid; min-height: 690px; grid-template-rows: 43px 470px 177px; }
   .right-panel { order: 3; min-height: 670px; }
   .workspace-stats { display: none; }
   .mapping-row { grid-template-columns: 1fr minmax(120px, .9fr) 1fr; gap: 7px; }
   .mapping-operation { grid-template-columns: 34px minmax(0, 1fr); gap: 4px; }
   .mapping-operation > span { width: 34px; height: 34px; }
-  .mapping-label-help { grid-template-columns: auto minmax(0, 1fr); }
   .canvas-topbar { right: 8px; left: 8px; }
   .view-presets > span { display: none; }
   .element-legend { right: 8px; bottom: 45px; left: 8px; max-width: none; }
 }
 
 @media (max-width: 520px) {
-  .workspace { min-height: 900px; grid-template-rows: 43px 430px 427px; }
+  .workspace { min-height: 800px; grid-template-rows: 43px 430px 327px; }
   .symmetry-story { overflow-y: auto; }
   .story-count { display: none; }
+  .mapping-help-box { right: -2px; width: min(300px, calc(100vw - 44px)); }
   .mapping-row { grid-template-columns: 1fr; }
   .mapping-operation { grid-template-columns: 42px minmax(0, 1fr); padding: 2px 8px; }
   .mapping-operation > span { width: 42px; height: 42px; }
