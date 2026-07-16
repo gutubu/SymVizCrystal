@@ -93,6 +93,13 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /step="0\.25"/);
   assert.match(page, /buildDisplayAtomInstances/);
   assert.match(page, /displayedAtomCount/);
+  assert.match(page, /Z clipping/);
+  assert.match(page, /后裁切面/);
+  assert.match(page, /前裁切面/);
+  assert.match(page, /clipSegmentToDepth/);
+  assert.match(page, /clipPolygonToDepth/);
+  assert.match(page, /depthVisible\(projection\.depth\)/);
+  assert.match(page, /旋转晶体后会按新视角重新裁切/);
   assert.doesNotMatch(page, /rotation\.current\.pitch/);
   assert.match(parser, /_space_group_symop_operation_xyz/);
   assert.match(parser, /_atom_site_fract_x/);

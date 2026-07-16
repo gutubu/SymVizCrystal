@@ -28,6 +28,7 @@ type DisplaySettings = {
   hydrogens: boolean;
   bonds: boolean;
   hydrogenBonds: boolean;
+  zClipping: boolean;
   cell: boolean;
   labels: boolean;
   symmetry: boolean;
@@ -48,6 +49,7 @@ type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "hydrogen" |
 type HydrogenPreset = "strict" | "steiner" | "broad";
 type HydrogenBondAppearance = { color: string; lineWidth: number };
 type SupercellSettings = { a: number; b: number; c: number };
+type ZClippingSettings = { back: number; front: number };
 type DisplayAtomInstance = {
   atom: AtomInstance;
   index: number;
@@ -62,6 +64,7 @@ const defaultDisplay: DisplaySettings = {
   hydrogens: true,
   bonds: true,
   hydrogenBonds: true,
+  zClipping: false,
   cell: true,
   labels: true,
   symmetry: true,
@@ -96,6 +99,7 @@ const defaultHydrogenBondCriteria = hydrogenBondPresets.steiner;
 const defaultHydrogenBondAppearance: HydrogenBondAppearance = { color: "#c2185b", lineWidth: 1.8 };
 const hydrogenStrengthLabels: Record<HydrogenBond["strength"], string> = { strong: "强", moderate: "中等", weak: "弱" };
 const defaultSupercell: SupercellSettings = { a: 1, b: 1, c: 1 };
+const defaultZClipping: ZClippingSettings = { back: 0, front: 100 };
 
 function supercellText(value: SupercellSettings) {
   const format = (extent: number) => Number.isInteger(extent) ? String(extent) : extent.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
@@ -384,6 +388,7 @@ function CrystalCanvas({
   hydrogenBonds,
   hydrogenBondAppearance,
   supercell,
+  zClipping,
   display,
   selectedAtomIndex,
   selectedOperation,
@@ -399,6 +404,7 @@ function CrystalCanvas({
   hydrogenBonds: HydrogenBond[];
   hydrogenBondAppearance: HydrogenBondAppearance;
   supercell: SupercellSettings;
+  zClipping: ZClippingSettings;
   display: DisplaySettings;
   selectedAtomIndex: number;
   selectedOperation: SymmetryOperation;
@@ -464,8 +470,7 @@ function CrystalCanvas({
       return rotateByQuaternion(relative, rotation.current);
     };
 
-    const project = (point: Vec3) => {
-      const rotated = rotate(point);
+    const projectRotated = (rotated: Vec3) => {
       const base = Math.min(width, height);
       const factor = orthographic
         ? base * 0.19 * zoom.current
@@ -477,6 +482,7 @@ function CrystalCanvas({
         factor,
       };
     };
+    const project = (point: Vec3) => projectRotated(rotate(point));
 
     const baseDisplayFracts = display.completeMolecules
       ? molecularDisplayFracts(structure.atoms, structure.bonds)
@@ -486,6 +492,56 @@ function CrystalCanvas({
     const displayTranslations = [...new Map(displayAtoms.map((instance) => [instance.translationKey, instance.translation])).values()];
     const instancesByAtom = new Map<number, DisplayAtomInstance[]>();
     displayAtoms.forEach((instance) => instancesByAtom.set(instance.index, [...(instancesByAtom.get(instance.index) ?? []), instance]));
+
+    const atomDepths = displayAtoms.map((instance) => rotate(instance.cart)[2]);
+    const minimumAtomDepth = atomDepths.length ? Math.min(...atomDepths) : -1;
+    const maximumAtomDepth = atomDepths.length ? Math.max(...atomDepths) : 1;
+    const atomDepthSpan = Math.max(1e-6, maximumAtomDepth - minimumAtomDepth);
+    const clippingMinimum = minimumAtomDepth + atomDepthSpan * zClipping.back / 100;
+    const clippingMaximum = minimumAtomDepth + atomDepthSpan * zClipping.front / 100;
+    const depthVisible = (depth: number) => !display.zClipping || (depth >= clippingMinimum - 1e-6 && depth <= clippingMaximum + 1e-6);
+    const clipSegmentToDepth = (start: Vec3, end: Vec3) => {
+      const a = rotate(start);
+      const b = rotate(end);
+      if (!display.zClipping) return [projectRotated(a), projectRotated(b)] as const;
+      let startT = 0;
+      let endT = 1;
+      const deltaDepth = b[2] - a[2];
+      for (const [boundary, keepAbove] of [[clippingMinimum, true], [clippingMaximum, false]] as const) {
+        const aInside = keepAbove ? a[2] >= boundary : a[2] <= boundary;
+        const bInside = keepAbove ? b[2] >= boundary : b[2] <= boundary;
+        if (!aInside && !bInside) return null;
+        if (aInside === bInside) continue;
+        const intersection = (boundary - a[2]) / deltaDepth;
+        if (!aInside) startT = Math.max(startT, intersection);
+        else endT = Math.min(endT, intersection);
+      }
+      if (startT > endT) return null;
+      const interpolate = (t: number): Vec3 => a.map((value, axis) => value + (b[axis] - value) * t) as Vec3;
+      return [projectRotated(interpolate(startT)), projectRotated(interpolate(endT))] as const;
+    };
+    const clipPolygonToDepth = (points: Vec3[]) => {
+      let polygon = points.map(rotate);
+      if (!display.zClipping) return polygon.map(projectRotated);
+      const clipAtBoundary = (input: Vec3[], boundary: number, keepAbove: boolean) => {
+        const output: Vec3[] = [];
+        input.forEach((current, index) => {
+          const previous = input[(index + input.length - 1) % input.length];
+          const currentInside = keepAbove ? current[2] >= boundary : current[2] <= boundary;
+          const previousInside = keepAbove ? previous[2] >= boundary : previous[2] <= boundary;
+          if (currentInside !== previousInside) {
+            const t = (boundary - previous[2]) / (current[2] - previous[2]);
+            output.push(previous.map((value, axis) => value + (current[axis] - value) * t) as Vec3);
+          }
+          if (currentInside) output.push(current);
+        });
+        return output;
+      };
+      polygon = clipAtBoundary(polygon, clippingMinimum, true);
+      if (!polygon.length) return [];
+      polygon = clipAtBoundary(polygon, clippingMaximum, false);
+      return polygon.map(projectRotated);
+    };
 
     const edges = [[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
 
@@ -507,8 +563,9 @@ function CrystalCanvas({
             ];
             const corners = fractionalCorners.map((fract) => fractToCart(fract, structure.cell));
             for (const [from, to] of edges) {
-              const a = project(corners[from]);
-              const b = project(corners[to]);
+              const segment = clipSegmentToDepth(corners[from], corners[to]);
+              if (!segment) continue;
+              const [a, b] = segment;
               context.beginPath();
               context.moveTo(a.x, a.y);
               context.lineTo(b.x, b.y);
@@ -528,15 +585,19 @@ function CrystalCanvas({
         const baseAxisOrigin = findSymmetryAxisOrigin(selectedOperation, axisFract, structure);
         const axisOrigin = fractToCart(baseAxisOrigin.map((value, axis) => value + Math.floor(supercellExtents[axis] / 2)) as Vec3, structure.cell);
         const span = maxCell * 0.72;
-        const a = project(vectorAdd(axisOrigin, vectorScale(axisCart, -span)));
-        const b = project(vectorAdd(axisOrigin, vectorScale(axisCart, span)));
+        const axisStart = vectorAdd(axisOrigin, vectorScale(axisCart, -span));
+        const axisEnd = vectorAdd(axisOrigin, vectorScale(axisCart, span));
+        const axisSegment = clipSegmentToDepth(axisStart, axisEnd);
+        const [a, b] = axisSegment ?? [project(axisStart), project(axisEnd)];
         context.strokeStyle = "rgba(168, 105, 18, .62)";
         context.lineWidth = 1.4;
         context.setLineDash([6, 5]);
-        context.beginPath();
-        context.moveTo(a.x, a.y);
-        context.lineTo(b.x, b.y);
-        context.stroke();
+        if (axisSegment) {
+          context.beginPath();
+          context.moveTo(a.x, a.y);
+          context.lineTo(b.x, b.y);
+          context.stroke();
+        }
         context.setLineDash([]);
 
         if (selectedOperation.kind === "screw") {
@@ -545,55 +606,66 @@ function CrystalCanvas({
           const v = normalize(cross(axisCart, u));
           const radius = baseMaxCell * 0.055;
           const turns = Math.max(1.6, selectedOperation.order * 0.82);
-          const helixPoints = Array.from({ length: 97 }, (_, index) => {
+          const helixWorldPoints = Array.from({ length: 97 }, (_, index) => {
             const t = index / 96;
             const angle = t * Math.PI * 2 * turns;
             const axial = vectorScale(axisCart, (t - 0.5) * span * 1.75);
             const radial = vectorAdd(vectorScale(u, Math.cos(angle) * radius), vectorScale(v, Math.sin(angle) * radius));
-            return project(vectorAdd(axisOrigin, vectorAdd(axial, radial)));
+            return vectorAdd(axisOrigin, vectorAdd(axial, radial));
           });
+          const helixSegments = helixWorldPoints.slice(1).map((point, index) => clipSegmentToDepth(helixWorldPoints[index], point)).filter((segment) => segment !== null);
 
           context.strokeStyle = "rgba(255, 255, 255, .92)";
           context.lineWidth = 5.5;
           context.lineJoin = "round";
-          context.beginPath();
-          context.moveTo(helixPoints[0].x, helixPoints[0].y);
-          helixPoints.slice(1).forEach((point) => context.lineTo(point.x, point.y));
-          context.stroke();
+          helixSegments.forEach(([start, end]) => {
+            context.beginPath();
+            context.moveTo(start.x, start.y);
+            context.lineTo(end.x, end.y);
+            context.stroke();
+          });
           context.strokeStyle = "#b76f12";
           context.lineWidth = 2.8;
-          context.stroke();
+          helixSegments.forEach(([start, end]) => {
+            context.beginPath();
+            context.moveTo(start.x, start.y);
+            context.lineTo(end.x, end.y);
+            context.stroke();
+          });
 
-          const arrowTip = helixPoints[helixPoints.length - 1];
-          const arrowFrom = helixPoints[helixPoints.length - 5];
-          const arrowAngle = Math.atan2(arrowTip.y - arrowFrom.y, arrowTip.x - arrowFrom.x);
-          context.fillStyle = "#b76f12";
-          context.beginPath();
-          context.moveTo(arrowTip.x, arrowTip.y);
-          context.lineTo(arrowTip.x - 10 * Math.cos(arrowAngle - 0.5), arrowTip.y - 10 * Math.sin(arrowAngle - 0.5));
-          context.lineTo(arrowTip.x - 10 * Math.cos(arrowAngle + 0.5), arrowTip.y - 10 * Math.sin(arrowAngle + 0.5));
-          context.closePath();
-          context.fill();
-
-          const label = `${selectedOperation.label}  ·  旋转 ${Math.round(360 / selectedOperation.order)}°  +  轴向平移 ${screwTranslationText(selectedOperation, axisFract)}`;
-          context.font = "600 10px ui-monospace, monospace";
-          const labelWidth = context.measureText(label).width + 16;
-          const labelX = Math.max(10, Math.min(width - labelWidth - 10, b.x + 10));
-          const labelY = Math.max(36, Math.min(height - 30, b.y - 10));
-          context.fillStyle = "rgba(255, 250, 240, .96)";
-          context.strokeStyle = "rgba(183, 111, 18, .42)";
-          context.lineWidth = 1;
-          context.beginPath();
-          context.roundRect(labelX, labelY - 17, labelWidth, 25, 6);
-          context.fill();
-          context.stroke();
-          context.fillStyle = "#8a5310";
-          context.fillText(label, labelX + 8, labelY);
+          const lastHelixSegment = helixSegments[helixSegments.length - 1];
+          if (lastHelixSegment) {
+            const [arrowFrom, arrowTip] = lastHelixSegment;
+            const arrowAngle = Math.atan2(arrowTip.y - arrowFrom.y, arrowTip.x - arrowFrom.x);
+            context.fillStyle = "#b76f12";
+            context.beginPath();
+            context.moveTo(arrowTip.x, arrowTip.y);
+            context.lineTo(arrowTip.x - 10 * Math.cos(arrowAngle - 0.5), arrowTip.y - 10 * Math.sin(arrowAngle - 0.5));
+            context.lineTo(arrowTip.x - 10 * Math.cos(arrowAngle + 0.5), arrowTip.y - 10 * Math.sin(arrowAngle + 0.5));
+            context.closePath();
+            context.fill();
+            const label = `${selectedOperation.label}  ·  旋转 ${Math.round(360 / selectedOperation.order)}°  +  轴向平移 ${screwTranslationText(selectedOperation, axisFract)}`;
+            context.font = "600 10px ui-monospace, monospace";
+            const labelWidth = context.measureText(label).width + 16;
+            const labelX = Math.max(10, Math.min(width - labelWidth - 10, b.x + 10));
+            const labelY = Math.max(36, Math.min(height - 30, b.y - 10));
+            context.fillStyle = "rgba(255, 250, 240, .96)";
+            context.strokeStyle = "rgba(183, 111, 18, .42)";
+            context.lineWidth = 1;
+            context.beginPath();
+            context.roundRect(labelX, labelY - 17, labelWidth, 25, 6);
+            context.fill();
+            context.stroke();
+            context.fillStyle = "#8a5310";
+            context.fillText(label, labelX + 8, labelY);
+          }
         } else {
-          context.fillStyle = "#b7791f";
-          context.beginPath();
-          context.arc(b.x, b.y, 4, 0, Math.PI * 2);
-          context.fill();
+          if (axisSegment) {
+            context.fillStyle = "#b7791f";
+            context.beginPath();
+            context.arc(b.x, b.y, 4, 0, Math.PI * 2);
+            context.fill();
+          }
         }
       } else if (["mirror", "glide"].includes(selectedOperation.kind)) {
         const normalFract = findEigenDirection(selectedOperation, -1);
@@ -602,32 +674,37 @@ function CrystalCanvas({
         const u = normalize(cross(normal, helper));
         const v = normalize(cross(normal, u));
         const span = maxCell * 0.52;
-        const plane = [
+        const plane = clipPolygonToDepth([
           vectorAdd(center, vectorAdd(vectorScale(u, -span), vectorScale(v, -span))),
           vectorAdd(center, vectorAdd(vectorScale(u, span), vectorScale(v, -span))),
           vectorAdd(center, vectorAdd(vectorScale(u, span), vectorScale(v, span))),
           vectorAdd(center, vectorAdd(vectorScale(u, -span), vectorScale(v, span))),
-        ].map(project);
+        ]);
         context.fillStyle = "rgba(183, 121, 31, .08)";
         context.strokeStyle = "rgba(183, 121, 31, .62)";
         context.lineWidth = 1;
-        context.beginPath();
-        context.moveTo(plane[0].x, plane[0].y);
-        plane.slice(1).forEach((point) => context.lineTo(point.x, point.y));
-        context.closePath();
-        context.fill();
-        context.stroke();
+        if (plane.length >= 3) {
+          context.beginPath();
+          context.moveTo(plane[0].x, plane[0].y);
+          plane.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+          context.closePath();
+          context.fill();
+          context.stroke();
+        }
       } else if (selectedOperation.kind === "inversion") {
-        const point = project(center);
-        context.strokeStyle = "#b7791f";
-        context.lineWidth = 2;
-        context.beginPath();
-        context.arc(point.x, point.y, 9, 0, Math.PI * 2);
-        context.stroke();
-        context.fillStyle = "#b7791f";
-        context.beginPath();
-        context.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
-        context.fill();
+        const rotatedCenter = rotate(center);
+        if (depthVisible(rotatedCenter[2])) {
+          const point = projectRotated(rotatedCenter);
+          context.strokeStyle = "#b7791f";
+          context.lineWidth = 2;
+          context.beginPath();
+          context.arc(point.x, point.y, 9, 0, Math.PI * 2);
+          context.stroke();
+          context.fillStyle = "#b7791f";
+          context.beginPath();
+          context.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+          context.fill();
+        }
       }
       context.restore();
     }
@@ -653,8 +730,9 @@ function CrystalCanvas({
             instanceA.cart[0] - instanceB.cart[0], instanceA.cart[1] - instanceB.cart[1], instanceA.cart[2] - instanceB.cart[2],
           );
           if (directDistance > bond.distance + 0.25) continue;
-          const a = project(instanceA.cart);
-          const b = project(instanceB.cart);
+          const segment = clipSegmentToDepth(instanceA.cart, instanceB.cart);
+          if (!segment) continue;
+          const [a, b] = segment;
           const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
           const lineWidth = Math.max(2.2, Math.min(7, (a.factor + b.factor) * worldScale * 0.13));
           context.globalAlpha = atomFocus.mode === "fade" ? (focusA && focusB ? 1 : focusA || focusB ? 0.42 : 0.07) : 1;
@@ -698,8 +776,9 @@ function CrystalCanvas({
             value + acceptorAtom.fract[axis] + hydrogenBond.acceptorImageShift[axis] - hydrogenAtom.fract[axis]
           )) as Vec3;
           const acceptorImageCart = fractToCart(acceptorImageFract, structure.cell);
-          const start = project(hydrogenInstance.cart);
-          const end = project(acceptorImageCart);
+          const segment = clipSegmentToDepth(hydrogenInstance.cart, acceptorImageCart);
+          if (!segment) continue;
+          const [start, end] = segment;
           const focused = focusD || focusH || focusA;
           context.globalAlpha = atomFocus.mode === "fade" ? (focused ? 1 : 0.08) : 0.94;
           context.strokeStyle = "rgba(255, 255, 255, .96)";
@@ -717,7 +796,7 @@ function CrystalCanvas({
             acceptorImageCart[1] - instance.cart[1],
             acceptorImageCart[2] - instance.cart[2],
           ) <= 0.24);
-          if (!hasDisplayedAcceptor) {
+          if (!hasDisplayedAcceptor && depthVisible(rotate(acceptorImageCart)[2])) {
             context.setLineDash([]);
             context.fillStyle = "rgba(255, 255, 255, .92)";
             context.beginPath();
@@ -736,33 +815,38 @@ function CrystalCanvas({
     const selectedAtom = structure.atoms[selectedAtomIndex];
     if (display.symmetry && selectedAtom && (display.hydrogens || selectedAtom.element !== "H")) {
       const selectedTranslation = supercellExtents.map((extent) => Math.floor(extent / 2)) as Vec3;
-      const source = project(fractToCart(selectedAtom.source.fract.map((value, axis) => value + selectedTranslation[axis]) as Vec3, structure.cell));
-      const target = project(fractToCart(baseDisplayFracts[selectedAtomIndex].map((value, axis) => value + selectedTranslation[axis]) as Vec3, structure.cell));
-      context.save();
-      context.strokeStyle = "rgba(15, 139, 141, .76)";
-      context.fillStyle = "#0f8b8d";
-      context.lineWidth = 1.5;
-      context.setLineDash([5, 5]);
-      context.beginPath();
-      context.moveTo(source.x, source.y);
-      context.lineTo(target.x, target.y);
-      context.stroke();
-      context.setLineDash([]);
-      const angle = Math.atan2(target.y - source.y, target.x - source.x);
-      context.beginPath();
-      context.moveTo(target.x, target.y);
-      context.lineTo(target.x - 9 * Math.cos(angle - 0.45), target.y - 9 * Math.sin(angle - 0.45));
-      context.lineTo(target.x - 9 * Math.cos(angle + 0.45), target.y - 9 * Math.sin(angle + 0.45));
-      context.closePath();
-      context.fill();
-      if (Math.hypot(target.x - source.x, target.y - source.y) > 30) {
-        context.font = "600 11px ui-monospace, monospace";
-        context.fillText(`操作 ${selectedOperation.id}`, (source.x + target.x) / 2 + 5, (source.y + target.y) / 2 - 5);
+      const sourceCart = fractToCart(selectedAtom.source.fract.map((value, axis) => value + selectedTranslation[axis]) as Vec3, structure.cell);
+      const targetCart = fractToCart(baseDisplayFracts[selectedAtomIndex].map((value, axis) => value + selectedTranslation[axis]) as Vec3, structure.cell);
+      const mappingSegment = clipSegmentToDepth(sourceCart, targetCart);
+      if (mappingSegment) {
+        const [source, target] = mappingSegment;
+        context.save();
+        context.strokeStyle = "rgba(15, 139, 141, .76)";
+        context.fillStyle = "#0f8b8d";
+        context.lineWidth = 1.5;
+        context.setLineDash([5, 5]);
+        context.beginPath();
+        context.moveTo(source.x, source.y);
+        context.lineTo(target.x, target.y);
+        context.stroke();
+        context.setLineDash([]);
+        const angle = Math.atan2(target.y - source.y, target.x - source.x);
+        context.beginPath();
+        context.moveTo(target.x, target.y);
+        context.lineTo(target.x - 9 * Math.cos(angle - 0.45), target.y - 9 * Math.sin(angle - 0.45));
+        context.lineTo(target.x - 9 * Math.cos(angle + 0.45), target.y - 9 * Math.sin(angle + 0.45));
+        context.closePath();
+        context.fill();
+        if (Math.hypot(target.x - source.x, target.y - source.y) > 30) {
+          context.font = "600 11px ui-monospace, monospace";
+          context.fillText(`操作 ${selectedOperation.id}`, (source.x + target.x) / 2 + 5, (source.y + target.y) / 2 - 5);
+        }
+        context.restore();
       }
-      context.restore();
     }
 
     const atoms = displayAtoms.map(({ atom, index, cart }) => ({ atom, index, projection: project(cart) }))
+      .filter(({ projection }) => depthVisible(projection.depth))
       .sort((a, b) => a.projection.depth - b.projection.depth);
     const hitTargets: ProjectedAtom[] = [];
     if (display.atoms) {
@@ -881,7 +965,7 @@ function CrystalCanvas({
       context.fillStyle = axis.color;
       context.fillText(axis.label, labelX, labelY);
     }
-  }, [structure, hydrogenBonds, hydrogenBondAppearance, supercell, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion]);
+  }, [structure, hydrogenBonds, hydrogenBondAppearance, supercell, zClipping, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion]);
 
   useEffect(() => {
     const resize = new ResizeObserver(() => redraw());
@@ -999,6 +1083,7 @@ function CrystalCanvas({
           <div className={isCrystallographicSupercell(supercell) ? "supercell-chip" : "supercell-chip fractional"}>
             <i />{isCrystallographicSupercell(supercell) ? "超胞" : "分数范围"} {supercellText(supercell)}
           </div>
+          {display.zClipping && <div className="z-clipping-chip"><i /> Z clip {zClipping.back}–{zClipping.front}%</div>}
           {display.hydrogenBonds && <div
             className="hydrogen-bond-chip"
             style={{ "--hbond-view-color": hydrogenBondAppearance.color } as React.CSSProperties}
@@ -1079,6 +1164,7 @@ export default function Home() {
   const [fileName, setFileName] = useState("alpha-quartz.cif");
   const [display, setDisplay] = useState(defaultDisplay);
   const [supercell, setSupercell] = useState<SupercellSettings>(defaultSupercell);
+  const [zClipping, setZClipping] = useState<ZClippingSettings>(defaultZClipping);
   const [selectedAtomIndex, setSelectedAtomIndex] = useState(0);
   const [selectedOperationId, setSelectedOperationId] = useState(1);
   const [rightTab, setRightTab] = useState<RightTab>("operations");
@@ -1271,6 +1357,13 @@ export default function Home() {
 
   function toggleDisplay(key: keyof DisplaySettings) {
     setDisplay((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function updateZClipping(side: keyof ZClippingSettings, value: number) {
+    setZClipping((current) => {
+      if (side === "back") return { ...current, back: Math.min(value, current.front - 2) };
+      return { ...current, front: Math.max(value, current.back + 2) };
+    });
   }
 
   function applySupercellPreset(a: number, b: number, c: number) {
@@ -1487,6 +1580,40 @@ export default function Home() {
           <Toggle label="晶胞边界" hint={supercellText(supercell)} checked={display.cell} onChange={() => toggleDisplay("cell")} />
           <Toggle label="原子标签" hint="元素与编号" checked={display.labels} onChange={() => toggleDisplay("labels")} />
           <Toggle label="对称元素" hint="轴 / 面 / 映射轨迹" checked={display.symmetry} onChange={() => toggleDisplay("symmetry")} />
+          <Toggle
+            label="Z clipping"
+            hint={display.zClipping ? `沿观察方向保留 ${zClipping.back}–${zClipping.front}%` : "沿当前观察方向裁切深度"}
+            checked={display.zClipping}
+            onChange={() => toggleDisplay("zClipping")}
+          />
+          {display.zClipping && <div className="z-clipping-controls">
+            <div className="z-clipping-head"><span>深度裁切范围</span><button type="button" onClick={() => setZClipping(defaultZClipping)}>重置</button></div>
+            <label>
+              <span>后裁切面<output>{zClipping.back}%</output></span>
+              <input
+                type="range"
+                min="0"
+                max="98"
+                step="1"
+                value={zClipping.back}
+                aria-label="后裁切面"
+                onChange={(event) => updateZClipping("back", Number(event.target.value))}
+              />
+            </label>
+            <label>
+              <span>前裁切面<output>{zClipping.front}%</output></span>
+              <input
+                type="range"
+                min="2"
+                max="100"
+                step="1"
+                value={zClipping.front}
+                aria-label="前裁切面"
+                onChange={(event) => updateZClipping("front", Number(event.target.value))}
+              />
+            </label>
+            <p>0% 为最远端，100% 为最靠近观察者的一端；旋转晶体后会按新视角重新裁切。</p>
+          </div>}
         </section>
 
         <section className="side-section source-section">
@@ -1507,6 +1634,7 @@ export default function Home() {
           hydrogenBonds={hydrogenBonds}
           hydrogenBondAppearance={hydrogenBondAppearance}
           supercell={supercell}
+          zClipping={zClipping}
           display={display}
           selectedAtomIndex={selectedAtomIndex}
           selectedOperation={selectedOperation}
