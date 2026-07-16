@@ -15,6 +15,8 @@
   --amber-soft: #fff7e8;
   --green: #23855b;
   --red: #d54b5f;
+  --hbond: #c2185b;
+  --hbond-soft: #fff1f6;
 }
 
 * { box-sizing: border-box; }
@@ -430,6 +432,21 @@ canvas:focus-visible {
 
 .live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
 
+.hydrogen-bond-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid #edc0d2;
+  border-radius: 6px;
+  color: #8f1748;
+  background: rgba(255, 246, 249, .94);
+  font-size: 8px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .04);
+}
+.hydrogen-bond-chip i { width: 13px; height: 0; border-top: 2px dashed var(--hbond); }
+
 .focus-chip {
   display: flex;
   align-items: center;
@@ -611,8 +628,8 @@ canvas:focus-visible {
 .group-metadata span { color: var(--subtle); font-size: 8px; }
 .group-metadata strong { color: #344054; font-family: var(--font-geist-mono), monospace; font-size: 11px; font-weight: 560; }
 
-.right-tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); background: #fff; }
-.right-tabs button { position: relative; border: 0; color: var(--subtle); background: transparent; font-size: 9px; cursor: pointer; }
+.right-tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--line); background: #fff; }
+.right-tabs button { position: relative; min-width: 0; padding: 0 3px; border: 0; color: var(--subtle); background: transparent; font-size: 8px; cursor: pointer; }
 .right-tabs button.active { color: var(--text); }
 .right-tabs button.active::after { position: absolute; right: 18%; bottom: 0; left: 18%; height: 2px; content: ""; background: var(--accent); }
 .right-content { min-height: 0; padding: 12px 12px 24px; }
@@ -732,6 +749,77 @@ canvas:focus-visible {
 .calculator-match.found > strong { color: var(--accent); }
 .calculator-match button { grid-column: 1 / -1; height: 27px; margin-top: 5px; border: 0; border-radius: 5px; color: #fff; background: var(--accent); font-size: 8px; cursor: pointer; }
 .calculator-match button:hover { background: #0c7779; }
+
+.hydrogen-panel { display: flex; flex-direction: column; gap: 11px; }
+.hydrogen-intro { padding: 10px; border: 1px solid #efc5d5; border-radius: 8px; background: #fff8fa; }
+.hydrogen-intro-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hydrogen-intro-head > span { display: inline-flex; align-items: center; gap: 6px; color: #7f1741; font-size: 10px; font-weight: 660; }
+.hydrogen-intro-head > span i { width: 18px; height: 0; border-top: 2px dashed var(--hbond); }
+.hydrogen-intro p { margin: 6px 0 0; color: var(--muted); font-size: 8px; line-height: 1.55; }
+.hydrogen-layer-toggle { height: 23px; padding: 0 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--subtle); background: #fff; font-size: 7px; cursor: pointer; }
+.hydrogen-layer-toggle.on { border-color: #e9b6ca; color: #9b174d; background: var(--hbond-soft); }
+.hydrogen-summary { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 9px; overflow: hidden; border: 1px solid #f0dbe3; border-radius: 6px; background: #fff; }
+.hydrogen-summary span { display: flex; align-items: center; flex-direction: column; gap: 1px; padding: 6px 3px; border-right: 1px solid #f0dbe3; color: var(--subtle); font-size: 7px; }
+.hydrogen-summary span:last-child { border-right: 0; }
+.hydrogen-summary strong { color: var(--hbond); font-family: var(--font-geist-mono), monospace; font-size: 11px; font-weight: 620; }
+
+.hydrogen-settings { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.hydrogen-section-head { display: flex; align-items: center; justify-content: space-between; }
+.hydrogen-section-head span { color: #344054; font-size: 9px; font-weight: 650; }
+.hydrogen-section-head small { color: var(--subtle); font-family: var(--font-geist-mono), monospace; font-size: 7px; }
+.hydrogen-presets { display: grid; grid-template-columns: .8fr 1.3fr .8fr; gap: 5px; margin-top: 8px; }
+.hydrogen-presets button { height: 25px; padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: var(--panel-soft); font-size: 7.5px; cursor: pointer; }
+.hydrogen-presets button.active { border-color: #e8b6ca; color: #951749; background: var(--hbond-soft); }
+.hydrogen-ranges { display: flex; flex-direction: column; gap: 9px; margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line); }
+.hydrogen-ranges label { display: flex; flex-direction: column; gap: 5px; }
+.hydrogen-ranges label > span { display: flex; align-items: center; justify-content: space-between; color: #475467; font-size: 8px; }
+.hydrogen-ranges output { color: var(--hbond); font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+.hydrogen-ranges input[type="range"] { width: 100%; height: 4px; accent-color: var(--hbond); cursor: pointer; }
+.hydrogen-element-filter { margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line); }
+.hydrogen-element-filter > span { display: block; margin-bottom: 6px; color: #475467; font-size: 8px; font-weight: 620; }
+.hydrogen-element-filter > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.hydrogen-element-filter button { min-width: 34px; height: 23px; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: var(--panel-soft); font-family: var(--font-geist-mono), monospace; font-size: 7px; cursor: pointer; }
+.hydrogen-element-filter button.active { border-color: #e7b4c8; color: #951749; background: var(--hbond-soft); }
+.hydrogen-element-filter small { display: block; margin-top: 5px; color: var(--subtle); font-size: 7px; line-height: 1.45; }
+.hydrogen-element-filter.acceptors { margin-top: 8px; }
+
+.hydrogen-results { display: flex; flex-direction: column; gap: 8px; }
+.hydrogen-bond-list { display: flex; flex-direction: column; gap: 4px; }
+.hydrogen-bond-row { display: grid; grid-template-columns: 25px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 49px; padding: 6px 7px; border: 1px solid transparent; border-radius: 7px; background: var(--panel-soft); text-align: left; cursor: pointer; }
+.hydrogen-bond-row:hover { border-color: #e7b4c8; background: #fff8fa; }
+.hydrogen-bond-mark { position: relative; display: block; width: 25px; height: 22px; }
+.hydrogen-bond-mark::before { position: absolute; top: 10px; left: 3px; width: 19px; content: ""; border-top: 2px dashed var(--hbond); }
+.hydrogen-bond-mark i,
+.hydrogen-bond-mark b { position: absolute; top: 7px; width: 7px; height: 7px; border: 1px solid #ad174f; border-radius: 50%; background: #fff; }
+.hydrogen-bond-mark i { left: 0; }
+.hydrogen-bond-mark b { right: 0; background: var(--hbond); }
+.hydrogen-bond-copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.hydrogen-bond-copy strong { overflow: hidden; color: #3d2631; font-family: var(--font-geist-mono), monospace; font-size: 8px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.hydrogen-bond-copy small { overflow: hidden; color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 6.5px; text-overflow: ellipsis; white-space: nowrap; }
+.hydrogen-bond-badge { display: flex; align-items: flex-end; flex-direction: column; gap: 2px; }
+.hydrogen-bond-badge b { padding: 2px 5px; border: 1px solid #e7b4c8; border-radius: 4px; color: #951749; background: var(--hbond-soft); font-size: 6.5px; font-weight: 600; }
+.hydrogen-bond-badge.intramolecular b { border-color: #d8dce2; color: #596273; background: #fff; }
+.hydrogen-bond-badge small { color: var(--subtle); font-size: 6px; }
+.hydrogen-empty { padding: 12px; border: 1px dashed var(--line-strong); border-radius: 7px; background: var(--panel-soft); text-align: center; }
+.hydrogen-empty strong { color: #475467; font-size: 9px; }
+.hydrogen-empty p { margin: 4px 0 0; color: var(--muted); font-size: 7.5px; line-height: 1.5; }
+.hydrogen-empty.warning { border-color: #e9c995; background: #fffaf1; }
+.hydrogen-empty.warning strong { color: #8a5a12; }
+
+.hydrogen-reference { border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.hydrogen-reference summary { padding: 9px 10px; color: #344054; font-size: 9px; font-weight: 650; cursor: pointer; }
+.hydrogen-reference > p { margin: 0; padding: 0 10px 8px; color: var(--muted); font-size: 7.5px; line-height: 1.55; }
+.hydrogen-reference > p b { color: #7f1741; }
+.hydrogen-guide-table { display: grid; grid-template-columns: 1.2fr repeat(3, .8fr); margin: 1px 10px 9px; overflow: hidden; border: 1px solid var(--line); border-radius: 5px; }
+.hydrogen-guide-table > * { min-width: 0; padding: 5px 3px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: 6.5px; font-style: normal; font-weight: 500; text-align: center; }
+.hydrogen-guide-table > *:nth-child(4n) { border-right: 0; }
+.hydrogen-guide-table > *:nth-last-child(-n + 4) { border-bottom: 0; }
+.hydrogen-guide-table > span { color: #475467; background: var(--panel-soft); text-align: left; }
+.hydrogen-guide-table > b { color: #8f1748; background: var(--hbond-soft); }
+.hydrogen-caution { color: #8a5a12 !important; background: #fffaf1; }
+.hydrogen-links { display: flex; gap: 6px; padding: 0 10px 10px; }
+.hydrogen-links a { padding: 4px 7px; border: 1px solid #e6b5c8; border-radius: 5px; color: #951749; background: var(--hbond-soft); font-size: 7px; text-decoration: none; }
+.hydrogen-links a:hover { border-color: var(--hbond); }
 
 .drop-overlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; border: 3px solid var(--accent); background: rgba(255, 255, 255, .88); backdrop-filter: blur(8px); pointer-events: none; }
 .drop-overlay > div { display: flex; align-items: center; flex-direction: column; }

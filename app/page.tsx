@@ -5,10 +5,13 @@ import {
   DEFAULT_CIF,
   type AtomInstance,
   type CrystalStructure,
+  type HydrogenBond,
+  type HydrogenBondCriteria,
   type SymmetryOperation,
   type Vec3,
   applyOperation,
   elementStyle,
+  findHydrogenBonds,
   formatFractional,
   fractToCart,
   hillElementOrder,
@@ -21,6 +24,7 @@ import {
 type DisplaySettings = {
   atoms: boolean;
   bonds: boolean;
+  hydrogenBonds: boolean;
   cell: boolean;
   labels: boolean;
   symmetry: boolean;
@@ -37,10 +41,13 @@ type ElementAppearance = Record<string, { color: string; scale: number }>;
 type AxisFont = "mono" | "sans" | "serif";
 type AxisAppearance = { lineWidth: number; length: number; font: AxisFont; fontSize: number };
 type AppearanceMenu = { kind: "element"; element: string; x: number; y: number } | { kind: "axis"; x: number; y: number };
+type RightTab = "operations" | "atoms" | "wyckoff" | "hydrogen" | "calculator";
+type HydrogenPreset = "strict" | "steiner" | "broad";
 
 const defaultDisplay: DisplaySettings = {
   atoms: true,
   bonds: true,
+  hydrogenBonds: true,
   cell: true,
   labels: true,
   symmetry: true,
@@ -48,6 +55,31 @@ const defaultDisplay: DisplaySettings = {
 };
 
 const defaultAxisAppearance: AxisAppearance = { lineWidth: 1.5, length: 25, font: "mono", fontSize: 10 };
+const hydrogenBondPresets: Record<HydrogenPreset, HydrogenBondCriteria> = {
+  strict: {
+    maxHydrogenAcceptorDistance: 2.5,
+    maxDonorAcceptorDistance: 3.2,
+    minDonorHydrogenAcceptorAngle: 150,
+    donorElements: ["O", "N", "S"],
+    acceptorElements: ["O", "N", "S", "F"],
+  },
+  steiner: {
+    maxHydrogenAcceptorDistance: 3.0,
+    maxDonorAcceptorDistance: 3.8,
+    minDonorHydrogenAcceptorAngle: 110,
+    donorElements: ["O", "N", "S"],
+    acceptorElements: ["O", "N", "S", "F", "Cl", "Br", "I"],
+  },
+  broad: {
+    maxHydrogenAcceptorDistance: 3.2,
+    maxDonorAcceptorDistance: 4.0,
+    minDonorHydrogenAcceptorAngle: 90,
+    donorElements: ["O", "N", "S", "C"],
+    acceptorElements: ["O", "N", "S", "F", "Cl", "Br", "I"],
+  },
+};
+const defaultHydrogenBondCriteria = hydrogenBondPresets.steiner;
+const hydrogenStrengthLabels: Record<HydrogenBond["strength"], string> = { strong: "强", moderate: "中等", weak: "弱" };
 const axisFontFamilies: Record<AxisFont, string> = {
   mono: "ui-monospace, SFMono-Regular, Consolas, monospace",
   sans: '"Segoe UI", "PingFang SC", sans-serif',
@@ -266,6 +298,7 @@ function screwTranslationText(operation: SymmetryOperation, axisFract: Vec3) {
 
 function CrystalCanvas({
   structure,
+  hydrogenBonds,
   display,
   selectedAtomIndex,
   selectedOperation,
@@ -278,6 +311,7 @@ function CrystalCanvas({
   onClearAtomFocus,
 }: {
   structure: CrystalStructure;
+  hydrogenBonds: HydrogenBond[];
   display: DisplaySettings;
   selectedAtomIndex: number;
   selectedOperation: SymmetryOperation;
@@ -533,6 +567,58 @@ function CrystalCanvas({
       context.restore();
     }
 
+    if (display.hydrogenBonds && hydrogenBonds.length) {
+      context.save();
+      context.lineCap = "round";
+      context.setLineDash([5, 4]);
+      for (const hydrogenBond of hydrogenBonds) {
+        const donorAtom = structure.atoms[hydrogenBond.donor];
+        const hydrogenAtom = structure.atoms[hydrogenBond.hydrogen];
+        const acceptorAtom = structure.atoms[hydrogenBond.acceptor];
+        const focusD = matchesFocus(donorAtom);
+        const focusH = matchesFocus(hydrogenAtom);
+        const focusA = matchesFocus(acceptorAtom);
+        if (atomFocus.mode === "isolate" && !focusD && !focusH && !focusA) continue;
+        const hydrogenFract = displayFracts[hydrogenBond.hydrogen];
+        const acceptorImageFract = hydrogenFract.map((value, axis) => (
+          value + acceptorAtom.fract[axis] + hydrogenBond.acceptorImageShift[axis] - hydrogenAtom.fract[axis]
+        )) as Vec3;
+        const hydrogenCart = displayCarts[hydrogenBond.hydrogen];
+        const acceptorImageCart = fractToCart(acceptorImageFract, structure.cell);
+        const start = project(hydrogenCart);
+        const end = project(acceptorImageCart);
+        const focused = focusD || focusH || focusA;
+        context.globalAlpha = atomFocus.mode === "fade" ? (focused ? 1 : 0.08) : 0.94;
+        context.strokeStyle = "rgba(255, 255, 255, .96)";
+        context.lineWidth = 4.4;
+        context.beginPath();
+        context.moveTo(start.x, start.y);
+        context.lineTo(end.x, end.y);
+        context.stroke();
+        context.strokeStyle = "#c2185b";
+        context.lineWidth = 1.8;
+        context.stroke();
+
+        const displayedAcceptor = displayCarts[hydrogenBond.acceptor];
+        if (Math.hypot(
+          acceptorImageCart[0] - displayedAcceptor[0],
+          acceptorImageCart[1] - displayedAcceptor[1],
+          acceptorImageCart[2] - displayedAcceptor[2],
+        ) > 0.24) {
+          context.setLineDash([]);
+          context.fillStyle = "rgba(255, 255, 255, .92)";
+          context.beginPath();
+          context.arc(end.x, end.y, 3.8, 0, Math.PI * 2);
+          context.fill();
+          context.strokeStyle = "#c2185b";
+          context.lineWidth = 1.4;
+          context.stroke();
+          context.setLineDash([5, 4]);
+        }
+      }
+      context.restore();
+    }
+
     const selectedAtom = structure.atoms[selectedAtomIndex];
     if (display.symmetry && selectedAtom) {
       const source = project(fractToCart(selectedAtom.source.fract, structure.cell));
@@ -679,7 +765,7 @@ function CrystalCanvas({
       context.fillStyle = axis.color;
       context.fillText(axis.label, labelX, labelY);
     }
-  }, [structure, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion]);
+  }, [structure, hydrogenBonds, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion]);
 
   useEffect(() => {
     const resize = new ResizeObserver(() => redraw());
@@ -794,6 +880,7 @@ function CrystalCanvas({
       <div className="canvas-topbar">
         <div className="canvas-chip-group">
           <div className="view-chip"><span className="live-dot" /> 交互晶胞</div>
+          {display.hydrogenBonds && <div className="hydrogen-bond-chip"><i /> 氢键候选 {hydrogenBonds.length}</div>}
           {atomFocus.mode !== "none" && <div className="focus-chip">
             <span>{atomFocus.mode === "fade" ? "聚焦" : "单独显示"} · {atomFocus.sourceLabel}</span>
             <button type="button" onClick={onClearAtomFocus}>恢复全部</button>
@@ -871,7 +958,7 @@ export default function Home() {
   const [display, setDisplay] = useState(defaultDisplay);
   const [selectedAtomIndex, setSelectedAtomIndex] = useState(0);
   const [selectedOperationId, setSelectedOperationId] = useState(1);
-  const [rightTab, setRightTab] = useState<"operations" | "atoms" | "wyckoff" | "calculator">("operations");
+  const [rightTab, setRightTab] = useState<RightTab>("operations");
   const [operationFilter, setOperationFilter] = useState("all");
   const [calculatorInput, setCalculatorInput] = useState<[string, string, string]>(() => {
     const firstSite = structure.sites[0];
@@ -884,6 +971,12 @@ export default function Home() {
   const [contextMenu, setContextMenu] = useState<AtomContextMenu | null>(null);
   const [elementAppearance, setElementAppearance] = useState<ElementAppearance>({});
   const [axisAppearance, setAxisAppearance] = useState<AxisAppearance>(defaultAxisAppearance);
+  const [hydrogenBondCriteria, setHydrogenBondCriteria] = useState<HydrogenBondCriteria>(() => ({
+    ...defaultHydrogenBondCriteria,
+    donorElements: [...defaultHydrogenBondCriteria.donorElements],
+    acceptorElements: [...defaultHydrogenBondCriteria.acceptorElements],
+  }));
+  const [hydrogenPreset, setHydrogenPreset] = useState<HydrogenPreset | "custom">("steiner");
   const [appearanceMenu, setAppearanceMenu] = useState<AppearanceMenu | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -906,6 +999,16 @@ export default function Home() {
     structure.atoms.forEach((atom) => counts.set(atom.element, (counts.get(atom.element) ?? 0) + 1));
     return [...counts.entries()].sort(([a], [b]) => hillElementOrder(a, b, counts.has("C")));
   }, [structure]);
+
+  const hydrogenBonds = useMemo(
+    () => findHydrogenBonds(structure, hydrogenBondCriteria),
+    [structure, hydrogenBondCriteria],
+  );
+  const hydrogenBondSummary = useMemo(() => ({
+    intramolecular: hydrogenBonds.filter((bond) => bond.kind === "intramolecular").length,
+    intermolecular: hydrogenBonds.filter((bond) => bond.kind === "intermolecular").length,
+  }), [hydrogenBonds]);
+  const hasExplicitHydrogens = structure.atoms.some((atom) => atom.element === "H");
 
   const calculator = useMemo(() => {
     const input = calculatorInput.map(parseCoordinateInput) as Vec3;
@@ -1001,6 +1104,35 @@ export default function Home() {
     setDisplay((current) => ({ ...current, [key]: !current[key] }));
   }
 
+  function applyHydrogenBondPreset(preset: HydrogenPreset) {
+    const values = hydrogenBondPresets[preset];
+    setHydrogenBondCriteria({
+      ...values,
+      donorElements: [...values.donorElements],
+      acceptorElements: [...values.acceptorElements],
+    });
+    setHydrogenPreset(preset);
+  }
+
+  function updateHydrogenBondNumber(
+    key: "maxHydrogenAcceptorDistance" | "maxDonorAcceptorDistance" | "minDonorHydrogenAcceptorAngle",
+    value: number,
+  ) {
+    setHydrogenBondCriteria((current) => ({ ...current, [key]: value }));
+    setHydrogenPreset("custom");
+  }
+
+  function toggleHydrogenBondElement(key: "donorElements" | "acceptorElements", element: string) {
+    setHydrogenBondCriteria((current) => {
+      const values = current[key];
+      return {
+        ...current,
+        [key]: values.includes(element) ? values.filter((value) => value !== element) : [...values, element],
+      };
+    });
+    setHydrogenPreset("custom");
+  }
+
   function exportReport() {
     const report = {
       structure: structure.name,
@@ -1012,6 +1144,20 @@ export default function Home() {
       asymmetricSites: structure.sites,
       symmetryOperations: structure.operations.map(({ id, xyz, kind, name }) => ({ id, xyz, kind, name })),
       generatedAtoms: structure.atoms.map(({ label, element, fract, source, operationIds }) => ({ label, element, fract, source: source.label, operationIds })),
+      hydrogenBondAnalysis: {
+        criteria: hydrogenBondCriteria,
+        candidates: hydrogenBonds.map((bond) => ({
+          donor: structure.atoms[bond.donor].label,
+          hydrogen: structure.atoms[bond.hydrogen].label,
+          acceptor: structure.atoms[bond.acceptor].label,
+          kind: bond.kind,
+          strength: bond.strength,
+          hydrogenAcceptorDistance: bond.hydrogenAcceptorDistance,
+          donorAcceptorDistance: bond.donorAcceptorDistance,
+          angle: bond.angle,
+          acceptorImageShift: bond.acceptorImageShift,
+        })),
+      },
     };
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1084,6 +1230,15 @@ export default function Home() {
           <div className="section-heading"><span>显示控制</span><small>VIEW LAYERS</small></div>
           <Toggle label="原子球（哑光 CPK）" hint={`${structure.atoms.length} 个等价原子`} checked={display.atoms} onChange={() => toggleDisplay("atoms")} />
           <Toggle label="化学键（球棍）" hint={`${structure.bonds.length} 组共价近邻`} checked={display.bonds} onChange={() => toggleDisplay("bonds")} />
+          <Toggle
+            label="氢键候选（深粉虚线）"
+            hint={`${hydrogenBonds.length} 条 · 分子内 ${hydrogenBondSummary.intramolecular} / 分子间 ${hydrogenBondSummary.intermolecular}`}
+            checked={display.hydrogenBonds}
+            onChange={() => {
+              toggleDisplay("hydrogenBonds");
+              if (!display.hydrogenBonds) setRightTab("hydrogen");
+            }}
+          />
           <Toggle label="补全分子片段" hint={display.completeMolecules ? "跨晶胞键已重新拼接" : "当前按晶胞边界截断"} checked={display.completeMolecules} onChange={() => toggleDisplay("completeMolecules")} />
           <Toggle label="晶胞边界" hint="1 × 1 × 1" checked={display.cell} onChange={() => toggleDisplay("cell")} />
           <Toggle label="原子标签" hint="元素与编号" checked={display.labels} onChange={() => toggleDisplay("labels")} />
@@ -1101,10 +1256,11 @@ export default function Home() {
       <section className="workspace">
         <div className="workspace-toolbar">
           <div className="mode-tabs"><button type="button" className="active">结构 + 对称</button><button type="button">操作轨迹</button></div>
-          <div className="workspace-stats"><span><i />{structure.atoms.length} 原子</span><span>{structure.bonds.length} 键</span><span>{display.completeMolecules ? "完整分子" : "晶胞截断"}</span></div>
+          <div className="workspace-stats"><span><i />{structure.atoms.length} 原子</span><span>{structure.bonds.length} 键 · {hydrogenBonds.length} 氢键候选</span><span>{display.completeMolecules ? "完整分子" : "晶胞截断"}</span></div>
         </div>
         <CrystalCanvas
           structure={structure}
+          hydrogenBonds={hydrogenBonds}
           display={display}
           selectedAtomIndex={selectedAtomIndex}
           selectedOperation={selectedOperation}
@@ -1163,6 +1319,7 @@ export default function Home() {
           <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>对称操作</button>
           <button type="button" className={rightTab === "atoms" ? "active" : ""} onClick={() => setRightTab("atoms")}>原子轨迹</button>
           <button type="button" className={rightTab === "wyckoff" ? "active" : ""} onClick={() => setRightTab("wyckoff")}>Wyckoff</button>
+          <button type="button" className={rightTab === "hydrogen" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>氢键</button>
           <button type="button" className={rightTab === "calculator" ? "active" : ""} onClick={() => setRightTab("calculator")}>坐标计算器</button>
         </nav>
 
@@ -1224,6 +1381,100 @@ export default function Home() {
               <span className="wyckoff-count"><strong>{site.multiplicity ?? generated}</strong><small>等价位</small></span>
             </button>;
           })}
+        </div>}
+
+        {rightTab === "hydrogen" && <div className="right-content panel-scroll hydrogen-panel">
+          <div className="hydrogen-intro">
+            <div className="hydrogen-intro-head">
+              <span><i />氢键几何筛选</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={display.hydrogenBonds}
+                className={display.hydrogenBonds ? "hydrogen-layer-toggle on" : "hydrogen-layer-toggle"}
+                onClick={() => toggleDisplay("hydrogenBonds")}
+              >{display.hydrogenBonds ? "视图已显示" : "视图已隐藏"}</button>
+            </div>
+            <p>自动搜索 D–H···A 周期近邻，并按共价连通片段区分分子内与分子间。深粉色虚线表示 H···A。</p>
+            <div className="hydrogen-summary">
+              <span><strong>{hydrogenBonds.length}</strong>总候选</span>
+              <span><strong>{hydrogenBondSummary.intramolecular}</strong>分子内</span>
+              <span><strong>{hydrogenBondSummary.intermolecular}</strong>分子间</span>
+            </div>
+          </div>
+
+          <section className="hydrogen-settings">
+            <div className="hydrogen-section-head"><span>筛选预设</span><small>{hydrogenPreset === "custom" ? "自定义" : "已应用"}</small></div>
+            <div className="hydrogen-presets">
+              {([['strict', '严格'], ['steiner', 'Steiner 保守'], ['broad', '宽松']] as Array<[HydrogenPreset, string]>).map(([preset, label]) => (
+                <button type="button" key={preset} className={hydrogenPreset === preset ? "active" : ""} onClick={() => applyHydrogenBondPreset(preset)}>{label}</button>
+              ))}
+            </div>
+
+            <div className="hydrogen-ranges">
+              <label>
+                <span>H···A 最大距离<output>{hydrogenBondCriteria.maxHydrogenAcceptorDistance.toFixed(1)} Å</output></span>
+                <input type="range" min="1.8" max="3.2" step="0.1" value={hydrogenBondCriteria.maxHydrogenAcceptorDistance} onChange={(event) => updateHydrogenBondNumber("maxHydrogenAcceptorDistance", Number(event.target.value))} />
+              </label>
+              <label>
+                <span>D···A 最大距离<output>{hydrogenBondCriteria.maxDonorAcceptorDistance.toFixed(1)} Å</output></span>
+                <input type="range" min="2.4" max="4.2" step="0.1" value={hydrogenBondCriteria.maxDonorAcceptorDistance} onChange={(event) => updateHydrogenBondNumber("maxDonorAcceptorDistance", Number(event.target.value))} />
+              </label>
+              <label>
+                <span>D–H···A 最小角<output>{hydrogenBondCriteria.minDonorHydrogenAcceptorAngle.toFixed(0)}°</output></span>
+                <input type="range" min="80" max="175" step="5" value={hydrogenBondCriteria.minDonorHydrogenAcceptorAngle} onChange={(event) => updateHydrogenBondNumber("minDonorHydrogenAcceptorAngle", Number(event.target.value))} />
+              </label>
+            </div>
+
+            <div className="hydrogen-element-filter">
+              <span>供体 D–H</span>
+              <div>{["O", "N", "S", "C"].map((element) => <button type="button" key={element} className={hydrogenBondCriteria.donorElements.includes(element) ? "active" : ""} onClick={() => toggleHydrogenBondElement("donorElements", element)}>{element}–H</button>)}</div>
+              <small>C–H 通常属于较弱、边界更开放的氢键类型。</small>
+            </div>
+            <div className="hydrogen-element-filter acceptors">
+              <span>受体 A</span>
+              <div>{["O", "N", "S", "F", "Cl", "Br", "I"].map((element) => <button type="button" key={element} className={hydrogenBondCriteria.acceptorElements.includes(element) ? "active" : ""} onClick={() => toggleHydrogenBondElement("acceptorElements", element)}>{element}</button>)}</div>
+            </div>
+          </section>
+
+          <section className="hydrogen-results">
+            <div className="hydrogen-section-head"><span>符合当前阈值</span><small>周期最小镜像</small></div>
+            {!hasExplicitHydrogens ? <div className="hydrogen-empty warning"><strong>没有显式 H 原子</strong><p>当前 CIF 无法计算 D–H···A 角。请使用含氢坐标的 CIF，最好采用中子衍射或已规范化的 X–H 键长。</p></div>
+              : hydrogenBonds.length === 0 ? <div className="hydrogen-empty"><strong>未发现候选</strong><p>可切换“宽松”预设，或调整距离、角度及供体/受体元素。</p></div>
+                : <div className="hydrogen-bond-list">{hydrogenBonds.slice(0, 160).map((bond, index) => {
+                  const donor = structure.atoms[bond.donor];
+                  const hydrogen = structure.atoms[bond.hydrogen];
+                  const acceptor = structure.atoms[bond.acceptor];
+                  const periodic = bond.acceptorImageShift.some((value) => value !== 0);
+                  return <button type="button" className="hydrogen-bond-row" key={`${bond.hydrogen}-${bond.acceptor}-${index}`} onClick={() => selectAtom(bond.hydrogen)}>
+                    <span className="hydrogen-bond-mark"><i /><b /></span>
+                    <span className="hydrogen-bond-copy">
+                      <strong>{donor.label}–{hydrogen.label}···{acceptor.label}</strong>
+                      <small>H···A {bond.hydrogenAcceptorDistance.toFixed(2)} Å · D···A {bond.donorAcceptorDistance.toFixed(2)} Å · ∠ {bond.angle.toFixed(1)}°</small>
+                    </span>
+                    <span className={`hydrogen-bond-badge ${bond.kind}`}>
+                      <b>{bond.kind === "intramolecular" ? "分子内" : "分子间"}</b>
+                      <small>{hydrogenStrengthLabels[bond.strength]}{periodic ? " · 跨界" : ""}</small>
+                    </span>
+                  </button>;
+                })}</div>}
+          </section>
+
+          <details className="hydrogen-reference" open>
+            <summary>判据依据与解释</summary>
+            <p><b>Steiner (2002)</b>：氢键强度连续、没有天然分界。若必须自动筛选，可考虑 H···A 至 3.0–3.2 Å；角度下限可取 90°，更保守取 110°。</p>
+            <div className="hydrogen-guide-table">
+              <span>几何引导值</span><b>强</b><b>中等</b><b>弱</b>
+              <span>H···A / Å</span><em>1.2–1.5</em><em>1.5–2.2</em><em>&gt; 2.2</em>
+              <span>D···A / Å</span><em>2.2–2.5</em><em>2.5–3.2</em><em>&gt; 3.2</em>
+              <span>∠D–H···A</span><em>170–180°</em><em>&gt; 130°</em><em>&gt; 90°</em>
+            </div>
+            <p className="hydrogen-caution">几何命中只表示“候选”。IUPAC 2011 要求至少有实验或理论证据；电子密度、光谱、能量和化学环境可能改变结论。</p>
+            <div className="hydrogen-links">
+              <a href="https://doi.org/10.1002/1521-3773(20020104)41:1%3C48::AID-ANIE48%3E3.0.CO;2-U" target="_blank" rel="noreferrer">Steiner 2002 ↗</a>
+              <a href="https://publications.iupac.org/pac/83/8/1637/index.html" target="_blank" rel="noreferrer">IUPAC 2011 ↗</a>
+            </div>
+          </details>
         </div>}
 
         {rightTab === "calculator" && <div className="right-content panel-scroll calculator-panel">

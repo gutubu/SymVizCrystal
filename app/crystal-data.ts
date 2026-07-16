@@ -47,6 +47,26 @@ export type Bond = {
   imageShift: Vec3;
 };
 
+export type HydrogenBondCriteria = {
+  maxHydrogenAcceptorDistance: number;
+  maxDonorAcceptorDistance: number;
+  minDonorHydrogenAcceptorAngle: number;
+  donorElements: string[];
+  acceptorElements: string[];
+};
+
+export type HydrogenBond = {
+  donor: number;
+  hydrogen: number;
+  acceptor: number;
+  hydrogenAcceptorDistance: number;
+  donorAcceptorDistance: number;
+  angle: number;
+  acceptorImageShift: Vec3;
+  kind: "intramolecular" | "intermolecular";
+  strength: "strong" | "moderate" | "weak";
+};
+
 export type CrystalStructure = {
   name: string;
   cell: UnitCell;
@@ -442,6 +462,107 @@ function generateBonds(atoms: AtomInstance[], cell: UnitCell) {
     }
   }
   return bonds;
+}
+
+function molecularComponentIds(atoms: AtomInstance[], bonds: Bond[]) {
+  const adjacency: number[][] = Array.from({ length: atoms.length }, () => []);
+  bonds.forEach((bond) => {
+    adjacency[bond.a].push(bond.b);
+    adjacency[bond.b].push(bond.a);
+  });
+  const componentIds = Array(atoms.length).fill(-1) as number[];
+  let componentId = 0;
+  for (let start = 0; start < atoms.length; start += 1) {
+    if (componentIds[start] >= 0) continue;
+    const queue = [start];
+    componentIds[start] = componentId;
+    while (queue.length) {
+      const current = queue.shift()!;
+      adjacency[current].forEach((target) => {
+        if (componentIds[target] >= 0) return;
+        componentIds[target] = componentId;
+        queue.push(target);
+      });
+    }
+    componentId += 1;
+  }
+  return componentIds;
+}
+
+function hydrogenBondStrength(hydrogenAcceptorDistance: number, donorAcceptorDistance: number, angle: number): HydrogenBond["strength"] {
+  if (hydrogenAcceptorDistance <= 1.5 && donorAcceptorDistance <= 2.5 && angle >= 170) return "strong";
+  if (hydrogenAcceptorDistance <= 2.2 && donorAcceptorDistance <= 3.2 && angle >= 130) return "moderate";
+  return "weak";
+}
+
+/**
+ * Geometry-based hydrogen-bond candidate search with periodic minimum images.
+ * The result is a screening aid, not a claim that geometry alone proves bonding.
+ */
+export function findHydrogenBonds(structure: CrystalStructure, criteria: HydrogenBondCriteria) {
+  const { atoms, bonds, cell } = structure;
+  const adjacency: number[][] = Array.from({ length: atoms.length }, () => []);
+  bonds.forEach((bond) => {
+    adjacency[bond.a].push(bond.b);
+    adjacency[bond.b].push(bond.a);
+  });
+  const componentIds = molecularComponentIds(atoms, bonds);
+  const donorElements = new Set(criteria.donorElements);
+  const acceptorElements = new Set(criteria.acceptorElements);
+  const results: HydrogenBond[] = [];
+
+  atoms.forEach((hydrogenAtom, hydrogen) => {
+    if (hydrogenAtom.element !== "H") return;
+    adjacency[hydrogen].forEach((donor) => {
+      const donorAtom = atoms[donor];
+      if (!donorElements.has(donorAtom.element)) return;
+      const donorDelta = donorAtom.fract.map((value, axis) => {
+        const raw = value - hydrogenAtom.fract[axis];
+        return raw - Math.round(raw);
+      }) as Vec3;
+      const donorVector = fractToCart(donorDelta, cell);
+      const donorHydrogenDistance = Math.hypot(...donorVector);
+      if (donorHydrogenDistance < 0.35 || donorHydrogenDistance > 1.75) return;
+
+      atoms.forEach((acceptorAtom, acceptor) => {
+        if (acceptor === donor || acceptor === hydrogen || !acceptorElements.has(acceptorAtom.element)) return;
+        if (adjacency[hydrogen].includes(acceptor)) return;
+        const acceptorImageShift = acceptorAtom.fract.map((value, axis) => -Math.round(value - hydrogenAtom.fract[axis])) as Vec3;
+        const acceptorDelta = acceptorAtom.fract.map((value, axis) => (
+          value + acceptorImageShift[axis] - hydrogenAtom.fract[axis]
+        )) as Vec3;
+        const acceptorVector = fractToCart(acceptorDelta, cell);
+        const hydrogenAcceptorDistance = Math.hypot(...acceptorVector);
+        if (hydrogenAcceptorDistance < 0.65 || hydrogenAcceptorDistance > criteria.maxHydrogenAcceptorDistance) return;
+        const donorAcceptorVector = acceptorVector.map((value, axis) => value - donorVector[axis]) as Vec3;
+        const donorAcceptorDistance = Math.hypot(...donorAcceptorVector);
+        if (donorAcceptorDistance > criteria.maxDonorAcceptorDistance) return;
+        const cosine = Math.max(-1, Math.min(1, (
+          donorVector[0] * acceptorVector[0] + donorVector[1] * acceptorVector[1] + donorVector[2] * acceptorVector[2]
+        ) / Math.max(1e-8, donorHydrogenDistance * hydrogenAcceptorDistance)));
+        const angle = Math.acos(cosine) * 180 / Math.PI;
+        if (angle < criteria.minDonorHydrogenAcceptorAngle) return;
+
+        results.push({
+          donor,
+          hydrogen,
+          acceptor,
+          hydrogenAcceptorDistance,
+          donorAcceptorDistance,
+          angle,
+          acceptorImageShift,
+          kind: componentIds[donor] === componentIds[acceptor] ? "intramolecular" : "intermolecular",
+          strength: hydrogenBondStrength(hydrogenAcceptorDistance, donorAcceptorDistance, angle),
+        });
+      });
+    });
+  });
+
+  return results.sort((a, b) => (
+    Number(a.kind === "intermolecular") - Number(b.kind === "intermolecular")
+    || a.hydrogenAcceptorDistance - b.hydrogenAcceptorDistance
+    || b.angle - a.angle
+  ));
 }
 
 export function molecularDisplayFracts(atoms: AtomInstance[], bonds: Bond[]) {
