@@ -448,6 +448,8 @@ canvas:focus-visible {
 .focus-chip button { height: 19px; padding: 0 6px; border: 0; border-radius: 4px; color: #0b6668; background: #d9efed; font-size: 7px; cursor: pointer; }
 .focus-chip button:hover { background: #c8e7e4; }
 
+.canvas-control-stack { display: flex; align-items: flex-end; flex-direction: column; gap: 5px; pointer-events: auto; }
+
 .canvas-actions {
   display: flex;
   gap: 3px;
@@ -462,6 +464,28 @@ canvas:focus-visible {
 .canvas-actions button { min-width: 28px; height: 24px; padding: 0 7px; border: 0; border-radius: 4px; color: var(--muted); background: transparent; font-size: 8px; cursor: pointer; }
 .canvas-actions button.active { color: var(--accent); background: var(--accent-soft); }
 .canvas-actions button:hover { color: var(--text); background: #f2f4f7; }
+
+.view-presets {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 27px;
+  padding: 3px 4px 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--subtle);
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 1px 4px rgba(16, 24, 40, .06);
+}
+
+.view-presets > span { margin-right: 2px; font-size: 7px; white-space: nowrap; }
+.view-presets > i { width: 1px; height: 14px; margin: 0 3px; background: var(--line); }
+.view-presets button { display: grid; width: 21px; height: 19px; padding: 0; place-items: center; border: 0; border-radius: 4px; color: #667085; background: transparent; font-family: Georgia, "Cambria Math", serif; font-size: 10px; font-style: italic; cursor: pointer; }
+.view-presets button:hover { color: var(--text); background: #f2f4f7; }
+.view-presets button.active { color: #fff; background: var(--accent); }
+.view-presets button.lattice.a:not(.active) { color: #df4961; }
+.view-presets button.lattice.b:not(.active) { color: #2eaa67; }
+.view-presets button.lattice.c:not(.active) { color: #3f9de8; }
 
 .gesture-hint { position: absolute; z-index: 4; bottom: 12px; left: 50%; padding: 5px 10px; border: 1px solid var(--line); border-radius: 5px; color: var(--subtle); background: rgba(255, 255, 255, .86); font-size: 8px; transform: translateX(-50%); pointer-events: none; }
 
@@ -713,6 +737,8 @@ canvas:focus-visible {
   .mapping-row { grid-template-columns: 1fr 90px 1fr; gap: 7px; }
   .mapping-operation { grid-template-columns: 25px 1fr; gap: 4px; }
   .mapping-operation > span { width: 25px; height: 25px; }
+  .canvas-topbar { right: 8px; left: 8px; }
+  .view-presets > span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

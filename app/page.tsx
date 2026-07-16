@@ -29,6 +29,7 @@ type DisplaySettings = {
 
 type ProjectedAtom = { index: number; x: number; y: number; radius: number; depth: number };
 type Quaternion = [number, number, number, number];
+type ViewPreset = "x" | "y" | "z" | "a" | "b" | "c";
 type AtomFocusMode = "none" | "fade" | "isolate";
 type AtomFocus = { mode: AtomFocusMode; sourceLabel: string | null };
 type AtomContextMenu = { x: number; y: number; atomIndex: number };
@@ -127,6 +128,57 @@ function dot(a: Vec3, b: Vec3) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+function quaternionFromRotationMatrix(matrix: [Vec3, Vec3, Vec3]): Quaternion {
+  const trace = matrix[0][0] + matrix[1][1] + matrix[2][2];
+  let quaternion: Quaternion;
+  if (trace > 0) {
+    const scale = Math.sqrt(trace + 1) * 2;
+    quaternion = [
+      0.25 * scale,
+      (matrix[2][1] - matrix[1][2]) / scale,
+      (matrix[0][2] - matrix[2][0]) / scale,
+      (matrix[1][0] - matrix[0][1]) / scale,
+    ];
+  } else if (matrix[0][0] > matrix[1][1] && matrix[0][0] > matrix[2][2]) {
+    const scale = Math.sqrt(1 + matrix[0][0] - matrix[1][1] - matrix[2][2]) * 2;
+    quaternion = [
+      (matrix[2][1] - matrix[1][2]) / scale,
+      0.25 * scale,
+      (matrix[0][1] + matrix[1][0]) / scale,
+      (matrix[0][2] + matrix[2][0]) / scale,
+    ];
+  } else if (matrix[1][1] > matrix[2][2]) {
+    const scale = Math.sqrt(1 + matrix[1][1] - matrix[0][0] - matrix[2][2]) * 2;
+    quaternion = [
+      (matrix[0][2] - matrix[2][0]) / scale,
+      (matrix[0][1] + matrix[1][0]) / scale,
+      0.25 * scale,
+      (matrix[1][2] + matrix[2][1]) / scale,
+    ];
+  } else {
+    const scale = Math.sqrt(1 + matrix[2][2] - matrix[0][0] - matrix[1][1]) * 2;
+    quaternion = [
+      (matrix[1][0] - matrix[0][1]) / scale,
+      (matrix[0][2] + matrix[2][0]) / scale,
+      (matrix[1][2] + matrix[2][1]) / scale,
+      0.25 * scale,
+    ];
+  }
+  return normalizeQuaternion(quaternion);
+}
+
+function quaternionForView(direction: Vec3, preferredUp: Vec3) {
+  const forward = normalize(direction);
+  let upReference = normalize(preferredUp);
+  if (Math.abs(dot(forward, upReference)) > 0.94) {
+    upReference = ([[0, 1, 0], [0, 0, 1], [1, 0, 0]] as Vec3[])
+      .sort((a, b) => Math.abs(dot(forward, a)) - Math.abs(dot(forward, b)))[0];
+  }
+  const right = normalize(cross(upReference, forward));
+  const up = normalize(cross(forward, right));
+  return quaternionFromRotationMatrix([right, up, forward]);
+}
+
 function shadeHex(color: string, strength = 0.2) {
   const match = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
   if (!match) return color;
@@ -220,6 +272,7 @@ function CrystalCanvas({
   const zoom = useRef(1);
   const drag = useRef({ active: false, x: 0, y: 0, moved: 0 });
   const [orthographic, setOrthographic] = useState(false);
+  const [viewPreset, setViewPreset] = useState<ViewPreset | null>(null);
   const [viewVersion, setViewVersion] = useState(0);
 
   const redraw = useCallback(() => setViewVersion((version) => version + 1), []);
@@ -530,52 +583,71 @@ function CrystalCanvas({
       { vector: normalize(bVector), color: "#65df91", label: "b" },
       { vector: normalize(cVector), color: "#5db5ff", label: "c" },
     ];
-    for (const axis of axes) {
-      const rotated = rotate(vectorAdd(center, vectorScale(axis.vector, maxCell * 0.35)));
-      const length = 25;
-      const norm = Math.hypot(rotated[0], rotated[1]);
-      context.strokeStyle = axis.color;
-      context.fillStyle = axis.color;
-      context.lineWidth = 1.5;
-      context.font = "600 10px ui-monospace, monospace";
-      if (norm < 0.055) {
-        context.beginPath();
-        context.arc(axesOrigin.x, axesOrigin.y, 4, 0, Math.PI * 2);
-        context.stroke();
-        if (rotated[2] > 0) {
-          context.beginPath();
-          context.arc(axesOrigin.x, axesOrigin.y, 1.6, 0, Math.PI * 2);
-          context.fill();
-        } else {
-          context.beginPath();
-          context.moveTo(axesOrigin.x - 2.2, axesOrigin.y - 2.2);
-          context.lineTo(axesOrigin.x + 2.2, axesOrigin.y + 2.2);
-          context.moveTo(axesOrigin.x + 2.2, axesOrigin.y - 2.2);
-          context.lineTo(axesOrigin.x - 2.2, axesOrigin.y + 2.2);
-          context.stroke();
-        }
-        context.fillText(axis.label, axesOrigin.x + 7, axesOrigin.y - 5);
-      } else {
-        const x = axesOrigin.x + (rotated[0] / norm) * length;
-        const y = axesOrigin.y - (rotated[1] / norm) * length;
-        context.beginPath();
-        context.moveTo(axesOrigin.x, axesOrigin.y);
-        context.lineTo(x, y);
-        context.stroke();
-        const angle = Math.atan2(y - axesOrigin.y, x - axesOrigin.x);
-        context.beginPath();
-        context.moveTo(x, y);
-        context.lineTo(x - 5 * Math.cos(angle - 0.45), y - 5 * Math.sin(angle - 0.45));
-        context.lineTo(x - 5 * Math.cos(angle + 0.45), y - 5 * Math.sin(angle + 0.45));
-        context.closePath();
-        context.fill();
-        context.fillText(axis.label, x + 3, y - 2);
-      }
-    }
     context.fillStyle = "#64748b";
     context.beginPath();
     context.arc(axesOrigin.x, axesOrigin.y, 2, 0, Math.PI * 2);
     context.fill();
+    for (const axis of axes) {
+      const rotated = rotate(vectorAdd(center, vectorScale(axis.vector, maxCell * 0.35)));
+      const maximumLength = 25;
+      const spatialLength = Math.hypot(...rotated) || 1;
+      const screenNorm = Math.hypot(rotated[0], rotated[1]);
+      const screenFraction = Math.min(1, screenNorm / spatialLength);
+      const projectedLength = maximumLength * screenFraction;
+      let labelX = axesOrigin.x + 7;
+      let labelY = axesOrigin.y - 5;
+      context.strokeStyle = axis.color;
+      context.fillStyle = axis.color;
+      context.lineWidth = 1.5;
+      context.font = "600 10px ui-monospace, monospace";
+
+      if (screenNorm > 1e-6 && projectedLength > 0.3) {
+        const x = axesOrigin.x + (rotated[0] / screenNorm) * projectedLength;
+        const y = axesOrigin.y - (rotated[1] / screenNorm) * projectedLength;
+        labelX = x + 3;
+        labelY = y - 2;
+        context.beginPath();
+        context.moveTo(axesOrigin.x, axesOrigin.y);
+        context.lineTo(x, y);
+        context.stroke();
+        if (projectedLength > 4) {
+          const angle = Math.atan2(y - axesOrigin.y, x - axesOrigin.x);
+          const arrowSize = Math.min(5, projectedLength * 0.24);
+          context.beginPath();
+          context.moveTo(x, y);
+          context.lineTo(x - arrowSize * Math.cos(angle - 0.45), y - arrowSize * Math.sin(angle - 0.45));
+          context.lineTo(x - arrowSize * Math.cos(angle + 0.45), y - arrowSize * Math.sin(angle + 0.45));
+          context.closePath();
+          context.fill();
+        }
+      }
+
+      const faceOnStrength = Math.max(0, 1 - screenFraction);
+      if (faceOnStrength > 0.04) {
+        context.save();
+        context.globalAlpha = Math.min(1, faceOnStrength * 1.45);
+        const markerRadius = 1.7 + faceOnStrength * 2.5;
+        context.beginPath();
+        context.arc(axesOrigin.x, axesOrigin.y, markerRadius, 0, Math.PI * 2);
+        context.stroke();
+        if (rotated[2] > 0) {
+          context.beginPath();
+          context.arc(axesOrigin.x, axesOrigin.y, Math.max(0.8, markerRadius * 0.38), 0, Math.PI * 2);
+          context.fill();
+        } else {
+          const crossSize = Math.max(1.2, markerRadius * 0.55);
+          context.beginPath();
+          context.moveTo(axesOrigin.x - crossSize, axesOrigin.y - crossSize);
+          context.lineTo(axesOrigin.x + crossSize, axesOrigin.y + crossSize);
+          context.moveTo(axesOrigin.x + crossSize, axesOrigin.y - crossSize);
+          context.lineTo(axesOrigin.x - crossSize, axesOrigin.y + crossSize);
+          context.stroke();
+        }
+        context.restore();
+      }
+      context.fillStyle = axis.color;
+      context.fillText(axis.label, labelX, labelY);
+    }
   }, [structure, display, selectedAtomIndex, selectedOperation, atomFocus, orthographic, viewVersion]);
 
   useEffect(() => {
@@ -600,6 +672,7 @@ function CrystalCanvas({
     const yawDelta = quaternionFromAxis([0, 1, 0], dx * 0.008);
     const pitchDelta = quaternionFromAxis([1, 0, 0], dy * 0.008);
     rotation.current = normalizeQuaternion(quaternionMultiply(pitchDelta, quaternionMultiply(yawDelta, rotation.current)));
+    if (dx || dy) setViewPreset(null);
     redraw();
   }
 
@@ -624,6 +697,23 @@ function CrystalCanvas({
   function resetView() {
     rotation.current = initialViewQuaternion();
     zoom.current = 1;
+    setViewPreset(null);
+    redraw();
+  }
+
+  function selectPresetView(preset: ViewPreset) {
+    const [a, b, c] = latticeVectors(structure.cell);
+    const presets: Record<ViewPreset, { direction: Vec3; up: Vec3 }> = {
+      x: { direction: [1, 0, 0], up: [0, 1, 0] },
+      y: { direction: [0, 1, 0], up: [0, 0, 1] },
+      z: { direction: [0, 0, 1], up: [0, 1, 0] },
+      a: { direction: a, up: b },
+      b: { direction: b, up: c },
+      c: { direction: c, up: b },
+    };
+    const selected = presets[preset];
+    rotation.current = quaternionForView(selected.direction, selected.up);
+    setViewPreset(preset);
     redraw();
   }
 
@@ -659,10 +749,33 @@ function CrystalCanvas({
             <button type="button" onClick={onClearAtomFocus}>恢复全部</button>
           </div>}
         </div>
-        <div className="canvas-actions">
-          <button type="button" className={!orthographic ? "active" : ""} onClick={() => setOrthographic(false)}>透视</button>
-          <button type="button" className={orthographic ? "active" : ""} onClick={() => setOrthographic(true)}>正交</button>
-          <button type="button" onClick={resetView} aria-label="复位视图">↺</button>
+        <div className="canvas-control-stack">
+          <div className="canvas-actions">
+            <button type="button" className={!orthographic ? "active" : ""} onClick={() => setOrthographic(false)}>透视</button>
+            <button type="button" className={orthographic ? "active" : ""} onClick={() => setOrthographic(true)}>正交</button>
+            <button type="button" onClick={resetView} aria-label="复位视图">↺</button>
+          </div>
+          <div className="view-presets" aria-label="定向观察视图">
+            <span>笛卡尔</span>
+            {(["x", "y", "z"] as ViewPreset[]).map((preset) => <button
+              type="button"
+              key={preset}
+              className={viewPreset === preset ? "active cartesian" : "cartesian"}
+              title={`沿笛卡尔 +${preset} 方向观察`}
+              aria-label={`沿笛卡尔正 ${preset} 方向观察`}
+              onClick={() => selectPresetView(preset)}
+            >{preset}</button>)}
+            <i />
+            <span>晶格</span>
+            {(["a", "b", "c"] as ViewPreset[]).map((preset) => <button
+              type="button"
+              key={preset}
+              className={viewPreset === preset ? `active lattice ${preset}` : `lattice ${preset}`}
+              title={`沿晶格 +${preset} 方向观察`}
+              aria-label={`沿晶格正 ${preset} 方向观察`}
+              onClick={() => selectPresetView(preset)}
+            >{preset}</button>)}
+          </div>
         </div>
       </div>
       <div className="gesture-hint">拖拽旋转 · 滚轮缩放 · 左键选择 · 右键聚焦</div>
