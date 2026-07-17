@@ -57,7 +57,7 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /selectedCharacterTable\.classes/);
   assert.match(page, /对称等价位置生成/);
   assert.match(page, /className="mapping-help"/);
-  assert.match(page, /？ 说明/);
+  assert.match(page, /text\("说明", "Help"\)/);
   assert.match(page, /CIF 位点标签/);
   assert.match(page, /SymViz 生成编号/);
   assert.doesNotMatch(page, /当前原子是怎样由 CIF 原始位点生成的/);
@@ -100,6 +100,14 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /clipPolygonToDepth/);
   assert.match(page, /depthVisible\(projection\.depth\)/);
   assert.match(page, /旋转晶体后会按新视角重新裁切/);
+  assert.match(page, /type Language = "zh-CN" \| "en-US"/);
+  assert.match(page, /symviz-language/);
+  assert.match(page, /EN-US/);
+  assert.match(page, /Interface language/);
+  assert.match(page, /Structure overview/);
+  assert.match(page, /Hydrogen-bond geometry filter/);
+  assert.match(page, /Coordinate calculator/);
+  assert.match(page, /document\.documentElement\.lang/);
   assert.doesNotMatch(page, /rotation\.current\.pitch/);
   assert.match(parser, /_space_group_symop_operation_xyz/);
   assert.match(parser, /_atom_site_fract_x/);

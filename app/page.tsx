@@ -37,6 +37,7 @@ type DisplaySettings = {
 
 type ProjectedAtom = { index: number; x: number; y: number; radius: number; depth: number };
 type Quaternion = [number, number, number, number];
+type Language = "zh-CN" | "en-US";
 type ViewPreset = "x" | "y" | "z" | "a" | "b" | "c";
 type AtomFocusMode = "none" | "fade" | "isolate";
 type AtomFocus = { mode: AtomFocusMode; sourceLabel: string | null };
@@ -97,7 +98,6 @@ const hydrogenBondPresets: Record<HydrogenPreset, HydrogenBondCriteria> = {
 };
 const defaultHydrogenBondCriteria = hydrogenBondPresets.steiner;
 const defaultHydrogenBondAppearance: HydrogenBondAppearance = { color: "#c2185b", lineWidth: 1.8 };
-const hydrogenStrengthLabels: Record<HydrogenBond["strength"], string> = { strong: "强", moderate: "中等", weak: "弱" };
 const defaultSupercell: SupercellSettings = { a: 1, b: 1, c: 1 };
 const defaultZClipping: ZClippingSettings = { back: 0, front: 100 };
 
@@ -187,8 +187,53 @@ function decimalCoordinateText(value: Vec3) {
   return `(${value.map((coordinate) => coordinate.toFixed(4)).join(", ")})`;
 }
 
-function operationTitle(operation: SymmetryOperation) {
-  return `操作 ${operation.id}（${operation.name}）`;
+function operationName(operation: SymmetryOperation, language: Language) {
+  if (language === "zh-CN") return operation.name;
+  if (operation.kind === "identity") return "Identity";
+  if (operation.kind === "inversion") return "Inversion center";
+  if (operation.kind === "mirror") return "Mirror reflection";
+  if (operation.kind === "glide") return "Glide reflection";
+  if (operation.kind === "screw") return `${operation.label} screw axis`;
+  if (operation.kind === "rotation") return `${operation.order}-fold rotation`;
+  return "Rotoinversion";
+}
+
+function operationTitle(operation: SymmetryOperation, language: Language) {
+  return language === "en-US"
+    ? `Operation ${operation.id} (${operationName(operation, language)})`
+    : `操作 ${operation.id}（${operation.name}）`;
+}
+
+function operationKindText(kind: SymmetryOperation["kind"], language: Language) {
+  if (language === "zh-CN") return operationKindLabel(kind);
+  return {
+    identity: "Identity",
+    rotation: "Rotation axis",
+    screw: "Screw axis",
+    mirror: "Mirror plane",
+    glide: "Glide plane",
+    inversion: "Inversion",
+    rotoinversion: "Rotoinversion",
+  }[kind];
+}
+
+function crystalSystemText(value: string, language: Language) {
+  if (language === "zh-CN") return value.replace("晶系", "");
+  const systems: Record<string, string> = {
+    "三斜": "Triclinic", "三斜晶系": "Triclinic",
+    "单斜": "Monoclinic", "单斜晶系": "Monoclinic",
+    "正交": "Orthorhombic", "正交晶系": "Orthorhombic",
+    "四方": "Tetragonal", "四方晶系": "Tetragonal",
+    "三方": "Trigonal", "三方晶系": "Trigonal",
+    "六方": "Hexagonal", "六方晶系": "Hexagonal",
+    "立方": "Cubic", "立方晶系": "Cubic",
+  };
+  return systems[value] ?? value.replace("晶系", "");
+}
+
+function hydrogenStrengthText(strength: HydrogenBond["strength"], language: Language) {
+  if (language === "en-US") return { strong: "Strong", moderate: "Moderate", weak: "Weak" }[strength];
+  return { strong: "强", moderate: "中等", weak: "弱" }[strength];
 }
 
 function IrrepLabel({ value }: { value: string }) {
@@ -389,6 +434,7 @@ function CrystalCanvas({
   hydrogenBondAppearance,
   supercell,
   zClipping,
+  language,
   display,
   selectedAtomIndex,
   selectedOperation,
@@ -405,6 +451,7 @@ function CrystalCanvas({
   hydrogenBondAppearance: HydrogenBondAppearance;
   supercell: SupercellSettings;
   zClipping: ZClippingSettings;
+  language: Language;
   display: DisplaySettings;
   selectedAtomIndex: number;
   selectedOperation: SymmetryOperation;
@@ -425,6 +472,7 @@ function CrystalCanvas({
   const [orthographic, setOrthographic] = useState(false);
   const [viewPreset, setViewPreset] = useState<ViewPreset | null>(null);
   const [viewVersion, setViewVersion] = useState(0);
+  const english = language === "en-US";
 
   const legendElements = useMemo(() => {
     const counts = new Map<string, number>();
@@ -644,7 +692,9 @@ function CrystalCanvas({
             context.lineTo(arrowTip.x - 10 * Math.cos(arrowAngle + 0.5), arrowTip.y - 10 * Math.sin(arrowAngle + 0.5));
             context.closePath();
             context.fill();
-            const label = `${selectedOperation.label}  ·  旋转 ${Math.round(360 / selectedOperation.order)}°  +  轴向平移 ${screwTranslationText(selectedOperation, axisFract)}`;
+            const label = english
+              ? `${selectedOperation.label}  ·  rotate ${Math.round(360 / selectedOperation.order)}°  +  translate ${screwTranslationText(selectedOperation, axisFract)} along axis`
+              : `${selectedOperation.label}  ·  旋转 ${Math.round(360 / selectedOperation.order)}°  +  轴向平移 ${screwTranslationText(selectedOperation, axisFract)}`;
             context.font = "600 10px ui-monospace, monospace";
             const labelWidth = context.measureText(label).width + 16;
             const labelX = Math.max(10, Math.min(width - labelWidth - 10, b.x + 10));
@@ -839,7 +889,7 @@ function CrystalCanvas({
         context.fill();
         if (Math.hypot(target.x - source.x, target.y - source.y) > 30) {
           context.font = "600 11px ui-monospace, monospace";
-          context.fillText(`操作 ${selectedOperation.id}`, (source.x + target.x) / 2 + 5, (source.y + target.y) / 2 - 5);
+          context.fillText(`${english ? "Operation" : "操作"} ${selectedOperation.id}`, (source.x + target.x) / 2 + 5, (source.y + target.y) / 2 - 5);
         }
         context.restore();
       }
@@ -965,7 +1015,7 @@ function CrystalCanvas({
       context.fillStyle = axis.color;
       context.fillText(axis.label, labelX, labelY);
     }
-  }, [structure, hydrogenBonds, hydrogenBondAppearance, supercell, zClipping, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion]);
+  }, [structure, hydrogenBonds, hydrogenBondAppearance, supercell, zClipping, language, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion, english]);
 
   useEffect(() => {
     const resize = new ResizeObserver(() => redraw());
@@ -1050,7 +1100,7 @@ function CrystalCanvas({
       <canvas
         ref={canvasRef}
         className="crystal-canvas"
-        aria-label="可旋转的晶体结构三维视图；拖拽旋转，滚轮缩放，点击选择原子"
+        aria-label={english ? "Rotatable 3D crystal structure; drag to rotate, use the mouse wheel to zoom, and click to select an atom" : "可旋转的晶体结构三维视图；拖拽旋转，滚轮缩放，点击选择原子"}
         tabIndex={0}
         onPointerDown={pointerDown}
         onPointerMove={pointerMove}
@@ -1079,58 +1129,58 @@ function CrystalCanvas({
       />
       <div className="canvas-topbar">
         <div className="canvas-chip-group">
-          <div className="view-chip"><span className="live-dot" /> 交互晶胞</div>
+          <div className="view-chip"><span className="live-dot" /> {english ? "Interactive cell" : "交互晶胞"}</div>
           <div className={isCrystallographicSupercell(supercell) ? "supercell-chip" : "supercell-chip fractional"}>
-            <i />{isCrystallographicSupercell(supercell) ? "超胞" : "分数范围"} {supercellText(supercell)}
+            <i />{isCrystallographicSupercell(supercell) ? (english ? "Supercell" : "超胞") : (english ? "Fractional range" : "分数范围")} {supercellText(supercell)}
           </div>
           {display.zClipping && <div className="z-clipping-chip"><i /> Z clip {zClipping.back}–{zClipping.front}%</div>}
           {display.hydrogenBonds && <div
             className="hydrogen-bond-chip"
             style={{ "--hbond-view-color": hydrogenBondAppearance.color } as React.CSSProperties}
-          ><i /> 氢键候选 {hydrogenBonds.length}</div>}
+          ><i /> {english ? "H-bond candidates" : "氢键候选"} {hydrogenBonds.length}</div>}
           {atomFocus.mode !== "none" && <div className="focus-chip">
-            <span>{atomFocus.mode === "fade" ? "聚焦" : "单独显示"} · {atomFocus.sourceLabel}</span>
-            <button type="button" onClick={onClearAtomFocus}>恢复全部</button>
+            <span>{atomFocus.mode === "fade" ? (english ? "Focus" : "聚焦") : (english ? "Isolate" : "单独显示")} · {atomFocus.sourceLabel}</span>
+            <button type="button" onClick={onClearAtomFocus}>{english ? "Show all" : "恢复全部"}</button>
           </div>}
         </div>
         <div className="canvas-control-stack">
           <div className="canvas-actions">
-            <button type="button" className={!orthographic ? "active" : ""} onClick={() => setOrthographic(false)}>透视</button>
-            <button type="button" className={orthographic ? "active" : ""} onClick={() => setOrthographic(true)}>正交</button>
-            <button type="button" onClick={resetView} aria-label="复位视图">↺</button>
+            <button type="button" className={!orthographic ? "active" : ""} onClick={() => setOrthographic(false)}>{english ? "Perspective" : "透视"}</button>
+            <button type="button" className={orthographic ? "active" : ""} onClick={() => setOrthographic(true)}>{english ? "Orthographic" : "正交"}</button>
+            <button type="button" onClick={resetView} aria-label={english ? "Reset view" : "复位视图"}>↺</button>
           </div>
-          <div className="view-presets" aria-label="定向观察视图">
-            <span>笛卡尔</span>
+          <div className="view-presets" aria-label={english ? "Preset viewing directions" : "定向观察视图"}>
+            <span>{english ? "Cartesian" : "笛卡尔"}</span>
             {(["x", "y", "z"] as ViewPreset[]).map((preset) => <button
               type="button"
               key={preset}
               className={viewPreset === preset ? "active cartesian" : "cartesian"}
-              title={`沿笛卡尔 +${preset} 方向观察`}
-              aria-label={`沿笛卡尔正 ${preset} 方向观察`}
+              title={english ? `View along Cartesian +${preset}` : `沿笛卡尔 +${preset} 方向观察`}
+              aria-label={english ? `View along positive Cartesian ${preset}` : `沿笛卡尔正 ${preset} 方向观察`}
               onClick={() => selectPresetView(preset)}
             >{preset}</button>)}
             <i />
-            <span>晶格</span>
+            <span>{english ? "Lattice" : "晶格"}</span>
             {(["a", "b", "c"] as ViewPreset[]).map((preset) => <button
               type="button"
               key={preset}
               className={viewPreset === preset ? `active lattice ${preset}` : `lattice ${preset}`}
-              title={`沿晶格 +${preset} 方向观察`}
-              aria-label={`沿晶格正 ${preset} 方向观察`}
+              title={english ? `View along lattice +${preset}` : `沿晶格 +${preset} 方向观察`}
+              aria-label={english ? `View along positive lattice ${preset}` : `沿晶格正 ${preset} 方向观察`}
               onClick={() => selectPresetView(preset)}
             >{preset}</button>)}
           </div>
         </div>
       </div>
-      <div className="element-legend" aria-label="元素颜色图例">
-        <div className="element-legend-head"><span>元素图例</span><small>单击或右键编辑</small></div>
+      <div className="element-legend" aria-label={english ? "Element color legend" : "元素颜色图例"}>
+        <div className="element-legend-head"><span>{english ? "Element legend" : "元素图例"}</span><small>{english ? "Click or right-click to edit" : "单击或右键编辑"}</small></div>
         <div className="element-legend-items">
           {legendElements.map(([element, count]) => {
             const style = resolvedElementStyle(element, elementAppearance);
             return <button
               type="button"
               key={element}
-              title={`编辑 ${element} 的颜色和原子大小`}
+              title={english ? `Edit ${element} color and atom size` : `编辑 ${element} 的颜色和原子大小`}
               onClick={(event) => requestElementAppearance(element, event)}
               onContextMenu={(event) => requestElementAppearance(element, event)}
             >
@@ -1141,7 +1191,7 @@ function CrystalCanvas({
           })}
         </div>
       </div>
-      <div className="gesture-hint">拖拽旋转 · 滚轮缩放 · 左键选择 · 右键聚焦 / 编辑坐标轴</div>
+      <div className="gesture-hint">{english ? "Drag to rotate · Wheel to zoom · Left-click to select · Right-click to focus / edit axes" : "拖拽旋转 · 滚轮缩放 · 左键选择 · 右键聚焦 / 编辑坐标轴"}</div>
     </div>
   );
 }
@@ -1162,6 +1212,7 @@ function Metric({ label, value, unit }: { label: string; value: string; unit?: s
 export default function Home() {
   const [structure, setStructure] = useState<CrystalStructure>(() => parseCif(DEFAULT_CIF));
   const [fileName, setFileName] = useState("alpha-quartz.cif");
+  const [language, setLanguage] = useState<Language>("zh-CN");
   const [display, setDisplay] = useState(defaultDisplay);
   const [supercell, setSupercell] = useState<SupercellSettings>(defaultSupercell);
   const [zClipping, setZClipping] = useState<ZClippingSettings>(defaultZClipping);
@@ -1193,6 +1244,26 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const appearanceMenuRef = useRef<HTMLDivElement>(null);
+  const english = language === "en-US";
+  const text = (zh: string, en: string) => english ? en : zh;
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("symviz-language");
+    if (stored !== "en-US" && stored !== "zh-CN") return;
+    const frame = window.requestAnimationFrame(() => {
+      setLanguage(stored);
+      setNotice("");
+      document.documentElement.lang = stored;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  function changeLanguage(nextLanguage: Language) {
+    setLanguage(nextLanguage);
+    setNotice("");
+    window.localStorage.setItem("symviz-language", nextLanguage);
+    document.documentElement.lang = nextLanguage;
+  }
 
   const selectedAtom = structure.atoms[Math.min(selectedAtomIndex, structure.atoms.length - 1)];
   const selectedOperation = structure.operations.find((operation) => operation.id === selectedOperationId) ?? structure.operations[0];
@@ -1211,10 +1282,10 @@ export default function Home() {
         ? Math.round(symmetryRatio)
         : null;
       const positionType = siteSymmetryOrder === 1
-        ? "一般位置"
+        ? (english ? "General position" : "一般位置")
         : siteSymmetryOrder && siteSymmetryOrder > 1
-          ? "特殊位置"
-          : "位置类型待定";
+          ? (english ? "Special position" : "特殊位置")
+          : (english ? "Position type pending" : "位置类型待定");
       return {
         site,
         generatedMultiplicity,
@@ -1222,10 +1293,10 @@ export default function Home() {
         letter,
         siteSymmetryOrder,
         positionType,
-        multiplicitySource: site.multiplicity ? "CIF 提供" : "由对称操作算得",
+        multiplicitySource: site.multiplicity ? (english ? "From CIF" : "CIF 提供") : (english ? "Calculated" : "由对称操作算得"),
       };
     });
-  }, [structure]);
+  }, [structure, english]);
   const selectedWyckoffInfo = selectedAtom
     ? wyckoffSites.find(({ site }) => site.label === selectedAtom.source.label)
     : undefined;
@@ -1317,7 +1388,7 @@ export default function Home() {
 
   async function loadFile(file: File) {
     if (!file.name.toLowerCase().endsWith(".cif")) {
-      setNotice("请选择 .cif 格式的晶体结构文件");
+      setNotice(text("请选择 .cif 格式的晶体结构文件", "Please select a crystal structure file in .cif format"));
       return;
     }
     try {
@@ -1335,9 +1406,11 @@ export default function Home() {
       setAtomFocus({ mode: "none", sourceLabel: null });
       setContextMenu(null);
       setAppearanceMenu(null);
-      setNotice(`已解析 ${next.atoms.length} 个等价原子与 ${next.operations.length} 个对称操作`);
+      setNotice(english
+        ? `Parsed ${next.atoms.length} equivalent atoms and ${next.operations.length} symmetry operations`
+        : `已解析 ${next.atoms.length} 个等价原子与 ${next.operations.length} 个对称操作`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "CIF 解析失败，请检查文件格式");
+      setNotice(english ? "Could not parse the CIF. Please check the file format." : (error instanceof Error ? error.message : "CIF 解析失败，请检查文件格式"));
     }
   }
 
@@ -1368,7 +1441,7 @@ export default function Home() {
 
   function applySupercellPreset(a: number, b: number, c: number) {
     setSupercell({ a, b, c });
-    setNotice(`显示范围已设为 ${supercellText({ a, b, c })}`);
+    setNotice(english ? `Display range set to ${supercellText({ a, b, c })}` : `显示范围已设为 ${supercellText({ a, b, c })}`);
   }
 
   function updateSupercellExtent(axis: keyof SupercellSettings, value: number) {
@@ -1445,7 +1518,7 @@ export default function Home() {
     anchor.download = `${fileName.replace(/\.cif$/i, "")}-symmetry-report.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setNotice("对称性报告已导出");
+    setNotice(text("对称性报告已导出", "Symmetry report exported"));
   }
 
   const transformedSelected = selectedAtom ? applyOperation(selectedOperation, selectedAtom.source.fract) : [0, 0, 0] as Vec3;
@@ -1474,8 +1547,12 @@ export default function Home() {
           <div><strong>{structure.name}</strong><small>{fileName}</small></div>
         </div>
         <div className="header-actions">
-          <button type="button" className="ghost-button" onClick={exportReport}>⇩ 导出报告</button>
-          <button type="button" className="primary-button" onClick={() => inputRef.current?.click()}>＋ 打开 CIF</button>
+          <div className="language-switch" role="group" aria-label={text("界面语言", "Interface language")}>
+            <button type="button" className={language === "zh-CN" ? "active" : ""} onClick={() => changeLanguage("zh-CN")}>中文</button>
+            <button type="button" className={language === "en-US" ? "active" : ""} title="English (US)" onClick={() => changeLanguage("en-US")}>EN-US</button>
+          </div>
+          <button type="button" className="ghost-button" onClick={exportReport}>⇩ {text("导出报告", "Export report")}</button>
+          <button type="button" className="primary-button" onClick={() => inputRef.current?.click()}>＋ {text("打开 CIF", "Open CIF")}</button>
           <input ref={inputRef} type="file" accept=".cif,text/plain" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) loadFile(file); event.target.value = ""; }} />
         </div>
       </header>
@@ -1485,24 +1562,24 @@ export default function Home() {
           <button
             type="button"
             aria-expanded={!sidebarCollapsed}
-            aria-label={sidebarCollapsed ? "展开左侧边栏" : "收起左侧边栏"}
-            title={sidebarCollapsed ? "展开左侧边栏" : "收起左侧边栏"}
+            aria-label={sidebarCollapsed ? text("展开左侧边栏", "Expand left sidebar") : text("收起左侧边栏", "Collapse left sidebar")}
+            title={sidebarCollapsed ? text("展开左侧边栏", "Expand left sidebar") : text("收起左侧边栏", "Collapse left sidebar")}
             onClick={() => setSidebarCollapsed((current) => !current)}
           >
             <span aria-hidden="true">{sidebarCollapsed ? "›" : "‹"}</span>
-            {!sidebarCollapsed && <b>收起边栏</b>}
+            {!sidebarCollapsed && <b>{text("收起边栏", "Collapse")}</b>}
           </button>
         </div>
         <section className="upload-card" onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}>
           <div className="upload-icon">⌁</div>
-          <div><strong>载入新的 CIF</strong><small>拖放文件，或点击浏览</small></div>
+          <div><strong>{text("载入新的 CIF", "Load a new CIF")}</strong><small>{text("拖放文件，或点击浏览", "Drop a file or click to browse")}</small></div>
           <span>⌘O</span>
         </section>
 
         <section className="side-section">
-          <div className="section-heading"><span>结构概览</span><small>ASYMMETRIC UNIT</small></div>
+          <div className="section-heading"><span>{text("结构概览", "Structure overview")}</span><small>ASYMMETRIC UNIT</small></div>
           <div className="formula-card">
-            <div><span>化学式 · 常规 / Hill 顺序</span><strong>{structure.formula}</strong></div>
+            <div><span>{text("化学式 · 常规 / Hill 顺序", "Formula · conventional / Hill order")}</span><strong>{structure.formula}</strong></div>
             <div className="composition-dots">
               {composition.map(([element, count]) => <span key={element} style={{ "--element-color": currentElementColor(element) } as React.CSSProperties}><i />{element}<small>{count}</small></span>)}
             </div>
@@ -1518,9 +1595,9 @@ export default function Home() {
         </section>
 
         <section className="side-section supercell-section">
-          <div className="section-heading"><span>超胞 / 显示范围</span><small>SUPERCELL</small></div>
+          <div className="section-heading"><span>{text("超胞 / 显示范围", "Supercell / display range")}</span><small>SUPERCELL</small></div>
           <div className="supercell-card">
-            <div className="supercell-presets" aria-label="常用超胞预设">
+            <div className="supercell-presets" aria-label={text("常用超胞预设", "Common supercell presets")}>
               {([
                 [1, 1, 1, "1×1×1"],
                 [2, 1, 1, "2×1"],
@@ -1542,92 +1619,92 @@ export default function Home() {
                   max="6"
                   step="0.25"
                   value={supercell[axis]}
-                  aria-label={`${axis} 方向显示倍数`}
+                  aria-label={english ? `${axis}-axis display multiplier` : `${axis} 方向显示倍数`}
                   onChange={(event) => updateSupercellExtent(axis, Number(event.target.value))}
                 />
               </label>)}
             </div>
             <div className={isCrystallographicSupercell(supercell) ? "supercell-status" : "supercell-status fractional"}>
               <i>{isCrystallographicSupercell(supercell) ? "✓" : "≈"}</i>
-              <span><strong>{isCrystallographicSupercell(supercell) ? "晶体学超胞" : "分数显示范围"}</strong><small>{isCrystallographicSupercell(supercell)
-                ? `${supercell.a * supercell.b * supercell.c} 个原胞 · 当前显示 ${displayedAtomCount} 原子`
-                : `按 ${supercellText(supercell)} 裁切视图，不改变晶格周期`}</small></span>
+              <span><strong>{isCrystallographicSupercell(supercell) ? text("晶体学超胞", "Crystallographic supercell") : text("分数显示范围", "Fractional display range")}</strong><small>{isCrystallographicSupercell(supercell)
+                ? (english ? `${supercell.a * supercell.b * supercell.c} unit cells · ${displayedAtomCount} atoms displayed` : `${supercell.a * supercell.b * supercell.c} 个原胞 · 当前显示 ${displayedAtomCount} 原子`)
+                : (english ? `Clip the view at ${supercellText(supercell)} without changing lattice periodicity` : `按 ${supercellText(supercell)} 裁切视图，不改变晶格周期`)}</small></span>
             </div>
-            <p className="supercell-note">可输入 0.25–6；整数倍构成周期超胞，非整数倍用于观察指定分数范围。</p>
+            <p className="supercell-note">{text("可输入 0.25–6；整数倍构成周期超胞，非整数倍用于观察指定分数范围。", "Enter 0.25–6. Integers create periodic supercells; fractional values define a viewing range.")}</p>
           </div>
         </section>
 
         <section className="side-section display-section">
-          <div className="section-heading"><span>显示控制</span><small>VIEW LAYERS</small></div>
-          <Toggle label="原子球（哑光 CPK）" hint={`${structure.atoms.length} 个等价原子`} checked={display.atoms} onChange={() => toggleDisplay("atoms")} />
+          <div className="section-heading"><span>{text("显示控制", "Display controls")}</span><small>VIEW LAYERS</small></div>
+          <Toggle label={text("原子球（哑光 CPK）", "Atoms (matte CPK)")} hint={english ? `${structure.atoms.length} equivalent atoms` : `${structure.atoms.length} 个等价原子`} checked={display.atoms} onChange={() => toggleDisplay("atoms")} />
           <Toggle
-            label="显示氢原子"
-            hint={display.hydrogens ? `${hydrogenAtomCount} 个 H` : `${hydrogenAtomCount} 个 H 已隐藏`}
+            label={text("显示氢原子", "Show hydrogen atoms")}
+            hint={display.hydrogens ? (english ? `${hydrogenAtomCount} H atoms` : `${hydrogenAtomCount} 个 H`) : (english ? `${hydrogenAtomCount} H atoms hidden` : `${hydrogenAtomCount} 个 H 已隐藏`)}
             checked={display.hydrogens}
             onChange={() => toggleDisplay("hydrogens")}
           />
-          <Toggle label="化学键（球棍）" hint={`${structure.bonds.length} 组共价近邻`} checked={display.bonds} onChange={() => toggleDisplay("bonds")} />
+          <Toggle label={text("化学键（球棍）", "Chemical bonds (ball-and-stick)")} hint={english ? `${structure.bonds.length} covalent neighbor pairs` : `${structure.bonds.length} 组共价近邻`} checked={display.bonds} onChange={() => toggleDisplay("bonds")} />
           <Toggle
-            label="氢键候选"
-            hint={`${hydrogenBonds.length} 条 · 分子内 ${hydrogenBondSummary.intramolecular} / 分子间 ${hydrogenBondSummary.intermolecular}`}
+            label={text("氢键候选", "Hydrogen-bond candidates")}
+            hint={english ? `${hydrogenBonds.length} · intramolecular ${hydrogenBondSummary.intramolecular} / intermolecular ${hydrogenBondSummary.intermolecular}` : `${hydrogenBonds.length} 条 · 分子内 ${hydrogenBondSummary.intramolecular} / 分子间 ${hydrogenBondSummary.intermolecular}`}
             checked={display.hydrogenBonds}
             onChange={() => {
               toggleDisplay("hydrogenBonds");
               if (!display.hydrogenBonds) setRightTab("hydrogen");
             }}
           />
-          <Toggle label="补全分子片段" hint={display.completeMolecules ? "跨晶胞键已重新拼接" : "当前按晶胞边界截断"} checked={display.completeMolecules} onChange={() => toggleDisplay("completeMolecules")} />
-          <Toggle label="晶胞边界" hint={supercellText(supercell)} checked={display.cell} onChange={() => toggleDisplay("cell")} />
-          <Toggle label="原子标签" hint="元素与编号" checked={display.labels} onChange={() => toggleDisplay("labels")} />
-          <Toggle label="对称元素" hint="轴 / 面 / 映射轨迹" checked={display.symmetry} onChange={() => toggleDisplay("symmetry")} />
+          <Toggle label={text("补全分子片段", "Complete molecular fragments")} hint={display.completeMolecules ? text("跨晶胞键已重新拼接", "Bonds across cell boundaries reconnected") : text("当前按晶胞边界截断", "Clipped at unit-cell boundaries")} checked={display.completeMolecules} onChange={() => toggleDisplay("completeMolecules")} />
+          <Toggle label={text("晶胞边界", "Unit-cell boundaries")} hint={supercellText(supercell)} checked={display.cell} onChange={() => toggleDisplay("cell")} />
+          <Toggle label={text("原子标签", "Atom labels")} hint={text("元素与编号", "Element and index")} checked={display.labels} onChange={() => toggleDisplay("labels")} />
+          <Toggle label={text("对称元素", "Symmetry elements")} hint={text("轴 / 面 / 映射轨迹", "Axes / planes / mapping path")} checked={display.symmetry} onChange={() => toggleDisplay("symmetry")} />
           <Toggle
             label="Z clipping"
-            hint={display.zClipping ? `沿观察方向保留 ${zClipping.back}–${zClipping.front}%` : "沿当前观察方向裁切深度"}
+            hint={display.zClipping ? (english ? `Keep ${zClipping.back}–${zClipping.front}% along the view direction` : `沿观察方向保留 ${zClipping.back}–${zClipping.front}%`) : text("沿当前观察方向裁切深度", "Clip depth along the current view direction")}
             checked={display.zClipping}
             onChange={() => toggleDisplay("zClipping")}
           />
           {display.zClipping && <div className="z-clipping-controls">
-            <div className="z-clipping-head"><span>深度裁切范围</span><button type="button" onClick={() => setZClipping(defaultZClipping)}>重置</button></div>
+            <div className="z-clipping-head"><span>{text("深度裁切范围", "Depth clipping range")}</span><button type="button" onClick={() => setZClipping(defaultZClipping)}>{text("重置", "Reset")}</button></div>
             <label>
-              <span>后裁切面<output>{zClipping.back}%</output></span>
+              <span>{text("后裁切面", "Back clipping plane")}<output>{zClipping.back}%</output></span>
               <input
                 type="range"
                 min="0"
                 max="98"
                 step="1"
                 value={zClipping.back}
-                aria-label="后裁切面"
+                aria-label={text("后裁切面", "Back clipping plane")}
                 onChange={(event) => updateZClipping("back", Number(event.target.value))}
               />
             </label>
             <label>
-              <span>前裁切面<output>{zClipping.front}%</output></span>
+              <span>{text("前裁切面", "Front clipping plane")}<output>{zClipping.front}%</output></span>
               <input
                 type="range"
                 min="2"
                 max="100"
                 step="1"
                 value={zClipping.front}
-                aria-label="前裁切面"
+                aria-label={text("前裁切面", "Front clipping plane")}
                 onChange={(event) => updateZClipping("front", Number(event.target.value))}
               />
             </label>
-            <p>0% 为最远端，100% 为最靠近观察者的一端；旋转晶体后会按新视角重新裁切。</p>
+            <p>{text("0% 为最远端，100% 为最靠近观察者的一端；旋转晶体后会按新视角重新裁切。", "0% is the farthest depth and 100% is closest to the viewer. Clipping updates after rotation.")}</p>
           </div>}
         </section>
 
         <section className="side-section source-section">
-          <div className="section-heading"><span>数据完整性</span><small>PARSE STATUS</small></div>
-          <div className="status-line good"><i>✓</i><span>晶胞参数</span><strong>完整</strong></div>
-          <div className="status-line good"><i>✓</i><span>分数坐标</span><strong>{structure.sites.length} 位点</strong></div>
-          <div className={structure.warnings.length ? "status-line warn" : "status-line good"}><i>{structure.warnings.length ? "!" : "✓"}</i><span>对称操作</span><strong>{structure.operations.length} 项</strong></div>
+          <div className="section-heading"><span>{text("数据完整性", "Data integrity")}</span><small>PARSE STATUS</small></div>
+          <div className="status-line good"><i>✓</i><span>{text("晶胞参数", "Unit-cell parameters")}</span><strong>{text("完整", "Complete")}</strong></div>
+          <div className="status-line good"><i>✓</i><span>{text("分数坐标", "Fractional coordinates")}</span><strong>{english ? `${structure.sites.length} sites` : `${structure.sites.length} 位点`}</strong></div>
+          <div className={structure.warnings.length ? "status-line warn" : "status-line good"}><i>{structure.warnings.length ? "!" : "✓"}</i><span>{text("对称操作", "Symmetry operations")}</span><strong>{english ? `${structure.operations.length} entries` : `${structure.operations.length} 项`}</strong></div>
         </section>
       </aside>
 
       <section className="workspace">
         <div className="workspace-toolbar">
-          <div className="mode-tabs"><button type="button" className="active">结构 + 对称</button><button type="button">操作轨迹</button></div>
-          <div className="workspace-stats"><span><i />{displayedAtomCount} 显示原子</span><span>{structure.bonds.length} 键 · {hydrogenBonds.length} 氢键类型</span><span>{supercellText(supercell)} · {display.completeMolecules ? "完整分子" : "晶胞截断"}</span></div>
+          <div className="mode-tabs"><button type="button" className="active">{text("结构 + 对称", "Structure + symmetry")}</button><button type="button">{text("操作轨迹", "Operation path")}</button></div>
+          <div className="workspace-stats"><span><i />{displayedAtomCount} {text("显示原子", "displayed atoms")}</span><span>{structure.bonds.length} {text("键", "bonds")} · {hydrogenBonds.length} {text("氢键类型", "H-bond types")}</span><span>{supercellText(supercell)} · {display.completeMolecules ? text("完整分子", "complete molecules") : text("晶胞截断", "cell-clipped")}</span></div>
         </div>
         <CrystalCanvas
           structure={structure}
@@ -1635,6 +1712,7 @@ export default function Home() {
           hydrogenBondAppearance={hydrogenBondAppearance}
           supercell={supercell}
           zClipping={zClipping}
+          language={language}
           display={display}
           selectedAtomIndex={selectedAtomIndex}
           selectedOperation={selectedOperation}
@@ -1663,37 +1741,37 @@ export default function Home() {
 
         <div className="symmetry-story">
           <div className="story-title">
-            <div><span className="eyebrow">SYMMETRY MAPPING</span><strong>对称等价位置生成</strong></div>
+            <div><span className="eyebrow">SYMMETRY MAPPING</span><strong>{text("对称等价位置生成", "Symmetry-equivalent position generation")}</strong></div>
             <div className="story-tools">
               <details className="mapping-help">
-                <summary>？ 说明</summary>
+                <summary>？ {text("说明", "Help")}</summary>
                 {selectedAtom && <div className="mapping-help-box">
-                  <p><b>{selectedAtom.source.label}</b>：CIF 位点标签；<b>{selectedAtom.label}</b>：SymViz 生成编号。</p>
-                  <p>中间公式变换坐标，结果按周期折回 [0, 1)。</p>
+                  <p>{english ? <><b>{selectedAtom.source.label}</b>: CIF site label; <b>{selectedAtom.label}</b>: SymViz display index.</> : <><b>{selectedAtom.source.label}</b>：CIF 位点标签；<b>{selectedAtom.label}</b>：SymViz 生成编号。</>}</p>
+                  <p>{text("中间公式变换坐标，结果按周期折回 [0, 1)。", "The central formula transforms the coordinates; the result is wrapped periodically into [0, 1).")}</p>
                 </div>}
               </details>
-              <span className="story-count">操作 {selectedOperation.id} / 共 {structure.operations.length} 项</span>
+              <span className="story-count">{english ? `Operation ${selectedOperation.id} / ${structure.operations.length}` : `操作 ${selectedOperation.id} / 共 ${structure.operations.length} 项`}</span>
             </div>
           </div>
           <div className="mapping-row">
             <div className="mapping-node source">
-              <span><b>1</b>CIF 原始位点</span>
+              <span><b>1</b>{text("CIF 原始位点", "Original CIF site")}</span>
               <strong>{selectedAtom?.source.label}</strong>
-              <small>CIF 标签 · 元素 {selectedAtom?.element ?? "—"}</small>
+              <small>{text("CIF 标签 · 元素", "CIF label · element")} {selectedAtom?.element ?? "—"}</small>
               <em>{selectedAtom ? coordinateText(selectedAtom.source.fract) : "—"}</em>
             </div>
             <div className="mapping-operation">
               <span><b>2</b>{selectedOperation.label}</span>
               <div className="mapping-operation-copy">
-                <strong>{operationTitle(selectedOperation)} · {operationKindLabel(selectedOperation.kind)}</strong>
+                <strong>{operationTitle(selectedOperation, language)} · {operationKindText(selectedOperation.kind, language)}</strong>
                 <code>{selectedOperation.xyz}</code>
               </div>
               <div className="mapping-arrow"><i style={{ width: `${completion}%` }} /></div>
             </div>
             <div className="mapping-node target">
-              <span><b>3</b>生成的等价原子</span>
+              <span><b>3</b>{text("生成的等价原子", "Generated equivalent atom")}</span>
               <strong>{selectedAtom?.label}</strong>
-              <small>SymViz 编号</small>
+              <small>{text("SymViz 编号", "SymViz index")}</small>
               <em>{coordinateText(transformedSelected as Vec3)}</em>
             </div>
           </div>
@@ -1702,27 +1780,27 @@ export default function Home() {
 
       <aside className="right-panel">
         <section className="group-hero">
-          <div className="group-topline"><span>空间群</span><small>INTERNATIONAL TABLES</small></div>
+          <div className="group-topline"><span>{text("空间群", "Space group")}</span><small>INTERNATIONAL TABLES</small></div>
           <div className="group-symbol"><strong>{prettyGroup(structure.spaceGroup)}</strong>{structure.spaceGroupNumber && <sup>#{structure.spaceGroupNumber}</sup>}</div>
           <div className="group-metadata">
-            <div><span>点群</span><strong>{structure.pointGroup}</strong></div>
-            <div><span>晶系</span><strong>{structure.crystalSystem.replace("晶系", "")}</strong></div>
-            <div><span>操作数</span><strong>{structure.operations.length}</strong></div>
+            <div><span>{text("点群", "Point group")}</span><strong>{structure.pointGroup}</strong></div>
+            <div><span>{text("晶系", "Crystal system")}</span><strong>{crystalSystemText(structure.crystalSystem, language)}</strong></div>
+            <div><span>{text("操作数", "Operations")}</span><strong>{structure.operations.length}</strong></div>
           </div>
         </section>
 
-        <nav className="right-tabs" aria-label="对称性信息">
-          <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>对称操作</button>
-          <button type="button" className={rightTab === "characters" ? "active" : ""} onClick={() => setRightTab("characters")}>特征标表</button>
-          <button type="button" className={rightTab === "atoms" ? "active" : ""} onClick={() => setRightTab("atoms")}>原子轨迹</button>
+        <nav className="right-tabs" aria-label={text("对称性信息", "Symmetry information")}>
+          <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>{text("对称操作", "Operations")}</button>
+          <button type="button" className={rightTab === "characters" ? "active" : ""} onClick={() => setRightTab("characters")}>{text("特征标表", "Character tables")}</button>
+          <button type="button" className={rightTab === "atoms" ? "active" : ""} onClick={() => setRightTab("atoms")}>{text("原子轨迹", "Atom provenance")}</button>
           <button type="button" className={rightTab === "wyckoff" ? "active" : ""} onClick={() => setRightTab("wyckoff")}>Wyckoff</button>
-          <button type="button" className={rightTab === "hydrogen" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>氢键</button>
-          <button type="button" className={rightTab === "calculator" ? "active" : ""} onClick={() => setRightTab("calculator")}>坐标计算器</button>
+          <button type="button" className={rightTab === "hydrogen" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>{text("氢键", "H bonds")}</button>
+          <button type="button" className={rightTab === "calculator" ? "active" : ""} onClick={() => setRightTab("calculator")}>{text("坐标计算器", "Coordinate calculator")}</button>
         </nav>
 
         {rightTab === "operations" && <div className="right-content panel-scroll">
           <div className="filter-row">
-            {[['all', '全部'], ['rotation', '旋转'], ['reflection', '反射 / 反演']].map(([value, label]) => (
+            {([['all', text('全部', 'All')], ['rotation', text('旋转', 'Rotations')], ['reflection', text('反射 / 反演', 'Reflections / inversion')]]).map(([value, label]) => (
               <button key={value} type="button" className={operationFilter === value ? "active" : ""} onClick={() => setOperationFilter(value)}>{label}</button>
             ))}
           </div>
@@ -1735,22 +1813,22 @@ export default function Home() {
                 onClick={() => selectOperation(operation)}
               >
                 <span className={`operation-symbol ${operation.kind}`}>{operation.label}</span>
-                <span className="operation-copy"><strong>{operationTitle(operation)}</strong><code>{operation.xyz}</code></span>
-                <span className="operation-kind">{operationKindLabel(operation.kind)}</span>
+                <span className="operation-copy"><strong>{operationTitle(operation, language)}</strong><code>{operation.xyz}</code></span>
+                <span className="operation-kind">{operationKindText(operation.kind, language)}</span>
               </button>
             ))}
           </div>
           {selectedAtom && <div className="selected-detail">
-            <div className="detail-head"><span style={{ "--atom-color": currentElementColor(selectedAtom.element) } as React.CSSProperties}><i />{selectedAtom.label}</span><small>当前映射</small></div>
+            <div className="detail-head"><span style={{ "--atom-color": currentElementColor(selectedAtom.element) } as React.CSSProperties}><i />{selectedAtom.label}</span><small>{text("当前映射", "Current mapping")}</small></div>
             <div className="equation">
-              <code>{coordinateText(selectedAtom.source.fract)}</code><b>— 操作 {selectedOperation.id} →</b><code>{coordinateText(transformedSelected as Vec3)}</code>
+              <code>{coordinateText(selectedAtom.source.fract)}</code><b>— {text("操作", "Operation")} {selectedOperation.id} →</b><code>{coordinateText(transformedSelected as Vec3)}</code>
             </div>
             <div className="detail-grid">
-              <span>母位点<strong>{selectedAtom.source.label}</strong></span>
+              <span>{text("母位点", "Parent site")}<strong>{selectedAtom.source.label}</strong></span>
               <span>Wyckoff<strong className="wyckoff-value">{selectedWyckoffInfo?.letter
                 ? `${selectedWyckoffInfo.multiplicity}${selectedWyckoffInfo.letter}`
-                : `${selectedWyckoffInfo?.multiplicity ?? "—"} · 字母未提供`}</strong></span>
-              <span>占有率<strong>{selectedAtom.source.occupancy.toFixed(2)}</strong></span>
+                : `${selectedWyckoffInfo?.multiplicity ?? "—"} · ${text("字母未提供", "letter not provided")}`}</strong></span>
+              <span>{text("占有率", "Occupancy")}<strong>{selectedAtom.source.occupancy.toFixed(2)}</strong></span>
             </div>
           </div>}
         </div>}
@@ -1758,39 +1836,39 @@ export default function Home() {
         {rightTab === "characters" && <div className="right-content panel-scroll character-panel">
           <div className="character-toolbar">
             <div>
-              <span>{selectedCharacterTable.system}晶系</span>
+              <span>{crystalSystemText(selectedCharacterTable.system, language)}{english ? " crystal system" : "晶系"}</span>
               <strong>{selectedCharacterTable.hm}<small>{selectedCharacterTable.schoenflies}</small></strong>
             </div>
             {normalizePointGroup(structure.pointGroup) !== selectedCharacterTable.hm && <button
               type="button"
               onClick={() => setCharacterPointGroup(structure.pointGroup)}
-            >返回当前点群 {structure.pointGroup}</button>}
+            >{text("返回当前点群", "Return to current point group")} {structure.pointGroup}</button>}
           </div>
 
           <label className="character-selector">
-            <span>浏览 32 个晶体学点群</span>
+            <span>{text("浏览 32 个晶体学点群", "Browse the 32 crystallographic point groups")}</span>
             <select value={selectedCharacterTable.hm} onChange={(event) => setCharacterPointGroup(event.target.value)}>
-              {(["三斜", "单斜", "正交", "四方", "三方", "六方", "立方"] as const).map((system) => <optgroup key={system} label={`${system}晶系`}>
+              {(["三斜", "单斜", "正交", "四方", "三方", "六方", "立方"] as const).map((system) => <optgroup key={system} label={english ? `${crystalSystemText(system, language)} crystal system` : `${system}晶系`}>
                 {characterTables.filter((table) => table.system === system).map((table) => <option key={table.hm} value={table.hm}>{table.hm} · {table.schoenflies}</option>)}
               </optgroup>)}
             </select>
           </label>
 
           <details className="character-help">
-            <summary>？ 如何阅读特征标表</summary>
+            <summary>？ {text("如何阅读特征标表", "How to read a character table")}</summary>
             <div>
-              <p>每列是一类共轭对称操作，每行是一种不可约表示；数字是表示矩阵的迹 χ。</p>
-              <p>χ(E) 等于表示维数。g/u 表示反演偶/奇，′/″ 表示对水平镜面对称/反对称。</p>
-              <p>基函数采用主轴为 z 的常规方向；二维实表示合并共轭复表示。</p>
+              <p>{text("每列是一类共轭对称操作，每行是一种不可约表示；数字是表示矩阵的迹 χ。", "Each column is a conjugacy class of symmetry operations and each row is an irreducible representation; the numbers are traces χ of representation matrices.")}</p>
+              <p>{text("χ(E) 等于表示维数。g/u 表示反演偶/奇，′/″ 表示对水平镜面对称/反对称。", "χ(E) is the representation dimension. g/u denote even/odd parity under inversion; ′/″ denote symmetry/antisymmetry under a horizontal mirror plane.")}</p>
+              <p>{text("基函数采用主轴为 z 的常规方向；二维实表示合并共轭复表示。", "Basis functions use the conventional principal axis along z; two-dimensional real representations combine conjugate complex representations.")}</p>
             </div>
           </details>
 
           <div className="character-table-scroll">
             <table className="character-table">
               <thead><tr>
-                <th>不可约表示</th>
+                <th>{text("不可约表示", "Irreducible representation")}</th>
                 {selectedCharacterTable.classes.map((operationClass) => <th key={operationClass}>{operationClass}</th>)}
-                <th>常用基函数</th>
+                <th>{text("常用基函数", "Common basis functions")}</th>
               </tr></thead>
               <tbody>{selectedCharacterTable.rows.map((characterRow) => <tr key={characterRow.irrep}>
                 <th><IrrepLabel value={characterRow.irrep} /></th>
@@ -1799,40 +1877,40 @@ export default function Home() {
               </tr>)}</tbody>
             </table>
           </div>
-          <p className="character-source-note">实基函数约定 · 主轴 z · R 表示轴矢量分量</p>
+          <p className="character-source-note">{text("实基函数约定 · 主轴 z · R 表示轴矢量分量", "Real-basis convention · principal axis z · R denotes axial-vector components")}</p>
         </div>}
 
         {rightTab === "atoms" && <div className="right-content panel-scroll atom-trace-list">
-          <div className="trace-intro"><span>点击任一原子</span><p>查看它从不对称单元中的哪个位点、经由哪项操作生成。</p></div>
+          <div className="trace-intro"><span>{text("点击任一原子", "Select any atom")}</span><p>{text("查看它从不对称单元中的哪个位点、经由哪项操作生成。", "See which asymmetric-unit site and symmetry operation generated it.")}</p></div>
           {structure.atoms.slice(0, 240).map((atom, index) => (
             <button type="button" key={atom.id} className={selectedAtomIndex === index ? "atom-row active" : "atom-row"} onClick={() => selectAtom(index)}>
               <span className="atom-swatch" style={{ "--atom-color": currentElementColor(atom.element) } as React.CSSProperties}>{atom.element}</span>
               <span><strong>{atom.label}</strong><small>{coordinateText(atom.fract)}</small></span>
-              <em>操作 {atom.operationIds[0]}</em>
+              <em>{text("操作", "Operation")} {atom.operationIds[0]}</em>
             </button>
           ))}
         </div>}
 
         {rightTab === "wyckoff" && <div className="right-content panel-scroll wyckoff-list">
           <details className="wyckoff-help">
-            <summary>？ 什么是 Wyckoff 位置</summary>
+            <summary>？ {text("什么是 Wyckoff 位置", "What is a Wyckoff position?")}</summary>
             <div>
-              <p><b>多重性</b>：一个独立位点经空间群操作生成的不同等价位置数。</p>
-              <p><b>字母</b>：International Tables 为每个空间群的标准位置分配的标签；不是从坐标随意生成的编号。</p>
-              <p><b>一般 / 特殊位置</b>：位点对称阶为 1 时是一般位置；大于 1 时是特殊位置。</p>
-              {missingWyckoffCount > 0 && <p><b>当前 CIF</b>：{missingWyckoffCount} 个位点没有提供字母。SymViz 会补算多重性，但不会猜测标准字母。</p>}
+              <p>{english ? <><b>Multiplicity</b>: the number of distinct equivalent positions generated from one independent site by the space-group operations.</> : <><b>多重性</b>：一个独立位点经空间群操作生成的不同等价位置数。</>}</p>
+              <p>{english ? <><b>Letter</b>: the label assigned to each standard position of a space group in International Tables; it is not an arbitrary coordinate index.</> : <><b>字母</b>：International Tables 为每个空间群的标准位置分配的标签；不是从坐标随意生成的编号。</>}</p>
+              <p>{english ? <><b>General / special position</b>: site-symmetry order 1 is general; an order greater than 1 is special.</> : <><b>一般 / 特殊位置</b>：位点对称阶为 1 时是一般位置；大于 1 时是特殊位置。</>}</p>
+              {missingWyckoffCount > 0 && <p>{english ? <><b>Current CIF</b>: {missingWyckoffCount} sites do not provide a letter. SymViz calculates multiplicity but does not guess a standard letter.</> : <><b>当前 CIF</b>：{missingWyckoffCount} 个位点没有提供字母。SymViz 会补算多重性，但不会猜测标准字母。</>}</p>}
             </div>
           </details>
-          <div className="trace-intro"><span>{structure.sites.length} 个不对称位点</span><p>{missingWyckoffCount > 0
-            ? `${missingWyckoffCount} 个字母未提供 · 多重性已由对称操作补算`
-            : "CIF 已提供完整的 Wyckoff 标记"}</p></div>
+          <div className="trace-intro"><span>{english ? `${structure.sites.length} asymmetric sites` : `${structure.sites.length} 个不对称位点`}</span><p>{missingWyckoffCount > 0
+            ? (english ? `${missingWyckoffCount} letters not provided · multiplicities calculated from symmetry operations` : `${missingWyckoffCount} 个字母未提供 · 多重性已由对称操作补算`)
+            : text("CIF 已提供完整的 Wyckoff 标记", "The CIF provides complete Wyckoff labels")}</p></div>
           {wyckoffSites.map(({ site, letter, multiplicity, multiplicitySource, positionType, siteSymmetryOrder }) => {
             return <button type="button" className="wyckoff-card" key={site.label} onClick={() => {
               const index = structure.atoms.findIndex((atom) => atom.source.label === site.label);
               if (index >= 0) selectAtom(index);
             }}>
-              <span className={letter ? "wyckoff-letter" : "wyckoff-letter missing"}>{letter ?? "未提供"}</span>
-              <span><strong>{site.label} · {site.element}</strong><small>{coordinateText(site.fract)} · {positionType}{siteSymmetryOrder ? ` · 对称阶 ${siteSymmetryOrder}` : ""}</small></span>
+              <span className={letter ? "wyckoff-letter" : "wyckoff-letter missing"}>{letter ?? text("未提供", "Missing")}</span>
+              <span><strong>{site.label} · {site.element}</strong><small>{coordinateText(site.fract)} · {positionType}{siteSymmetryOrder ? ` · ${text("对称阶", "symmetry order")} ${siteSymmetryOrder}` : ""}</small></span>
               <span className="wyckoff-count"><strong>{multiplicity}</strong><small>{multiplicitySource}</small></span>
             </button>;
           })}
@@ -1841,42 +1919,42 @@ export default function Home() {
         {rightTab === "hydrogen" && <div className="right-content panel-scroll hydrogen-panel">
           <div className="hydrogen-intro">
             <div className="hydrogen-intro-head">
-              <span><i />氢键几何筛选</span>
+              <span><i />{text("氢键几何筛选", "Hydrogen-bond geometry filter")}</span>
               <button
                 type="button"
                 role="switch"
                 aria-checked={display.hydrogenBonds}
                 className={display.hydrogenBonds ? "hydrogen-layer-toggle on" : "hydrogen-layer-toggle"}
                 onClick={() => toggleDisplay("hydrogenBonds")}
-              >{display.hydrogenBonds ? "视图已显示" : "视图已隐藏"}</button>
+              >{display.hydrogenBonds ? text("视图已显示", "Visible") : text("视图已隐藏", "Hidden")}</button>
             </div>
-            <p>自动搜索 D–H···A 周期近邻，并按共价连通片段区分分子内与分子间。虚线表示 H···A。</p>
+            <p>{text("自动搜索 D–H···A 周期近邻，并按共价连通片段区分分子内与分子间。虚线表示 H···A。", "Automatically searches periodic D–H···A neighbors and classifies intramolecular versus intermolecular contacts by covalent connectivity. Dashed lines represent H···A.")}</p>
             <div className="hydrogen-summary">
-              <span><strong>{hydrogenBonds.length}</strong>总候选</span>
-              <span><strong>{hydrogenBondSummary.intramolecular}</strong>分子内</span>
-              <span><strong>{hydrogenBondSummary.intermolecular}</strong>分子间</span>
+              <span><strong>{hydrogenBonds.length}</strong>{text("总候选", "Total")}</span>
+              <span><strong>{hydrogenBondSummary.intramolecular}</strong>{text("分子内", "Intramolecular")}</span>
+              <span><strong>{hydrogenBondSummary.intermolecular}</strong>{text("分子间", "Intermolecular")}</span>
             </div>
           </div>
 
           <section className="hydrogen-settings">
-            <div className="hydrogen-section-head"><span>筛选预设</span><small>{hydrogenPreset === "custom" ? "自定义" : "已应用"}</small></div>
+            <div className="hydrogen-section-head"><span>{text("筛选预设", "Filter presets")}</span><small>{hydrogenPreset === "custom" ? text("自定义", "Custom") : text("已应用", "Applied")}</small></div>
             <div className="hydrogen-presets">
-              {([['strict', '严格'], ['steiner', 'Steiner 保守'], ['broad', '宽松']] as Array<[HydrogenPreset, string]>).map(([preset, label]) => (
+              {([['strict', text('严格', 'Strict')], ['steiner', text('Steiner 保守', 'Steiner conservative')], ['broad', text('宽松', 'Broad')]] as Array<[HydrogenPreset, string]>).map(([preset, label]) => (
                 <button type="button" key={preset} className={hydrogenPreset === preset ? "active" : ""} onClick={() => applyHydrogenBondPreset(preset)}>{label}</button>
               ))}
             </div>
 
             <div className="hydrogen-ranges">
               <label>
-                <span>H···A 最大距离<output>{hydrogenBondCriteria.maxHydrogenAcceptorDistance.toFixed(1)} Å</output></span>
+                <span>{text("H···A 最大距离", "Maximum H···A distance")}<output>{hydrogenBondCriteria.maxHydrogenAcceptorDistance.toFixed(1)} Å</output></span>
                 <input type="range" min="1.8" max="3.2" step="0.1" value={hydrogenBondCriteria.maxHydrogenAcceptorDistance} onChange={(event) => updateHydrogenBondNumber("maxHydrogenAcceptorDistance", Number(event.target.value))} />
               </label>
               <label>
-                <span>D···A 最大距离<output>{hydrogenBondCriteria.maxDonorAcceptorDistance.toFixed(1)} Å</output></span>
+                <span>{text("D···A 最大距离", "Maximum D···A distance")}<output>{hydrogenBondCriteria.maxDonorAcceptorDistance.toFixed(1)} Å</output></span>
                 <input type="range" min="2.4" max="4.2" step="0.1" value={hydrogenBondCriteria.maxDonorAcceptorDistance} onChange={(event) => updateHydrogenBondNumber("maxDonorAcceptorDistance", Number(event.target.value))} />
               </label>
               <label>
-                <span>D–H···A 最小角<output>{hydrogenBondCriteria.minDonorHydrogenAcceptorAngle.toFixed(0)}°</output></span>
+                <span>{text("D–H···A 最小角", "Minimum D–H···A angle")}<output>{hydrogenBondCriteria.minDonorHydrogenAcceptorAngle.toFixed(0)}°</output></span>
                 <input type="range" min="80" max="175" step="5" value={hydrogenBondCriteria.minDonorHydrogenAcceptorAngle} onChange={(event) => updateHydrogenBondNumber("minDonorHydrogenAcceptorAngle", Number(event.target.value))} />
               </label>
             </div>
@@ -1886,21 +1964,21 @@ export default function Home() {
               "--hbond-view-width": `${hydrogenBondAppearance.lineWidth}px`,
             } as React.CSSProperties}>
               <div className="hydrogen-appearance-head">
-                <span>虚线样式</span>
+                <span>{text("虚线样式", "Dashed-line style")}</span>
                 <i />
               </div>
               <label className="hydrogen-color-control">
-                <span>虚线颜色</span>
+                <span>{text("虚线颜色", "Line color")}</span>
                 <input
                   type="color"
                   value={hydrogenBondAppearance.color}
-                  aria-label="氢键虚线颜色"
+                  aria-label={text("氢键虚线颜色", "Hydrogen-bond dashed-line color")}
                   onChange={(event) => setHydrogenBondAppearance((current) => ({ ...current, color: event.target.value }))}
                 />
                 <code>{hydrogenBondAppearance.color.toUpperCase()}</code>
               </label>
               <label className="hydrogen-width-control">
-                <span>虚线粗细<output>{hydrogenBondAppearance.lineWidth.toFixed(1)} px</output></span>
+                <span>{text("虚线粗细", "Line width")}<output>{hydrogenBondAppearance.lineWidth.toFixed(1)} px</output></span>
                 <input
                   type="range"
                   min="0.6"
@@ -1910,24 +1988,24 @@ export default function Home() {
                   onChange={(event) => setHydrogenBondAppearance((current) => ({ ...current, lineWidth: Number(event.target.value) }))}
                 />
               </label>
-              <button type="button" onClick={() => setHydrogenBondAppearance(defaultHydrogenBondAppearance)}>恢复虚线默认样式</button>
+              <button type="button" onClick={() => setHydrogenBondAppearance(defaultHydrogenBondAppearance)}>{text("恢复虚线默认样式", "Restore default line style")}</button>
             </div>
 
             <div className="hydrogen-element-filter">
-              <span>供体 D–H</span>
+              <span>{text("供体 D–H", "Donors D–H")}</span>
               <div>{["O", "N", "S", "C"].map((element) => <button type="button" key={element} className={hydrogenBondCriteria.donorElements.includes(element) ? "active" : ""} onClick={() => toggleHydrogenBondElement("donorElements", element)}>{element}–H</button>)}</div>
-              <small>C–H 通常属于较弱、边界更开放的氢键类型。</small>
+              <small>{text("C–H 通常属于较弱、边界更开放的氢键类型。", "C–H contacts usually represent weaker, more permissive hydrogen-bond types.")}</small>
             </div>
             <div className="hydrogen-element-filter acceptors">
-              <span>受体 A</span>
+              <span>{text("受体 A", "Acceptors A")}</span>
               <div>{["O", "N", "S", "F", "Cl", "Br", "I"].map((element) => <button type="button" key={element} className={hydrogenBondCriteria.acceptorElements.includes(element) ? "active" : ""} onClick={() => toggleHydrogenBondElement("acceptorElements", element)}>{element}</button>)}</div>
             </div>
           </section>
 
           <section className="hydrogen-results">
-            <div className="hydrogen-section-head"><span>符合当前阈值</span><small>周期最小镜像</small></div>
-            {!hasExplicitHydrogens ? <div className="hydrogen-empty warning"><strong>没有显式 H 原子</strong><p>当前 CIF 无法计算 D–H···A 角。请使用含氢坐标的 CIF，最好采用中子衍射或已规范化的 X–H 键长。</p></div>
-              : hydrogenBonds.length === 0 ? <div className="hydrogen-empty"><strong>未发现候选</strong><p>可切换“宽松”预设，或调整距离、角度及供体/受体元素。</p></div>
+            <div className="hydrogen-section-head"><span>{text("符合当前阈值", "Matches current thresholds")}</span><small>{text("周期最小镜像", "Periodic minimum image")}</small></div>
+            {!hasExplicitHydrogens ? <div className="hydrogen-empty warning"><strong>{text("没有显式 H 原子", "No explicit H atoms")}</strong><p>{text("当前 CIF 无法计算 D–H···A 角。请使用含氢坐标的 CIF，最好采用中子衍射或已规范化的 X–H 键长。", "The current CIF cannot provide D–H···A angles. Use a CIF with hydrogen coordinates, preferably from neutron diffraction or with normalized X–H bond lengths.")}</p></div>
+              : hydrogenBonds.length === 0 ? <div className="hydrogen-empty"><strong>{text("未发现候选", "No candidates found")}</strong><p>{text("可切换“宽松”预设，或调整距离、角度及供体/受体元素。", "Try the Broad preset or adjust distances, angles, and donor/acceptor elements.")}</p></div>
                 : <div className="hydrogen-bond-list">{hydrogenBonds.slice(0, 160).map((bond, index) => {
                   const donor = structure.atoms[bond.donor];
                   const hydrogen = structure.atoms[bond.hydrogen];
@@ -1940,23 +2018,23 @@ export default function Home() {
                       <small>H···A {bond.hydrogenAcceptorDistance.toFixed(2)} Å · D···A {bond.donorAcceptorDistance.toFixed(2)} Å · ∠ {bond.angle.toFixed(1)}°</small>
                     </span>
                     <span className={`hydrogen-bond-badge ${bond.kind}`}>
-                      <b>{bond.kind === "intramolecular" ? "分子内" : "分子间"}</b>
-                      <small>{hydrogenStrengthLabels[bond.strength]}{periodic ? " · 跨界" : ""}</small>
+                      <b>{bond.kind === "intramolecular" ? text("分子内", "Intramolecular") : text("分子间", "Intermolecular")}</b>
+                      <small>{hydrogenStrengthText(bond.strength, language)}{periodic ? text(" · 跨界", " · periodic") : ""}</small>
                     </span>
                   </button>;
                 })}</div>}
           </section>
 
           <details className="hydrogen-reference" open>
-            <summary>判据依据与解释</summary>
-            <p><b>Steiner (2002)</b>：氢键强度连续、没有天然分界。若必须自动筛选，可考虑 H···A 至 3.0–3.2 Å；角度下限可取 90°，更保守取 110°。</p>
+            <summary>{text("判据依据与解释", "Criteria and interpretation")}</summary>
+            <p>{english ? <><b>Steiner (2002)</b>: hydrogen-bond strength is continuous and has no natural boundary. For automated screening, H···A distances up to 3.0–3.2 Å may be considered; an angular lower limit of 90° is permissive and 110° is more conservative.</> : <><b>Steiner (2002)</b>：氢键强度连续、没有天然分界。若必须自动筛选，可考虑 H···A 至 3.0–3.2 Å；角度下限可取 90°，更保守取 110°。</>}</p>
             <div className="hydrogen-guide-table">
-              <span>几何引导值</span><b>强</b><b>中等</b><b>弱</b>
+              <span>{text("几何引导值", "Geometry guide")}</span><b>{text("强", "Strong")}</b><b>{text("中等", "Moderate")}</b><b>{text("弱", "Weak")}</b>
               <span>H···A / Å</span><em>1.2–1.5</em><em>1.5–2.2</em><em>&gt; 2.2</em>
               <span>D···A / Å</span><em>2.2–2.5</em><em>2.5–3.2</em><em>&gt; 3.2</em>
               <span>∠D–H···A</span><em>170–180°</em><em>&gt; 130°</em><em>&gt; 90°</em>
             </div>
-            <p className="hydrogen-caution">几何命中只表示“候选”。IUPAC 2011 要求至少有实验或理论证据；电子密度、光谱、能量和化学环境可能改变结论。</p>
+            <p className="hydrogen-caution">{text("几何命中只表示“候选”。IUPAC 2011 要求至少有实验或理论证据；电子密度、光谱、能量和化学环境可能改变结论。", "A geometry match indicates only a candidate. IUPAC 2011 requires experimental or theoretical evidence; electron density, spectroscopy, energy, and chemical environment may change the conclusion.")}</p>
             <div className="hydrogen-links">
               <a href="https://doi.org/10.1002/1521-3773(20020104)41:1%3C48::AID-ANIE48%3E3.0.CO;2-U" target="_blank" rel="noreferrer">Steiner 2002 ↗</a>
               <a href="https://publications.iupac.org/pac/83/8/1637/index.html" target="_blank" rel="noreferrer">IUPAC 2011 ↗</a>
@@ -1966,24 +2044,24 @@ export default function Home() {
 
         {rightTab === "calculator" && <div className="right-content panel-scroll calculator-panel">
           <div className="calculator-intro">
-            <span>对称位点计算器</span>
-            <p>输入分数坐标 r，逐步验证 r′ = Rr + t，并将结果折回 [0, 1) 晶胞范围。</p>
+            <span>{text("对称位点计算器", "Symmetry-site calculator")}</span>
+            <p>{text("输入分数坐标 r，逐步验证 r′ = Rr + t，并将结果折回 [0, 1) 晶胞范围。", "Enter fractional coordinates r to verify r′ = Rr + t step by step, then wrap the result into the [0, 1) unit-cell range.")}</p>
           </div>
 
           <label className="calculator-field">
-            <span>选择对称操作</span>
+            <span>{text("选择对称操作", "Select a symmetry operation")}</span>
             <select value={calculatorOperation.id} onChange={(event) => setCalculatorOperationId(Number(event.target.value))}>
-              {structure.operations.map((operation) => <option key={operation.id} value={operation.id}>{operationTitle(operation)} · {operation.xyz}</option>)}
+              {structure.operations.map((operation) => <option key={operation.id} value={operation.id}>{operationTitle(operation, language)} · {operation.xyz}</option>)}
             </select>
           </label>
 
           <div className="calculator-coordinate-head">
-            <span>输入分数坐标 r</span>
+            <span>{text("输入分数坐标 r", "Enter fractional coordinates r")}</span>
             <button type="button" onClick={() => {
               if (!selectedAtom) return;
               setCalculatorInput(selectedAtom.source.fract.map((value) => value.toFixed(6)) as [string, string, string]);
               setCalculatorOperationId(selectedOperation.id);
-            }}>填入当前原子</button>
+            }}>{text("填入当前原子", "Use current atom")}</button>
           </div>
           <div className="calculator-inputs">
             {(["x", "y", "z"] as const).map((axis, index) => <label key={axis}>
@@ -1992,16 +2070,16 @@ export default function Home() {
                 type="text"
                 inputMode="decimal"
                 value={calculatorInput[index]}
-                aria-label={`${axis} 分数坐标`}
+                aria-label={english ? `${axis} fractional coordinate` : `${axis} 分数坐标`}
                 onChange={(event) => setCalculatorInput((current) => current.map((value, axisIndex) => axisIndex === index ? event.target.value : value) as [string, string, string])}
               />
             </label>)}
           </div>
 
           <div className="calculator-operation-card">
-            <div className="calculator-step-head"><i>1</i><span>代入操作表达式</span></div>
+            <div className="calculator-step-head"><i>1</i><span>{text("代入操作表达式", "Substitute into the operation")}</span></div>
             <code>{calculatorOperation.xyz}</code>
-            <div className="matrix-equation" aria-label="旋转矩阵和平移向量">
+            <div className="matrix-equation" aria-label={text("旋转矩阵和平移向量", "Rotation matrix and translation vector")}>
               <span className="matrix-bracket">R</span>
               <span className="matrix-values">{calculatorOperation.matrix.flat().map((value, index) => <b key={index}>{value}</b>)}</span>
               <span className="matrix-plus">+</span>
@@ -2009,29 +2087,29 @@ export default function Home() {
             </div>
           </div>
 
-          {!calculator.valid ? <div className="calculator-invalid">请输入十进制或分数，例如 0.25、1/3、−0.5。</div> : <>
+          {!calculator.valid ? <div className="calculator-invalid">{text("请输入十进制或分数，例如 0.25、1/3、−0.5。", "Enter a decimal or fraction, such as 0.25, 1/3, or −0.5.")}</div> : <>
             <div className="calculator-result-row">
-              <div><span><i>2</i> 未折回结果</span><code>{decimalCoordinateText(calculator.raw)}</code></div>
+              <div><span><i>2</i> {text("未折回结果", "Unwrapped result")}</span><code>{decimalCoordinateText(calculator.raw)}</code></div>
               <b>→</b>
-              <div className="wrapped"><span><i>3</i> 晶胞内结果</span><code>{decimalCoordinateText(calculator.wrapped)}</code></div>
+              <div className="wrapped"><span><i>3</i> {text("晶胞内结果", "Wrapped unit-cell result")}</span><code>{decimalCoordinateText(calculator.wrapped)}</code></div>
             </div>
             <div className={calculator.matchIndex >= 0 ? "calculator-match found" : "calculator-match"}>
-              <span>匹配晶体中的原子</span>
+              <span>{text("匹配晶体中的原子", "Match an atom in the crystal")}</span>
               {calculator.matchIndex >= 0 ? <>
                 <strong>{structure.atoms[calculator.matchIndex].label}</strong>
-                <small>母位点 {structure.atoms[calculator.matchIndex].source.label} · {coordinateText(structure.atoms[calculator.matchIndex].fract)}</small>
+                <small>{text("母位点", "Parent site")} {structure.atoms[calculator.matchIndex].source.label} · {coordinateText(structure.atoms[calculator.matchIndex].fract)}</small>
                 <button type="button" onClick={() => {
                   setSelectedAtomIndex(calculator.matchIndex);
                   setSelectedOperationId(calculatorOperation.id);
-                  setNotice(`已定位 ${structure.atoms[calculator.matchIndex].label}`);
-                }}>在三维视图中定位</button>
-              </> : <><strong>未找到</strong><small>当前结果与 CIF 原子位点的容差大于 0.002。</small></>}
+                  setNotice(english ? `Located ${structure.atoms[calculator.matchIndex].label}` : `已定位 ${structure.atoms[calculator.matchIndex].label}`);
+                }}>{text("在三维视图中定位", "Locate in 3D view")}</button>
+              </> : <><strong>{text("未找到", "Not found")}</strong><small>{text("当前结果与 CIF 原子位点的容差大于 0.002。", "The result differs from every CIF atom site by more than the 0.002 tolerance.")}</small></>}
             </div>
           </>}
         </div>}
       </aside>
 
-      {dragActive && <div className="drop-overlay"><div><span>⇣</span><strong>释放以解析 CIF</strong><small>文件只在本机浏览器中处理</small></div></div>}
+      {dragActive && <div className="drop-overlay"><div><span>⇣</span><strong>{text("释放以解析 CIF", "Drop to parse the CIF")}</strong><small>{text("文件只在本机浏览器中处理", "The file is processed only in your local browser")}</small></div></div>}
       {appearanceMenu && appearanceMenu.kind === "element" && (() => {
         const element = appearanceMenu.element;
         const style = resolvedElementStyle(element, elementAppearance);
@@ -2039,15 +2117,15 @@ export default function Home() {
           ref={appearanceMenuRef}
           className="appearance-context-menu"
           role="dialog"
-          aria-label={`${element} 元素外观设置`}
+          aria-label={english ? `${element} element appearance settings` : `${element} 元素外观设置`}
           style={{ left: appearanceMenu.x, top: appearanceMenu.y }}
         >
           <div className="appearance-menu-head">
             <i style={{ "--preview-color": style.color } as React.CSSProperties} />
-            <span><strong>{element} 元素外观</strong><small>所有 {element} 原子与相连化学键实时更新</small></span>
+            <span><strong>{element} {text("元素外观", "element appearance")}</strong><small>{english ? `All ${element} atoms and connected bonds update immediately` : `所有 ${element} 原子与相连化学键实时更新`}</small></span>
           </div>
           <label className="appearance-color-row">
-            <span>元素颜色</span>
+            <span>{text("元素颜色", "Element color")}</span>
             <input type="color" value={style.color} onChange={(event) => setElementAppearance((current) => ({
               ...current,
               [element]: { color: event.target.value, scale: current[element]?.scale ?? 1 },
@@ -2055,7 +2133,7 @@ export default function Home() {
             <code>{style.color.toUpperCase()}</code>
           </label>
           <label className="appearance-range-row">
-            <span>原子球大小</span><output>{Math.round(style.scale * 100)}%</output>
+            <span>{text("原子球大小", "Atom size")}</span><output>{Math.round(style.scale * 100)}%</output>
             <input type="range" min="0.55" max="1.8" step="0.05" value={style.scale} onChange={(event) => setElementAppearance((current) => ({
               ...current,
               [element]: { color: current[element]?.color ?? elementStyle(element).color, scale: Number(event.target.value) },
@@ -2065,44 +2143,44 @@ export default function Home() {
             const next = { ...current };
             delete next[element];
             return next;
-          })}>恢复 {element} 默认外观</button>
+          })}>{english ? `Restore default ${element} appearance` : `恢复 ${element} 默认外观`}</button>
         </div>;
       })()}
       {appearanceMenu && appearanceMenu.kind === "axis" && <div
         ref={appearanceMenuRef}
         className="appearance-context-menu axis-appearance-menu"
         role="dialog"
-        aria-label="坐标轴外观设置"
+        aria-label={text("坐标轴外观设置", "Axis appearance settings")}
         style={{ left: appearanceMenu.x, top: appearanceMenu.y }}
       >
         <div className="appearance-menu-head axis-head">
           <div className="axis-miniature"><i /><b /><em /></div>
-          <span><strong>坐标轴外观</strong><small>修改右下角 a、b、c 晶格方向标记</small></span>
+          <span><strong>{text("坐标轴外观", "Axis appearance")}</strong><small>{text("修改右下角 a、b、c 晶格方向标记", "Edit the a, b, and c lattice-direction marker")}</small></span>
         </div>
         <div className="axis-preview" style={{ fontFamily: axisFontFamilies[axisAppearance.font], fontSize: `${axisAppearance.fontSize}px` }}>
           <span>a</span><span>b</span><span>c</span>
         </div>
         <label className="appearance-range-row">
-          <span>轴线粗细</span><output>{axisAppearance.lineWidth.toFixed(1)} px</output>
+          <span>{text("轴线粗细", "Axis line width")}</span><output>{axisAppearance.lineWidth.toFixed(1)} px</output>
           <input type="range" min="0.6" max="4" step="0.1" value={axisAppearance.lineWidth} onChange={(event) => setAxisAppearance((current) => ({ ...current, lineWidth: Number(event.target.value) }))} />
         </label>
         <label className="appearance-range-row">
-          <span>整体大小</span><output>{axisAppearance.length} px</output>
+          <span>{text("整体大小", "Overall size")}</span><output>{axisAppearance.length} px</output>
           <input type="range" min="14" max="52" step="1" value={axisAppearance.length} onChange={(event) => setAxisAppearance((current) => ({ ...current, length: Number(event.target.value) }))} />
         </label>
         <label className="appearance-select-row">
-          <span>字母字体</span>
+          <span>{text("字母字体", "Label font")}</span>
           <select value={axisAppearance.font} onChange={(event) => setAxisAppearance((current) => ({ ...current, font: event.target.value as AxisFont }))}>
-            <option value="mono">等宽字体</option>
-            <option value="sans">无衬线字体</option>
-            <option value="serif">衬线字体</option>
+            <option value="mono">{text("等宽字体", "Monospace")}</option>
+            <option value="sans">{text("无衬线字体", "Sans serif")}</option>
+            <option value="serif">{text("衬线字体", "Serif")}</option>
           </select>
         </label>
         <label className="appearance-range-row">
-          <span>字母大小</span><output>{axisAppearance.fontSize} px</output>
+          <span>{text("字母大小", "Label size")}</span><output>{axisAppearance.fontSize} px</output>
           <input type="range" min="7" max="20" step="1" value={axisAppearance.fontSize} onChange={(event) => setAxisAppearance((current) => ({ ...current, fontSize: Number(event.target.value) }))} />
         </label>
-        <button type="button" className="appearance-reset" onClick={() => setAxisAppearance({ ...defaultAxisAppearance })}>恢复坐标轴默认外观</button>
+        <button type="button" className="appearance-reset" onClick={() => setAxisAppearance({ ...defaultAxisAppearance })}>{text("恢复坐标轴默认外观", "Restore default axis appearance")}</button>
       </div>}
       {contextMenu && structure.atoms[contextMenu.atomIndex] && (() => {
         const atom = structure.atoms[contextMenu.atomIndex];
@@ -2110,36 +2188,36 @@ export default function Home() {
           ref={contextMenuRef}
           className="atom-context-menu"
           role="menu"
-          aria-label={`${atom.label} 原子显示选项`}
+          aria-label={english ? `${atom.label} atom display options` : `${atom.label} 原子显示选项`}
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <div className="context-menu-head">
             <span className="atom-swatch" style={{ "--atom-color": currentElementColor(atom.element) } as React.CSSProperties}>{atom.element}</span>
-            <span><strong>{atom.label}</strong><small>不对称位点 {atom.source.label}</small></span>
+            <span><strong>{atom.label}</strong><small>{text("不对称位点", "Asymmetric site")} {atom.source.label}</small></span>
           </div>
           <button type="button" role="menuitem" onClick={() => {
             setAtomFocus({ mode: "fade", sourceLabel: atom.source.label });
             setContextMenu(null);
           }}>
-            <span>聚焦该不对称位点</span><small>保留其对称轨道，虚化其它原子</small>
+            <span>{text("聚焦该不对称位点", "Focus this asymmetric site")}</span><small>{text("保留其对称轨道，虚化其它原子", "Keep its symmetry orbit and fade other atoms")}</small>
           </button>
           <button type="button" role="menuitem" onClick={() => {
             setAtomFocus({ mode: "isolate", sourceLabel: atom.source.label });
             setContextMenu(null);
           }}>
-            <span>仅显示该对称轨道</span><small>隐藏不属于 {atom.source.label} 的原子</small>
+            <span>{text("仅显示该对称轨道", "Isolate this symmetry orbit")}</span><small>{english ? `Hide atoms outside ${atom.source.label}` : `隐藏不属于 ${atom.source.label} 的原子`}</small>
           </button>
           <div className="context-menu-divider" />
           <button type="button" role="menuitem" onClick={() => {
             setAtomFocus({ mode: "none", sourceLabel: null });
             setContextMenu(null);
           }}>
-            <span>恢复全部原子</span><small>取消聚焦或单独显示</small>
+            <span>{text("恢复全部原子", "Show all atoms")}</span><small>{text("取消聚焦或单独显示", "Clear focus or isolation")}</small>
           </button>
         </div>;
       })()}
       {notice && <div className="toast"><i>✓</i><span>{notice}</span></div>}
-      {structure.warnings.length > 0 && <div className="warning-ribbon">{structure.warnings[0]}</div>}
+      {structure.warnings.length > 0 && <div className="warning-ribbon">{english ? "CIF warning: some symmetry metadata may be incomplete." : structure.warnings[0]}</div>}
     </main>
   );
 }

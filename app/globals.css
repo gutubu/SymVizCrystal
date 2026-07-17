@@ -184,6 +184,10 @@ canvas:focus-visible {
 
 .header-actions { display: flex; gap: 8px; padding-right: 16px; }
 
+.language-switch { display: inline-flex; align-items: center; height: 34px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 7px; background: #f7f9fa; }
+.language-switch button { height: 26px; padding: 0 8px; border: 0; border-radius: 5px; color: #667085; background: transparent; font-size: 8px; font-weight: 600; cursor: pointer; }
+.language-switch button.active { color: #0a7476; background: #fff; box-shadow: 0 1px 3px rgba(16, 24, 40, .09); }
+
 .ghost-button,
 .primary-button {
   height: 34px;
@@ -1046,6 +1050,7 @@ canvas:focus-visible {
   .brand { border-right: 0; }
   .header-structure { display: none; }
   .header-actions { padding-right: 10px; }
+  .language-switch button { padding: 0 6px; }
   .left-panel { order: 2; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .app-shell.sidebar-collapsed .left-panel { min-height: 48px; max-height: 48px; padding: 5px 10px; }
   .app-shell.sidebar-collapsed .drawer-control button { width: 100%; height: 36px; }
