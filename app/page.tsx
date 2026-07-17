@@ -50,7 +50,7 @@ type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "hydrogen" |
 type HydrogenPreset = "strict" | "steiner" | "broad";
 type HydrogenBondAppearance = { color: string; lineWidth: number };
 type SupercellSettings = { a: number; b: number; c: number };
-type ZClippingSettings = { back: number; front: number };
+type ZClippingSettings = { back: number; front: number; fade: number };
 type DisplayAtomInstance = {
   atom: AtomInstance;
   index: number;
@@ -99,7 +99,7 @@ const hydrogenBondPresets: Record<HydrogenPreset, HydrogenBondCriteria> = {
 const defaultHydrogenBondCriteria = hydrogenBondPresets.steiner;
 const defaultHydrogenBondAppearance: HydrogenBondAppearance = { color: "#c2185b", lineWidth: 1.8 };
 const defaultSupercell: SupercellSettings = { a: 1, b: 1, c: 1 };
-const defaultZClipping: ZClippingSettings = { back: 0, front: 100 };
+const defaultZClipping: ZClippingSettings = { back: 0, front: 100, fade: 14 };
 
 function supercellText(value: SupercellSettings) {
   const format = (extent: number) => Number.isInteger(extent) ? String(extent) : extent.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
@@ -367,6 +367,21 @@ function shadeHex(color: string, strength = 0.2) {
   return `#${channels.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
+function colorWithAlpha(color: string, opacity: number) {
+  const alpha = Math.max(0, Math.min(1, opacity));
+  const hex = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  if (hex) {
+    const [red, green, blue] = hex.slice(1).map((value) => Number.parseInt(value, 16));
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+  }
+  const rgba = color.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+  if (rgba) {
+    const sourceAlpha = rgba[4] === undefined ? 1 : Number(rgba[4]);
+    return `rgba(${rgba[1]}, ${rgba[2]}, ${rgba[3]}, ${sourceAlpha * alpha})`;
+  }
+  return color;
+}
+
 function findEigenDirection(operation: SymmetryOperation, eigenvalue: 1 | -1): Vec3 {
   const candidates: Vec3[] = [];
   for (let x = -2; x <= 2; x += 1) {
@@ -547,7 +562,34 @@ function CrystalCanvas({
     const atomDepthSpan = Math.max(1e-6, maximumAtomDepth - minimumAtomDepth);
     const clippingMinimum = minimumAtomDepth + atomDepthSpan * zClipping.back / 100;
     const clippingMaximum = minimumAtomDepth + atomDepthSpan * zClipping.front / 100;
-    const depthVisible = (depth: number) => !display.zClipping || (depth >= clippingMinimum - 1e-6 && depth <= clippingMaximum + 1e-6);
+    const fadeDepth = Math.min(
+      atomDepthSpan * zClipping.fade / 100,
+      Math.max(1e-6, (clippingMaximum - clippingMinimum) / 2),
+    );
+    const smoothstep = (value: number) => {
+      const clamped = Math.max(0, Math.min(1, value));
+      return clamped * clamped * (3 - 2 * clamped);
+    };
+    const depthOpacity = (depth: number) => {
+      if (!display.zClipping) return 1;
+      if (zClipping.back > 0 && depth <= clippingMinimum) return 0;
+      if (zClipping.front < 100 && depth >= clippingMaximum) return 0;
+      const backFade = zClipping.back <= 0 ? 1 : smoothstep((depth - clippingMinimum) / fadeDepth);
+      const frontFade = zClipping.front >= 100 ? 1 : smoothstep((clippingMaximum - depth) / fadeDepth);
+      return Math.min(backFade, frontFade);
+    };
+    const depthVisible = (depth: number) => depthOpacity(depth) > 0.002;
+    const depthStrokeStyle = (
+      start: ReturnType<typeof projectRotated>,
+      end: ReturnType<typeof projectRotated>,
+      color: string,
+    ) => {
+      if (!display.zClipping) return color;
+      const gradient = context.createLinearGradient(start.x, start.y, end.x, end.y);
+      gradient.addColorStop(0, colorWithAlpha(color, depthOpacity(start.depth)));
+      gradient.addColorStop(1, colorWithAlpha(color, depthOpacity(end.depth)));
+      return gradient;
+    };
     const clipSegmentToDepth = (start: Vec3, end: Vec3) => {
       const a = rotate(start);
       const b = rotate(end);
@@ -596,7 +638,8 @@ function CrystalCanvas({
     if (display.cell) {
       context.save();
       context.lineWidth = 1;
-      context.strokeStyle = "rgba(71, 85, 105, .34)";
+      const cellColor = "rgba(71, 85, 105, .34)";
+      context.strokeStyle = cellColor;
       context.setLineDash([4, 7]);
       for (let ix = 0; ix < Math.ceil(supercell.a); ix += 1) {
         for (let iy = 0; iy < Math.ceil(supercell.b); iy += 1) {
@@ -614,6 +657,7 @@ function CrystalCanvas({
               const segment = clipSegmentToDepth(corners[from], corners[to]);
               if (!segment) continue;
               const [a, b] = segment;
+              context.strokeStyle = depthStrokeStyle(a, b, cellColor);
               context.beginPath();
               context.moveTo(a.x, a.y);
               context.lineTo(b.x, b.y);
@@ -637,10 +681,12 @@ function CrystalCanvas({
         const axisEnd = vectorAdd(axisOrigin, vectorScale(axisCart, span));
         const axisSegment = clipSegmentToDepth(axisStart, axisEnd);
         const [a, b] = axisSegment ?? [project(axisStart), project(axisEnd)];
-        context.strokeStyle = "rgba(168, 105, 18, .62)";
+        const symmetryAxisColor = "rgba(168, 105, 18, .62)";
+        context.strokeStyle = symmetryAxisColor;
         context.lineWidth = 1.4;
         context.setLineDash([6, 5]);
         if (axisSegment) {
+          context.strokeStyle = depthStrokeStyle(a, b, symmetryAxisColor);
           context.beginPath();
           context.moveTo(a.x, a.y);
           context.lineTo(b.x, b.y);
@@ -663,18 +709,22 @@ function CrystalCanvas({
           });
           const helixSegments = helixWorldPoints.slice(1).map((point, index) => clipSegmentToDepth(helixWorldPoints[index], point)).filter((segment) => segment !== null);
 
-          context.strokeStyle = "rgba(255, 255, 255, .92)";
+          const helixOutlineColor = "rgba(255, 255, 255, .92)";
+          context.strokeStyle = helixOutlineColor;
           context.lineWidth = 5.5;
           context.lineJoin = "round";
           helixSegments.forEach(([start, end]) => {
+            context.strokeStyle = depthStrokeStyle(start, end, helixOutlineColor);
             context.beginPath();
             context.moveTo(start.x, start.y);
             context.lineTo(end.x, end.y);
             context.stroke();
           });
-          context.strokeStyle = "#b76f12";
+          const helixColor = "#b76f12";
+          context.strokeStyle = helixColor;
           context.lineWidth = 2.8;
           helixSegments.forEach(([start, end]) => {
+            context.strokeStyle = depthStrokeStyle(start, end, helixColor);
             context.beginPath();
             context.moveTo(start.x, start.y);
             context.lineTo(end.x, end.y);
@@ -684,6 +734,7 @@ function CrystalCanvas({
           const lastHelixSegment = helixSegments[helixSegments.length - 1];
           if (lastHelixSegment) {
             const [arrowFrom, arrowTip] = lastHelixSegment;
+            context.globalAlpha = depthOpacity(arrowTip.depth);
             const arrowAngle = Math.atan2(arrowTip.y - arrowFrom.y, arrowTip.x - arrowFrom.x);
             context.fillStyle = "#b76f12";
             context.beginPath();
@@ -708,6 +759,7 @@ function CrystalCanvas({
             context.stroke();
             context.fillStyle = "#8a5310";
             context.fillText(label, labelX + 8, labelY);
+            context.globalAlpha = 1;
           }
         } else {
           if (axisSegment) {
@@ -734,6 +786,7 @@ function CrystalCanvas({
         context.strokeStyle = "rgba(183, 121, 31, .62)";
         context.lineWidth = 1;
         if (plane.length >= 3) {
+          context.globalAlpha = plane.reduce((sum, point) => sum + depthOpacity(point.depth), 0) / plane.length;
           context.beginPath();
           context.moveTo(plane[0].x, plane[0].y);
           plane.slice(1).forEach((point) => context.lineTo(point.x, point.y));
@@ -745,6 +798,7 @@ function CrystalCanvas({
         const rotatedCenter = rotate(center);
         if (depthVisible(rotatedCenter[2])) {
           const point = projectRotated(rotatedCenter);
+          context.globalAlpha = depthOpacity(point.depth);
           context.strokeStyle = "#b7791f";
           context.lineWidth = 2;
           context.beginPath();
@@ -783,10 +837,16 @@ function CrystalCanvas({
           const segment = clipSegmentToDepth(instanceA.cart, instanceB.cart);
           if (!segment) continue;
           const [a, b] = segment;
-          const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const midpoint = {
+            x: (a.x + b.x) / 2,
+            y: (a.y + b.y) / 2,
+            depth: (a.depth + b.depth) / 2,
+            factor: (a.factor + b.factor) / 2,
+          };
           const lineWidth = Math.max(2.2, Math.min(7, (a.factor + b.factor) * worldScale * 0.13));
           context.globalAlpha = atomFocus.mode === "fade" ? (focusA && focusB ? 1 : focusA || focusB ? 0.42 : 0.07) : 1;
-          context.strokeStyle = "rgba(51, 65, 85, .26)";
+          const bondOutlineColor = "rgba(51, 65, 85, .26)";
+          context.strokeStyle = depthStrokeStyle(a, b, bondOutlineColor);
           context.lineWidth = lineWidth + 1.8;
           context.beginPath();
           context.moveTo(a.x, a.y);
@@ -794,12 +854,14 @@ function CrystalCanvas({
           context.stroke();
 
           context.lineWidth = lineWidth;
-          context.strokeStyle = shadeHex(resolvedElementStyle(atomA.element, elementAppearance).color, 0.06);
+          const atomAColor = shadeHex(resolvedElementStyle(atomA.element, elementAppearance).color, 0.06);
+          context.strokeStyle = depthStrokeStyle(a, midpoint, atomAColor);
           context.beginPath();
           context.moveTo(a.x, a.y);
           context.lineTo(midpoint.x, midpoint.y);
           context.stroke();
-          context.strokeStyle = shadeHex(resolvedElementStyle(atomB.element, elementAppearance).color, 0.06);
+          const atomBColor = shadeHex(resolvedElementStyle(atomB.element, elementAppearance).color, 0.06);
+          context.strokeStyle = depthStrokeStyle(midpoint, b, atomBColor);
           context.beginPath();
           context.moveTo(midpoint.x, midpoint.y);
           context.lineTo(b.x, b.y);
@@ -830,14 +892,16 @@ function CrystalCanvas({
           if (!segment) continue;
           const [start, end] = segment;
           const focused = focusD || focusH || focusA;
-          context.globalAlpha = atomFocus.mode === "fade" ? (focused ? 1 : 0.08) : 0.94;
-          context.strokeStyle = "rgba(255, 255, 255, .96)";
+          const focusOpacity = atomFocus.mode === "fade" ? (focused ? 1 : 0.08) : 0.94;
+          context.globalAlpha = focusOpacity;
+          const hydrogenBondOutlineColor = "rgba(255, 255, 255, .96)";
+          context.strokeStyle = depthStrokeStyle(start, end, hydrogenBondOutlineColor);
           context.lineWidth = hydrogenBondAppearance.lineWidth + 2.6;
           context.beginPath();
           context.moveTo(start.x, start.y);
           context.lineTo(end.x, end.y);
           context.stroke();
-          context.strokeStyle = hydrogenBondAppearance.color;
+          context.strokeStyle = depthStrokeStyle(start, end, hydrogenBondAppearance.color);
           context.lineWidth = hydrogenBondAppearance.lineWidth;
           context.stroke();
 
@@ -847,6 +911,7 @@ function CrystalCanvas({
             acceptorImageCart[2] - instance.cart[2],
           ) <= 0.24);
           if (!hasDisplayedAcceptor && depthVisible(rotate(acceptorImageCart)[2])) {
+            context.globalAlpha = focusOpacity * depthOpacity(end.depth);
             context.setLineDash([]);
             context.fillStyle = "rgba(255, 255, 255, .92)";
             context.beginPath();
@@ -871,7 +936,8 @@ function CrystalCanvas({
       if (mappingSegment) {
         const [source, target] = mappingSegment;
         context.save();
-        context.strokeStyle = "rgba(15, 139, 141, .76)";
+        const mappingColor = "rgba(15, 139, 141, .76)";
+        context.strokeStyle = depthStrokeStyle(source, target, mappingColor);
         context.fillStyle = "#0f8b8d";
         context.lineWidth = 1.5;
         context.setLineDash([5, 5]);
@@ -880,6 +946,7 @@ function CrystalCanvas({
         context.lineTo(target.x, target.y);
         context.stroke();
         context.setLineDash([]);
+        context.globalAlpha = depthOpacity(target.depth);
         const angle = Math.atan2(target.y - source.y, target.x - source.x);
         context.beginPath();
         context.moveTo(target.x, target.y);
@@ -906,9 +973,11 @@ function CrystalCanvas({
         if (atomFocus.mode === "isolate" && !focused) continue;
         const style = resolvedElementStyle(atom.element, elementAppearance);
         const radius = Math.max(3.2, Math.min(22, style.radius * style.scale * projection.factor * worldScale * 0.9));
-        hitTargets.push({ index, x: projection.x, y: projection.y, radius: radius + 5, depth: projection.depth });
+        const clippingOpacity = depthOpacity(projection.depth);
+        if (clippingOpacity > 0.08) hitTargets.push({ index, x: projection.x, y: projection.y, radius: radius + 5, depth: projection.depth });
         context.save();
-        context.globalAlpha = atomFocus.mode === "fade" && !focused ? 0.12 : 1;
+        const focusOpacity = atomFocus.mode === "fade" && !focused ? 0.12 : 1;
+        context.globalAlpha = focusOpacity * clippingOpacity;
         const gradient = context.createLinearGradient(
           projection.x - radius * 0.45,
           projection.y - radius * 0.55,
@@ -1133,7 +1202,7 @@ function CrystalCanvas({
           <div className={isCrystallographicSupercell(supercell) ? "supercell-chip" : "supercell-chip fractional"}>
             <i />{isCrystallographicSupercell(supercell) ? (english ? "Supercell" : "超胞") : (english ? "Fractional range" : "分数范围")} {supercellText(supercell)}
           </div>
-          {display.zClipping && <div className="z-clipping-chip"><i /> Z clip {zClipping.back}–{zClipping.front}%</div>}
+          {display.zClipping && <div className="z-clipping-chip"><i /> Z fade {zClipping.back}–{zClipping.front}% · {zClipping.fade}%</div>}
           {display.hydrogenBonds && <div
             className="hydrogen-bond-chip"
             style={{ "--hbond-view-color": hydrogenBondAppearance.color } as React.CSSProperties}
@@ -1435,7 +1504,8 @@ export default function Home() {
   function updateZClipping(side: keyof ZClippingSettings, value: number) {
     setZClipping((current) => {
       if (side === "back") return { ...current, back: Math.min(value, current.front - 2) };
-      return { ...current, front: Math.max(value, current.back + 2) };
+      if (side === "front") return { ...current, front: Math.max(value, current.back + 2) };
+      return { ...current, fade: Math.max(1, Math.min(40, value)) };
     });
   }
 
@@ -1658,38 +1728,50 @@ export default function Home() {
           <Toggle label={text("原子标签", "Atom labels")} hint={text("元素与编号", "Element and index")} checked={display.labels} onChange={() => toggleDisplay("labels")} />
           <Toggle label={text("对称元素", "Symmetry elements")} hint={text("轴 / 面 / 映射轨迹", "Axes / planes / mapping path")} checked={display.symmetry} onChange={() => toggleDisplay("symmetry")} />
           <Toggle
-            label="Z clipping"
-            hint={display.zClipping ? (english ? `Keep ${zClipping.back}–${zClipping.front}% along the view direction` : `沿观察方向保留 ${zClipping.back}–${zClipping.front}%`) : text("沿当前观察方向裁切深度", "Clip depth along the current view direction")}
+            label="Z clipping / fade"
+            hint={display.zClipping ? (english ? `Fade across ${zClipping.back}–${zClipping.front}% along the view direction` : `沿观察方向在 ${zClipping.back}–${zClipping.front}% 内渐隐`) : text("沿当前观察方向平滑虚化深度", "Fade depth smoothly along the current view direction")}
             checked={display.zClipping}
             onChange={() => toggleDisplay("zClipping")}
           />
           {display.zClipping && <div className="z-clipping-controls">
-            <div className="z-clipping-head"><span>{text("深度裁切范围", "Depth clipping range")}</span><button type="button" onClick={() => setZClipping(defaultZClipping)}>{text("重置", "Reset")}</button></div>
+            <div className="z-clipping-head"><span>{text("深度渐隐范围", "Depth fade range")}</span><button type="button" onClick={() => setZClipping(defaultZClipping)}>{text("重置", "Reset")}</button></div>
             <label>
-              <span>{text("后裁切面", "Back clipping plane")}<output>{zClipping.back}%</output></span>
+              <span>{text("后边界", "Back boundary")}<output>{zClipping.back}%</output></span>
               <input
                 type="range"
                 min="0"
                 max="98"
                 step="1"
                 value={zClipping.back}
-                aria-label={text("后裁切面", "Back clipping plane")}
+                aria-label={text("后渐隐边界", "Back fade boundary")}
                 onChange={(event) => updateZClipping("back", Number(event.target.value))}
               />
             </label>
             <label>
-              <span>{text("前裁切面", "Front clipping plane")}<output>{zClipping.front}%</output></span>
+              <span>{text("前边界", "Front boundary")}<output>{zClipping.front}%</output></span>
               <input
                 type="range"
                 min="2"
                 max="100"
                 step="1"
                 value={zClipping.front}
-                aria-label={text("前裁切面", "Front clipping plane")}
+                aria-label={text("前渐隐边界", "Front fade boundary")}
                 onChange={(event) => updateZClipping("front", Number(event.target.value))}
               />
             </label>
-            <p>{text("0% 为最远端，100% 为最靠近观察者的一端；旋转晶体后会按新视角重新裁切。", "0% is the farthest depth and 100% is closest to the viewer. Clipping updates after rotation.")}</p>
+            <label>
+              <span>{text("渐隐宽度", "Feather width")}<output>{zClipping.fade}%</output></span>
+              <input
+                type="range"
+                min="1"
+                max="40"
+                step="1"
+                value={zClipping.fade}
+                aria-label={text("渐隐过渡宽度", "Fade feather width")}
+                onChange={(event) => updateZClipping("fade", Number(event.target.value))}
+              />
+            </label>
+            <p>{text("边界内按渐隐宽度平滑虚化，越过边界后才完全隐藏；旋转晶体后会按新视角更新。", "Objects fade smoothly inside each boundary over the feather width and disappear only beyond it. The fade updates after rotation.")}</p>
           </div>}
         </section>
 
