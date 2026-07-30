@@ -893,6 +893,15 @@ canvas:focus-visible {
 .disorder-section { display: flex; flex-direction: column; gap: 6px; }
 .disorder-section-head { display: flex; align-items: center; justify-content: space-between; color: #475467; font-size: 8px; font-weight: 650; }
 .disorder-section-head small { color: var(--subtle); font-size: 6.5px; font-weight: 500; }
+.occupancy-title { display: flex; align-items: center; gap: 5px; }
+.occupancy-help { position: relative; }
+.occupancy-help summary { display: grid; width: 15px; height: 15px; place-items: center; border: 1px solid #cfc6ed; border-radius: 50%; color: #654db0; background: #f8f6ff; font-family: var(--font-geist-mono), monospace; font-size: 7px; line-height: 1; list-style: none; cursor: pointer; }
+.occupancy-help summary::-webkit-details-marker { display: none; }
+.occupancy-help[open] summary { color: #fff; background: #7c5ce7; }
+.occupancy-help > div { position: absolute; z-index: 8; top: 21px; left: -62px; width: 260px; padding: 9px; border: 1px solid #d9d0f6; border-radius: 7px; background: #fff; box-shadow: 0 8px 22px rgba(52, 45, 85, .14); }
+.occupancy-help > div::before { position: absolute; top: -5px; left: 67px; width: 8px; height: 8px; border-top: 1px solid #d9d0f6; border-left: 1px solid #d9d0f6; content: ""; background: #fff; transform: rotate(45deg); }
+.occupancy-help strong { color: #44366f; font-size: 8px; }
+.occupancy-help p { margin: 4px 0 0; color: var(--muted); font-size: 7px; font-weight: 450; line-height: 1.5; }
 .disorder-assembly { padding: 8px; border: 1px solid #ded8f2; border-radius: 8px; background: #fbfaff; }
 .disorder-assembly-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .disorder-assembly-head > span { display: flex; min-width: 0; flex-direction: column; gap: 1px; }

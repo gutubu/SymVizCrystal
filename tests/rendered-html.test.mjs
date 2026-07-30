@@ -114,6 +114,9 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /Coordinate calculator/);
   assert.match(page, /三维构象切换/);
   assert.match(page, /占有率一致性/);
+  assert.match(page, /className="occupancy-help"/);
+  assert.match(page, /解释占有率一致性/);
+  assert.match(page, /部分占位本身不等于已经确认无序/);
   assert.match(page, /Split-site/);
   assert.match(page, /disorderSelections/);
   assert.match(page, /Explicit disorder in CIF/);

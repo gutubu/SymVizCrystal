@@ -2213,7 +2213,17 @@ export default function Home() {
 
           <section className="disorder-section">
             <div className="disorder-section-head">
-              <span>{text("占有率一致性", "Occupancy consistency")}</span>
+              <div className="occupancy-title">
+                <span>{text("占有率一致性", "Occupancy consistency")}</span>
+                <details className="occupancy-help">
+                  <summary aria-label={text("解释占有率一致性", "Explain occupancy consistency")}>?</summary>
+                  <div>
+                    <strong>{text("检查什么？", "What is checked?")}</strong>
+                    <p>{text("同一 disorder assembly 中，各个互斥构象的代表占有率之和应接近 1；同一 group 内的原子通常也应采用一致的占有率。", "Within one disorder assembly, representative occupancies of mutually exclusive conformers should sum to about 1; atoms in the same group should usually have consistent occupancies.")}</p>
+                    <p>{text("“通过”表示 Σocc 在 1±0.08 内且未发现组内明显差异；警告表示需要回查 CIF 和精修模型。部分占位本身不等于已经确认无序。", "Pass means Σocc is within 1±0.08 with no marked within-group variation. A warning means the CIF and refinement model should be reviewed. Partial occupancy alone does not prove disorder.")}</p>
+                  </div>
+                </details>
+              </div>
               <small>{structure.disorder.occupancyIssues.length
                 ? (english ? `${structure.disorder.occupancyIssues.length} findings` : `${structure.disorder.occupancyIssues.length} 项`)
                 : text("通过", "Pass")}</small>
