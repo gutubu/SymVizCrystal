@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_CIF,
   type AtomInstance,
+  type AtomSite,
   type CrystalStructure,
   type HydrogenBond,
   type HydrogenBondCriteria,
   type SymmetryOperation,
   type Vec3,
   applyOperation,
+  disorderAssemblyKey,
   elementStyle,
   findHydrogenBonds,
   formatFractional,
@@ -46,11 +48,12 @@ type ElementAppearance = Record<string, { color: string; scale: number }>;
 type AxisFont = "mono" | "sans" | "serif";
 type AxisAppearance = { lineWidth: number; length: number; font: AxisFont; fontSize: number };
 type AppearanceMenu = { kind: "element"; element: string; x: number; y: number } | { kind: "axis"; x: number; y: number };
-type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "hydrogen" | "calculator";
+type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "disorder" | "hydrogen" | "calculator";
 type HydrogenPreset = "strict" | "steiner" | "broad";
 type HydrogenBondAppearance = { color: string; lineWidth: number };
 type SupercellSettings = { a: number; b: number; c: number };
 type ZClippingSettings = { back: number; front: number; fade: number };
+type DisorderSelections = Record<string, string>;
 type DisplayAtomInstance = {
   atom: AtomInstance;
   index: number;
@@ -115,6 +118,7 @@ function buildDisplayAtomInstances(
   baseDisplayFracts: Vec3[],
   supercell: SupercellSettings,
   completeMolecules: boolean,
+  disorderSelections: DisorderSelections = {},
 ) {
   const extents: Vec3 = [supercell.a, supercell.b, supercell.c];
   const results: DisplayAtomInstance[] = [];
@@ -160,7 +164,27 @@ function buildDisplayAtomInstances(
       }
     }
   }
-  return results;
+  return results.filter(({ atom }) => {
+    const assembly = disorderAssemblyKey(atom.source);
+    if (!assembly) return true;
+    const selectedGroup = disorderSelections[assembly] ?? "all";
+    return selectedGroup === "all" || !atom.source.disorderGroup || atom.source.disorderGroup === selectedGroup;
+  });
+}
+
+const disorderPalette = ["#7c5ce7", "#d66a2c", "#0b8f86", "#c24172", "#5378c7", "#8a6b24"];
+
+function disorderColor(assembly: string, group: string) {
+  const key = `${assembly}:${group}`;
+  const hash = [...key].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 17);
+  return disorderPalette[hash % disorderPalette.length];
+}
+
+function disorderSelectionLabel(site: AtomSite, selections: DisorderSelections) {
+  const assembly = disorderAssemblyKey(site);
+  if (!assembly || !site.disorderGroup) return null;
+  const selectedGroup = selections[assembly] ?? "all";
+  return { assembly, group: site.disorderGroup, overlay: selectedGroup === "all" };
 }
 const axisFontFamilies: Record<AxisFont, string> = {
   mono: "ui-monospace, SFMono-Regular, Consolas, monospace",
@@ -449,6 +473,7 @@ function CrystalCanvas({
   hydrogenBondAppearance,
   supercell,
   zClipping,
+  disorderSelections,
   language,
   display,
   selectedAtomIndex,
@@ -466,6 +491,7 @@ function CrystalCanvas({
   hydrogenBondAppearance: HydrogenBondAppearance;
   supercell: SupercellSettings;
   zClipping: ZClippingSettings;
+  disorderSelections: DisorderSelections;
   language: Language;
   display: DisplaySettings;
   selectedAtomIndex: number;
@@ -550,7 +576,13 @@ function CrystalCanvas({
     const baseDisplayFracts = display.completeMolecules
       ? molecularDisplayFracts(structure.atoms, structure.bonds)
       : structure.atoms.map((atom) => atom.fract);
-    const displayAtoms = buildDisplayAtomInstances(structure, baseDisplayFracts, supercell, display.completeMolecules);
+    const displayAtoms = buildDisplayAtomInstances(
+      structure,
+      baseDisplayFracts,
+      supercell,
+      display.completeMolecules,
+      disorderSelections,
+    );
     const displayAtomMap = new Map(displayAtoms.map((instance) => [`${instance.translationKey}:${instance.index}`, instance]));
     const displayTranslations = [...new Map(displayAtoms.map((instance) => [instance.translationKey, instance.translation])).values()];
     const instancesByAtom = new Map<number, DisplayAtomInstance[]>();
@@ -830,6 +862,12 @@ function CrystalCanvas({
           const focusA = matchesFocus(atomA);
           const focusB = matchesFocus(atomB);
           if (atomFocus.mode === "isolate" && (!focusA || !focusB)) continue;
+          const disorderA = disorderSelectionLabel(atomA.source, disorderSelections);
+          const disorderB = disorderSelectionLabel(atomB.source, disorderSelections);
+          const disorderOpacity = Math.min(
+            disorderA?.overlay ? 0.62 + atomA.source.occupancy * 0.24 : 1,
+            disorderB?.overlay ? 0.62 + atomB.source.occupancy * 0.24 : 1,
+          );
           const directDistance = Math.hypot(
             instanceA.cart[0] - instanceB.cart[0], instanceA.cart[1] - instanceB.cart[1], instanceA.cart[2] - instanceB.cart[2],
           );
@@ -844,7 +882,8 @@ function CrystalCanvas({
             factor: (a.factor + b.factor) / 2,
           };
           const lineWidth = Math.max(2.2, Math.min(7, (a.factor + b.factor) * worldScale * 0.13));
-          context.globalAlpha = atomFocus.mode === "fade" ? (focusA && focusB ? 1 : focusA || focusB ? 0.42 : 0.07) : 1;
+          const bondFocusOpacity = atomFocus.mode === "fade" ? (focusA && focusB ? 1 : focusA || focusB ? 0.42 : 0.07) : 1;
+          context.globalAlpha = bondFocusOpacity * disorderOpacity;
           const bondOutlineColor = "rgba(51, 65, 85, .26)";
           context.strokeStyle = depthStrokeStyle(a, b, bondOutlineColor);
           context.lineWidth = lineWidth + 1.8;
@@ -879,6 +918,9 @@ function CrystalCanvas({
         const donorAtom = structure.atoms[hydrogenBond.donor];
         const hydrogenAtom = structure.atoms[hydrogenBond.hydrogen];
         const acceptorAtom = structure.atoms[hydrogenBond.acceptor];
+        if (!instancesByAtom.has(hydrogenBond.donor)
+          || !instancesByAtom.has(hydrogenBond.hydrogen)
+          || !instancesByAtom.has(hydrogenBond.acceptor)) continue;
         const focusD = matchesFocus(donorAtom);
         const focusH = matchesFocus(hydrogenAtom);
         const focusA = matchesFocus(acceptorAtom);
@@ -977,7 +1019,9 @@ function CrystalCanvas({
         if (clippingOpacity > 0.08) hitTargets.push({ index, x: projection.x, y: projection.y, radius: radius + 5, depth: projection.depth });
         context.save();
         const focusOpacity = atomFocus.mode === "fade" && !focused ? 0.12 : 1;
-        context.globalAlpha = focusOpacity * clippingOpacity;
+        const disorder = disorderSelectionLabel(atom.source, disorderSelections);
+        const disorderOpacity = disorder?.overlay ? 0.62 + atom.source.occupancy * 0.24 : 1;
+        context.globalAlpha = focusOpacity * clippingOpacity * disorderOpacity;
         const gradient = context.createLinearGradient(
           projection.x - radius * 0.45,
           projection.y - radius * 0.55,
@@ -991,9 +1035,20 @@ function CrystalCanvas({
         context.beginPath();
         context.arc(projection.x, projection.y, radius, 0, Math.PI * 2);
         context.fill();
-        context.strokeStyle = index === selectedAtomIndex ? "#08777a" : "rgba(30, 41, 59, .34)";
+        context.strokeStyle = index === selectedAtomIndex
+          ? "#08777a"
+          : disorder
+            ? disorderColor(disorder.assembly, disorder.group)
+            : "rgba(30, 41, 59, .34)";
         context.lineWidth = index === selectedAtomIndex ? 2.4 : 0.85;
         context.stroke();
+        if (disorder && index !== selectedAtomIndex) {
+          context.strokeStyle = disorderColor(disorder.assembly, disorder.group);
+          context.lineWidth = 1.2;
+          context.beginPath();
+          context.arc(projection.x, projection.y, radius + 2.2, 0, Math.PI * 2);
+          context.stroke();
+        }
         if (index === selectedAtomIndex) {
           context.strokeStyle = "rgba(15, 139, 141, .34)";
           context.lineWidth = 2;
@@ -1084,7 +1139,7 @@ function CrystalCanvas({
       context.fillStyle = axis.color;
       context.fillText(axis.label, labelX, labelY);
     }
-  }, [structure, hydrogenBonds, hydrogenBondAppearance, supercell, zClipping, language, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion, english]);
+  }, [structure, hydrogenBonds, hydrogenBondAppearance, supercell, zClipping, disorderSelections, language, display, selectedAtomIndex, selectedOperation, atomFocus, elementAppearance, axisAppearance, orthographic, viewVersion, english]);
 
   useEffect(() => {
     const resize = new ResizeObserver(() => redraw());
@@ -1207,6 +1262,13 @@ function CrystalCanvas({
             className="hydrogen-bond-chip"
             style={{ "--hbond-view-color": hydrogenBondAppearance.color } as React.CSSProperties}
           ><i /> {english ? "H-bond candidates" : "氢键候选"} {hydrogenBonds.length}</div>}
+          {structure.disorder.explicit && <div className="disorder-chip">
+            <i /> {structure.disorder.assemblies.map((assembly) => {
+              const selected = disorderSelections[assembly.id] ?? "all";
+              const assemblyName = assembly.id === "__unassigned__" ? (english ? "Unassigned" : "未指定") : assembly.id;
+              return `${assemblyName}:${selected === "all" ? (english ? "overlay" : "叠加") : `${english ? "conf." : "构象"} ${selected}`}`;
+            }).join(" · ")}
+          </div>}
           {atomFocus.mode !== "none" && <div className="focus-chip">
             <span>{atomFocus.mode === "fade" ? (english ? "Focus" : "聚焦") : (english ? "Isolate" : "单独显示")} · {atomFocus.sourceLabel}</span>
             <button type="button" onClick={onClearAtomFocus}>{english ? "Show all" : "恢复全部"}</button>
@@ -1278,6 +1340,35 @@ function Metric({ label, value, unit }: { label: string; value: string; unit?: s
   return <div className="metric"><span>{label}</span><strong>{value}</strong>{unit && <small>{unit}</small>}</div>;
 }
 
+function occupancyIssueText(
+  issue: CrystalStructure["disorder"]["occupancyIssues"][number],
+  language: Language,
+) {
+  const english = language === "en-US";
+  const observed = issue.observed === undefined ? "" : ` (${issue.observed.toFixed(3)})`;
+  const messages = {
+    "out-of-range": english ? "Occupancy lies outside 0–1" : "占有率超出 0–1",
+    "assembly-sum": english ? "Conformer occupancies do not sum to 1" : "各构象代表占有率之和不为 1",
+    "group-variation": english ? "Occupancies vary within one disorder group" : "同一无序组内的占有率不一致",
+    "partial-ungrouped": english ? "Partial occupancy without standard disorder fields" : "部分占位，但未提供标准无序字段",
+    "incomplete-fields": english ? "Disorder assembly/group fields are incomplete" : "disorder assembly/group 字段不完整",
+  };
+  return `${messages[issue.kind]}${observed}`;
+}
+
+function splitCandidateReasonText(
+  reason: CrystalStructure["disorder"]["splitSiteCandidates"][number]["reasons"][number],
+  language: Language,
+) {
+  const english = language === "en-US";
+  return {
+    "close-position": english ? "close coordinates" : "坐标接近",
+    "complementary-occupancy": english ? "occupancies sum near 1" : "占有率之和接近 1",
+    "matching-label": english ? "paired labels" : "标签成对",
+    "mixed-element": english ? "mixed-element site" : "混合元素位点",
+  }[reason];
+}
+
 export default function Home() {
   const [structure, setStructure] = useState<CrystalStructure>(() => parseCif(DEFAULT_CIF));
   const [fileName, setFileName] = useState("alpha-quartz.cif");
@@ -1285,6 +1376,7 @@ export default function Home() {
   const [display, setDisplay] = useState(defaultDisplay);
   const [supercell, setSupercell] = useState<SupercellSettings>(defaultSupercell);
   const [zClipping, setZClipping] = useState<ZClippingSettings>(defaultZClipping);
+  const [disorderSelections, setDisorderSelections] = useState<DisorderSelections>({});
   const [selectedAtomIndex, setSelectedAtomIndex] = useState(0);
   const [selectedOperationId, setSelectedOperationId] = useState(1);
   const [rightTab, setRightTab] = useState<RightTab>("operations");
@@ -1400,9 +1492,15 @@ export default function Home() {
     const baseFracts = display.completeMolecules
       ? molecularDisplayFracts(structure.atoms, structure.bonds)
       : structure.atoms.map((atom) => atom.fract);
-    const instances = buildDisplayAtomInstances(structure, baseFracts, supercell, display.completeMolecules);
+    const instances = buildDisplayAtomInstances(
+      structure,
+      baseFracts,
+      supercell,
+      display.completeMolecules,
+      disorderSelections,
+    );
     return display.hydrogens ? instances.length : instances.filter((instance) => instance.atom.element !== "H").length;
-  }, [structure, supercell, display.completeMolecules, display.hydrogens]);
+  }, [structure, supercell, display.completeMolecules, display.hydrogens, disorderSelections]);
 
   const calculator = useMemo(() => {
     const input = calculatorInput.map(parseCoordinateInput) as Vec3;
@@ -1467,6 +1565,7 @@ export default function Home() {
       setFileName(file.name);
       setSelectedAtomIndex(0);
       setSelectedOperationId(next.operations[0]?.id ?? 1);
+      setDisorderSelections({});
       setCharacterPointGroup(next.pointGroup);
       setCalculatorOperationId(next.operations[0]?.id ?? 1);
       setCalculatorInput(next.sites[0]
@@ -1499,6 +1598,27 @@ export default function Home() {
 
   function toggleDisplay(key: keyof DisplaySettings) {
     setDisplay((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function selectDisorderConformer(assembly: string, group: string) {
+    setDisorderSelections((current) => ({ ...current, [assembly]: group }));
+    const currentAtom = structure.atoms[selectedAtomIndex];
+    if (group !== "all" && currentAtom) {
+      const currentAssembly = disorderAssemblyKey(currentAtom.source);
+      if (currentAssembly === assembly && currentAtom.source.disorderGroup && currentAtom.source.disorderGroup !== group) {
+        const replacementInGroup = structure.atoms.findIndex((atom) => (
+          disorderAssemblyKey(atom.source) === assembly && atom.source.disorderGroup === group
+        ));
+        const replacement = replacementInGroup >= 0 ? replacementInGroup : structure.atoms.findIndex((atom) => (
+          disorderAssemblyKey(atom.source) !== assembly || !atom.source.disorderGroup
+        ));
+        if (replacement >= 0) setSelectedAtomIndex(replacement);
+      }
+    }
+    const assemblyName = assembly === "__unassigned__" ? text("未指定组装", "unassigned assembly") : `${text("组装", "assembly")} ${assembly}`;
+    setNotice(group === "all"
+      ? text(`${assemblyName} 已叠加显示全部构象`, `${assemblyName} now overlays all conformers`)
+      : text(`${assemblyName} 仅显示构象 ${group}`, `${assemblyName} now shows conformer ${group} only`));
   }
 
   function updateZClipping(side: keyof ZClippingSettings, value: number) {
@@ -1563,6 +1683,11 @@ export default function Home() {
         displayedAtomCount,
       },
       asymmetricSites: structure.sites,
+      disorderAnalysis: {
+        ...structure.disorder,
+        displayedConformers: disorderSelections,
+        interpretation: "Explicit CIF disorder fields are reported separately from geometry-based split-site candidates.",
+      },
       symmetryOperations: structure.operations.map(({ id, xyz, kind, name }) => ({ id, xyz, kind, name })),
       generatedAtoms: structure.atoms.map(({ label, element, fract, source, operationIds }) => ({ label, element, fract, source: source.label, operationIds })),
       hydrogenBondAnalysis: {
@@ -1779,6 +1904,23 @@ export default function Home() {
           <div className="section-heading"><span>{text("数据完整性", "Data integrity")}</span><small>PARSE STATUS</small></div>
           <div className="status-line good"><i>✓</i><span>{text("晶胞参数", "Unit-cell parameters")}</span><strong>{text("完整", "Complete")}</strong></div>
           <div className="status-line good"><i>✓</i><span>{text("分数坐标", "Fractional coordinates")}</span><strong>{english ? `${structure.sites.length} sites` : `${structure.sites.length} 位点`}</strong></div>
+          <button
+            type="button"
+            className={structure.disorder.explicit
+              ? "status-line disorder-status explicit"
+              : structure.disorder.splitSiteCandidates.length || structure.disorder.partialOccupancySiteLabels.length
+                ? "status-line disorder-status warn"
+                : "status-line disorder-status good"}
+            onClick={() => setRightTab("disorder")}
+          >
+            <i>{structure.disorder.explicit ? "D" : structure.disorder.splitSiteCandidates.length ? "?" : "✓"}</i>
+            <span>{text("无序 / 占有率", "Disorder / occupancy")}</span>
+            <strong>{structure.disorder.explicit
+              ? (english ? `${structure.disorder.assemblies.length} assemblies` : `${structure.disorder.assemblies.length} 个组装`)
+              : structure.disorder.splitSiteCandidates.length
+                ? (english ? `${structure.disorder.splitSiteCandidates.length} candidates` : `${structure.disorder.splitSiteCandidates.length} 个候选`)
+                : text("未标注", "Not marked")}</strong>
+          </button>
           <div className={structure.warnings.length ? "status-line warn" : "status-line good"}><i>{structure.warnings.length ? "!" : "✓"}</i><span>{text("对称操作", "Symmetry operations")}</span><strong>{english ? `${structure.operations.length} entries` : `${structure.operations.length} 项`}</strong></div>
         </section>
       </aside>
@@ -1786,7 +1928,7 @@ export default function Home() {
       <section className="workspace">
         <div className="workspace-toolbar">
           <div className="mode-tabs"><button type="button" className="active">{text("结构 + 对称", "Structure + symmetry")}</button><button type="button">{text("操作轨迹", "Operation path")}</button></div>
-          <div className="workspace-stats"><span><i />{displayedAtomCount} {text("显示原子", "displayed atoms")}</span><span>{structure.bonds.length} {text("键", "bonds")} · {hydrogenBonds.length} {text("氢键类型", "H-bond types")}</span><span>{supercellText(supercell)} · {display.completeMolecules ? text("完整分子", "complete molecules") : text("晶胞截断", "cell-clipped")}</span></div>
+          <div className="workspace-stats"><span><i />{displayedAtomCount} {text("显示原子", "displayed atoms")}</span><span>{structure.bonds.length} {text("键", "bonds")} · {hydrogenBonds.length} {text("氢键类型", "H-bond types")}</span>{structure.disorder.explicit && <span>{text("无序组装", "disorder assemblies")} {structure.disorder.assemblies.length}</span>}<span>{supercellText(supercell)} · {display.completeMolecules ? text("完整分子", "complete molecules") : text("晶胞截断", "cell-clipped")}</span></div>
         </div>
         <CrystalCanvas
           structure={structure}
@@ -1794,6 +1936,7 @@ export default function Home() {
           hydrogenBondAppearance={hydrogenBondAppearance}
           supercell={supercell}
           zClipping={zClipping}
+          disorderSelections={disorderSelections}
           language={language}
           display={display}
           selectedAtomIndex={selectedAtomIndex}
@@ -1876,6 +2019,7 @@ export default function Home() {
           <button type="button" className={rightTab === "characters" ? "active" : ""} onClick={() => setRightTab("characters")}>{text("特征标表", "Character tables")}</button>
           <button type="button" className={rightTab === "atoms" ? "active" : ""} onClick={() => setRightTab("atoms")}>{text("原子轨迹", "Atom provenance")}</button>
           <button type="button" className={rightTab === "wyckoff" ? "active" : ""} onClick={() => setRightTab("wyckoff")}>Wyckoff</button>
+          <button type="button" className={rightTab === "disorder" ? "active" : ""} onClick={() => setRightTab("disorder")}>{text("无序", "Disorder")}</button>
           <button type="button" className={rightTab === "hydrogen" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>{text("氢键", "H bonds")}</button>
           <button type="button" className={rightTab === "calculator" ? "active" : ""} onClick={() => setRightTab("calculator")}>{text("坐标计算器", "Coordinate calculator")}</button>
         </nav>
@@ -1996,6 +2140,114 @@ export default function Home() {
               <span className="wyckoff-count"><strong>{multiplicity}</strong><small>{multiplicitySource}</small></span>
             </button>;
           })}
+        </div>}
+
+        {rightTab === "disorder" && <div className="right-content panel-scroll disorder-panel">
+          <div className={structure.disorder.explicit ? "disorder-intro explicit" : "disorder-intro"}>
+            <div>
+              <span>{structure.disorder.explicit
+                ? text("CIF 已标注无序", "Explicit disorder in CIF")
+                : text("CIF 未标注标准无序", "No standard disorder fields")}</span>
+              <small>{structure.disorder.explicit
+                ? (english
+                  ? `${structure.disorder.assemblies.length} assemblies · ${structure.disorder.partialOccupancySiteLabels.length} partial-occupancy sites`
+                  : `${structure.disorder.assemblies.length} 个组装 · ${structure.disorder.partialOccupancySiteLabels.length} 个部分占位`)
+                : (english
+                  ? `${structure.disorder.splitSiteCandidates.length} geometry-based split-site candidates`
+                  : `${structure.disorder.splitSiteCandidates.length} 个几何 split-site 候选`)}</small>
+            </div>
+            <b>{structure.disorder.explicit ? "CIF" : text("筛查", "Screen")}</b>
+          </div>
+
+          <details className="disorder-help">
+            <summary>？ {text("如何判读", "How to interpret")}</summary>
+            <div>
+              <p>{text("assembly 表示彼此关联的一套无序；group 表示互斥构象。标准字段属于 CIF 明示信息。", "An assembly is a correlated disorder model; its groups are mutually exclusive conformers. Standard fields are explicit CIF evidence.")}</p>
+              <p>{text("split-site 候选仅由距离、标签和占有率筛查得到，必须结合差值电子密度、ADP 与精修模型确认。", "Split-site candidates are screened from distance, labels, and occupancy only; confirm them against difference density, ADPs, and the refinement model.")}</p>
+            </div>
+          </details>
+
+          <section className="disorder-section">
+            <div className="disorder-section-head">
+              <span>{text("三维构象切换", "3D conformer switching")}</span>
+              <small>{text("叠加 / 单独显示", "Overlay / isolate")}</small>
+            </div>
+            {structure.disorder.assemblies.length ? structure.disorder.assemblies.map((assembly) => {
+              const selectedGroup = disorderSelections[assembly.id] ?? "all";
+              const assemblyName = assembly.id === "__unassigned__" ? text("未指定组装", "Unassigned assembly") : `${text("组装", "Assembly")} ${assembly.id}`;
+              return <article className="disorder-assembly" key={assembly.id}>
+                <div className="disorder-assembly-head">
+                  <span><strong>{assemblyName}</strong><small>{english ? `${assembly.groups.length} conformers` : `${assembly.groups.length} 个构象`}</small></span>
+                  <em className={assembly.occupancyConsistent ? "consistent" : "inconsistent"}>
+                    {assembly.occupancyConsistent
+                      ? text("Σocc 一致", "Σocc consistent")
+                      : `Σocc ${assembly.occupancySum.toFixed(2)}`}
+                  </em>
+                </div>
+                <div className="conformer-switch" role="group" aria-label={`${assemblyName} ${text("构象显示", "conformer display")}`}>
+                  <button type="button" className={selectedGroup === "all" ? "active" : ""} onClick={() => selectDisorderConformer(assembly.id, "all")}>{text("叠加", "Overlay")}</button>
+                  {assembly.groups.map((group) => <button
+                    type="button"
+                    key={group.id}
+                    className={selectedGroup === group.id ? "active" : ""}
+                    style={{ "--disorder-color": disorderColor(assembly.id, group.id) } as React.CSSProperties}
+                    onClick={() => selectDisorderConformer(assembly.id, group.id)}
+                  ><i />{text("构象", "Conf.")} {group.id}</button>)}
+                </div>
+                <div className="disorder-group-list">
+                  {assembly.groups.map((group) => <button type="button" key={group.id} onClick={() => {
+                    const index = structure.atoms.findIndex((atom) => atom.source.label === group.siteLabels[0]);
+                    if (index >= 0) selectAtom(index);
+                  }}>
+                    <i style={{ "--disorder-color": disorderColor(assembly.id, group.id) } as React.CSSProperties} />
+                    <span><strong>{text("构象", "Conformer")} {group.id}</strong><small>{group.siteLabels.slice(0, 7).join(", ")}{group.siteLabels.length > 7 ? "…" : ""}</small></span>
+                    <em>occ ≈ {group.representativeOccupancy.toFixed(3)}</em>
+                  </button>)}
+                </div>
+              </article>;
+            }) : <div className="disorder-empty">
+              <strong>{text("没有可切换的明示构象", "No explicit conformers to switch")}</strong>
+              <p>{text("只有 CIF 提供 disorder assembly/group 后，软件才会把构象切换作为确定功能启用。", "Conformer switching is enabled as a definitive action only when CIF disorder assembly/group fields are present.")}</p>
+            </div>}
+          </section>
+
+          <section className="disorder-section">
+            <div className="disorder-section-head">
+              <span>{text("占有率一致性", "Occupancy consistency")}</span>
+              <small>{structure.disorder.occupancyIssues.length
+                ? (english ? `${structure.disorder.occupancyIssues.length} findings` : `${structure.disorder.occupancyIssues.length} 项`)
+                : text("通过", "Pass")}</small>
+            </div>
+            {structure.disorder.occupancyIssues.length ? <div className="occupancy-issue-list">
+              {structure.disorder.occupancyIssues.slice(0, 120).map((issue, index) => <button type="button" className={issue.severity} key={`${issue.kind}-${issue.siteLabels.join("-")}-${index}`} onClick={() => {
+                const atomIndex = structure.atoms.findIndex((atom) => atom.source.label === issue.siteLabels[0]);
+                if (atomIndex >= 0) selectAtom(atomIndex);
+              }}>
+                <i>{issue.severity === "error" ? "!" : issue.severity === "warning" ? "△" : "i"}</i>
+                <span><strong>{occupancyIssueText(issue, language)}</strong><small>{issue.siteLabels.slice(0, 8).join(", ")}{issue.siteLabels.length > 8 ? "…" : ""}</small></span>
+              </button>)}
+            </div> : <div className="disorder-pass"><i>✓</i><span><strong>{text("未发现占有率冲突", "No occupancy conflict detected")}</strong><small>{text("显式组装按各组代表占有率求和。", "Explicit assemblies are checked using representative group occupancies.")}</small></span></div>}
+          </section>
+
+          <section className="disorder-section">
+            <div className="disorder-section-head">
+              <span>Split-site {text("候选", "candidates")}</span>
+              <small>{text("软件推测", "Inferred")}</small>
+            </div>
+            {structure.disorder.splitSiteCandidates.length ? <div className="split-candidate-list">
+              {structure.disorder.splitSiteCandidates.slice(0, 80).map((candidate) => <button type="button" key={candidate.id} onClick={() => {
+                const atomIndex = structure.atoms.findIndex((atom) => atom.source.label === candidate.labels[0]);
+                if (atomIndex >= 0) selectAtom(atomIndex);
+              }}>
+                <span className={`candidate-confidence ${candidate.confidence}`}>{candidate.confidence === "strong" ? text("较强", "Strong") : text("中等", "Moderate")}</span>
+                <span><strong>{candidate.labels[0]} ↔ {candidate.labels[1]}</strong><small>{candidate.reasons.map((reason) => splitCandidateReasonText(reason, language)).join(" · ")}</small></span>
+                <em>{candidate.distance.toFixed(2)} Å<br />Σocc {candidate.occupancySum.toFixed(2)}</em>
+              </button>)}
+            </div> : <div className="disorder-empty compact">
+              <strong>{text("未发现未标注的成对 split-site", "No unmarked paired split sites found")}</strong>
+              <p>{text("单个位点的部分占位仍会列入上方占有率检查，但不会被自动配对。", "A lone partially occupied site remains in the occupancy check above but is not paired automatically.")}</p>
+            </div>}
+          </section>
         </div>}
 
         {rightTab === "hydrogen" && <div className="right-content panel-scroll hydrogen-panel">

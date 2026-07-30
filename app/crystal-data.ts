@@ -17,6 +17,49 @@ export type AtomSite = {
   occupancy: number;
   wyckoff: string;
   multiplicity?: number;
+  disorderAssembly?: string;
+  disorderGroup?: string;
+  occupancyRefinementFlag?: string;
+};
+
+export type DisorderGroupSummary = {
+  id: string;
+  siteLabels: string[];
+  representativeOccupancy: number;
+  minimumOccupancy: number;
+  maximumOccupancy: number;
+};
+
+export type DisorderAssemblySummary = {
+  id: string;
+  groups: DisorderGroupSummary[];
+  occupancySum: number;
+  occupancyConsistent: boolean;
+};
+
+export type OccupancyIssue = {
+  kind: "out-of-range" | "assembly-sum" | "group-variation" | "partial-ungrouped" | "incomplete-fields";
+  severity: "error" | "warning" | "info";
+  siteLabels: string[];
+  observed?: number;
+};
+
+export type SplitSiteCandidate = {
+  id: string;
+  labels: [string, string];
+  elements: [string, string];
+  distance: number;
+  occupancySum: number;
+  confidence: "strong" | "moderate";
+  reasons: Array<"close-position" | "complementary-occupancy" | "matching-label" | "mixed-element">;
+};
+
+export type DisorderAnalysis = {
+  explicit: boolean;
+  assemblies: DisorderAssemblySummary[];
+  occupancyIssues: OccupancyIssue[];
+  splitSiteCandidates: SplitSiteCandidate[];
+  partialOccupancySiteLabels: string[];
 };
 
 export type SymmetryOperation = {
@@ -79,6 +122,7 @@ export type CrystalStructure = {
   atoms: AtomInstance[];
   bonds: Bond[];
   formula: string;
+  disorder: DisorderAnalysis;
   warnings: string[];
 };
 
@@ -242,6 +286,11 @@ function numeric(value: string | undefined, fallback: number) {
   if (!value || value === "." || value === "?") return fallback;
   const parsed = Number.parseFloat(value.replace(/\([^)]*\)$/, ""));
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function optionalCifValue(value: string | undefined) {
+  const normalized = value?.trim();
+  return normalized && ![".", "?"].includes(normalized) ? normalized : undefined;
 }
 
 function firstTag(tags: Map<string, string>, aliases: string[]) {
@@ -419,6 +468,7 @@ function closeFract(a: Vec3, b: Vec3) {
 function generateAtoms(sites: AtomSite[], operations: SymmetryOperation[], cell: UnitCell) {
   const atoms: AtomInstance[] = [];
   for (const site of sites) {
+    if (site.occupancy <= 0) continue;
     for (const operation of operations) {
       const fract = applyOperation(operation, site.fract);
       const existing = atoms.find((atom) => atom.element === site.element && atom.source.label === site.label && closeFract(atom.fract, fract));
@@ -449,10 +499,24 @@ function distancePeriodic(a: AtomInstance, b: AtomInstance, cell: UnitCell) {
   return Math.hypot(...cart);
 }
 
+export function disorderAssemblyKey(site: AtomSite) {
+  if (site.disorderAssembly) return site.disorderAssembly;
+  return site.disorderGroup ? "__unassigned__" : undefined;
+}
+
+export function disorderSitesCanCoexist(a: AtomSite, b: AtomSite) {
+  const assemblyA = disorderAssemblyKey(a);
+  const assemblyB = disorderAssemblyKey(b);
+  if (!assemblyA || !assemblyB || assemblyA !== assemblyB) return true;
+  if (!a.disorderGroup || !b.disorderGroup) return true;
+  return a.disorderGroup === b.disorderGroup;
+}
+
 function generateBonds(atoms: AtomInstance[], cell: UnitCell) {
   const bonds: Bond[] = [];
   for (let a = 0; a < atoms.length; a += 1) {
     for (let b = a + 1; b < atoms.length; b += 1) {
+      if (!disorderSitesCanCoexist(atoms[a].source, atoms[b].source)) continue;
       const distance = distancePeriodic(atoms[a], atoms[b], cell);
       const threshold = (elementStyle(atoms[a].element).covalent + elementStyle(atoms[b].element).covalent) * 1.22;
       if (distance > 0.35 && distance <= threshold) {
@@ -462,6 +526,155 @@ function generateBonds(atoms: AtomInstance[], cell: UnitCell) {
     }
   }
   return bonds;
+}
+
+function median(values: number[]) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function periodicSiteDistance(a: AtomSite, b: AtomSite, cell: UnitCell) {
+  const delta = a.fract.map((value, index) => {
+    const raw = value - b.fract[index];
+    return raw - Math.round(raw);
+  }) as Vec3;
+  return Math.hypot(...fractToCart(delta, cell));
+}
+
+function splitLabelStem(label: string) {
+  return label
+    .replace(/([_-]?(?:alt)?[a-z])$/i, "")
+    .replace(/([a-z])(\d+)$/i, "$1$2")
+    .toUpperCase();
+}
+
+export function analyzeDisorder(sites: AtomSite[], cell: UnitCell): DisorderAnalysis {
+  const occupancyIssues: OccupancyIssue[] = [];
+  const assemblySites = new Map<string, AtomSite[]>();
+  const partialOccupancySiteLabels = sites
+    .filter((site) => site.occupancy > 0 && site.occupancy < 0.999)
+    .map((site) => site.label);
+
+  sites.forEach((site) => {
+    if (site.occupancy < 0 || site.occupancy > 1.0001) {
+      occupancyIssues.push({
+        kind: "out-of-range",
+        severity: "error",
+        siteLabels: [site.label],
+        observed: site.occupancy,
+      });
+    }
+    const assembly = disorderAssemblyKey(site);
+    if (assembly) assemblySites.set(assembly, [...(assemblySites.get(assembly) ?? []), site]);
+    if ((site.disorderAssembly && !site.disorderGroup) || (!site.disorderAssembly && site.disorderGroup)) {
+      occupancyIssues.push({
+        kind: "incomplete-fields",
+        severity: "warning",
+        siteLabels: [site.label],
+      });
+    }
+    if (site.occupancy > 0 && site.occupancy < 0.999 && !site.disorderGroup) {
+      occupancyIssues.push({
+        kind: "partial-ungrouped",
+        severity: "info",
+        siteLabels: [site.label],
+        observed: site.occupancy,
+      });
+    }
+  });
+
+  const assemblies = [...assemblySites.entries()].map(([id, members]) => {
+    const grouped = new Map<string, AtomSite[]>();
+    members.forEach((site) => {
+      const group = site.disorderGroup ?? "__shared__";
+      grouped.set(group, [...(grouped.get(group) ?? []), site]);
+    });
+    const groups = [...grouped.entries()]
+      .filter(([group]) => group !== "__shared__")
+      .map(([group, groupSites]) => {
+        const occupancies = groupSites.map((site) => site.occupancy);
+        const representativeOccupancy = median(occupancies);
+        const minimumOccupancy = Math.min(...occupancies);
+        const maximumOccupancy = Math.max(...occupancies);
+        if (maximumOccupancy - minimumOccupancy > 0.08) {
+          occupancyIssues.push({
+            kind: "group-variation",
+            severity: "warning",
+            siteLabels: groupSites.map((site) => site.label),
+            observed: maximumOccupancy - minimumOccupancy,
+          });
+        }
+        return {
+          id: group,
+          siteLabels: groupSites.map((site) => site.label),
+          representativeOccupancy,
+          minimumOccupancy,
+          maximumOccupancy,
+        };
+      })
+      .sort((a, b) => a.id.localeCompare(b.id, "en", { numeric: true }));
+    const occupancySum = groups.reduce((sum, group) => sum + group.representativeOccupancy, 0);
+    const occupancyConsistent = groups.length > 1 && Math.abs(occupancySum - 1) <= 0.08;
+    if (groups.length > 1 && !occupancyConsistent) {
+      occupancyIssues.push({
+        kind: "assembly-sum",
+        severity: Math.abs(occupancySum - 1) > 0.2 ? "error" : "warning",
+        siteLabels: groups.flatMap((group) => group.siteLabels),
+        observed: occupancySum,
+      });
+    }
+    return { id, groups, occupancySum, occupancyConsistent };
+  }).sort((a, b) => a.id.localeCompare(b.id, "en", { numeric: true }));
+
+  const splitSiteCandidates: SplitSiteCandidate[] = [];
+  const candidateSites = sites.filter((site) => (
+    site.occupancy > 0
+    && site.occupancy < 0.999
+    && !site.disorderAssembly
+    && !site.disorderGroup
+  ));
+  for (let a = 0; a < candidateSites.length; a += 1) {
+    for (let b = a + 1; b < candidateSites.length; b += 1) {
+      const first = candidateSites[a];
+      const second = candidateSites[b];
+      const distance = periodicSiteDistance(first, second, cell);
+      const occupancySum = first.occupancy + second.occupancy;
+      const matchingLabel = splitLabelStem(first.label) === splitLabelStem(second.label);
+      const sameElement = first.element === second.element;
+      const closeEnough = sameElement
+        ? (matchingLabel ? distance <= 1.2 : distance <= 0.55)
+        : distance <= 0.3;
+      if (!closeEnough || Math.abs(occupancySum - 1) > 0.2) continue;
+      const reasons: SplitSiteCandidate["reasons"] = ["close-position", "complementary-occupancy"];
+      if (matchingLabel) reasons.push("matching-label");
+      if (!sameElement) reasons.push("mixed-element");
+      const confidence = Math.abs(occupancySum - 1) <= 0.08 && (matchingLabel || distance <= 0.35)
+        ? "strong"
+        : "moderate";
+      splitSiteCandidates.push({
+        id: `${first.label}::${second.label}`,
+        labels: [first.label, second.label],
+        elements: [first.element, second.element],
+        distance,
+        occupancySum,
+        confidence,
+        reasons,
+      });
+    }
+  }
+
+  return {
+    explicit: assemblies.some((assembly) => assembly.groups.length > 0),
+    assemblies,
+    occupancyIssues,
+    splitSiteCandidates: splitSiteCandidates.sort((a, b) => (
+      Number(a.confidence === "moderate") - Number(b.confidence === "moderate")
+      || a.distance - b.distance
+    )),
+    partialOccupancySiteLabels,
+  };
 }
 
 export function molecularComponentIds(atoms: AtomInstance[], bonds: Bond[]) {
@@ -527,6 +740,8 @@ export function findHydrogenBonds(structure: CrystalStructure, criteria: Hydroge
       atoms.forEach((acceptorAtom, acceptor) => {
         if (acceptor === donor || acceptor === hydrogen || !acceptorElements.has(acceptorAtom.element)) return;
         if (adjacency[hydrogen].includes(acceptor)) return;
+        if (!disorderSitesCanCoexist(donorAtom.source, acceptorAtom.source)
+          || !disorderSitesCanCoexist(hydrogenAtom.source, acceptorAtom.source)) return;
         const acceptorImageShift = acceptorAtom.fract.map((value, axis) => -Math.round(value - hydrogenAtom.fract[axis])) as Vec3;
         const acceptorDelta = acceptorAtom.fract.map((value, axis) => (
           value + acceptorImageShift[axis] - hydrogenAtom.fract[axis]
@@ -723,6 +938,18 @@ export function parseCif(text: string): CrystalStructure {
     "_atom_site_wyckoff_label",
     "_atom_site.wyckoff_symbol",
   ]);
+  const idisorderAssembly = findColumn(atomLoop, [
+    "_atom_site_disorder_assembly",
+    "_atom_site.disorder_assembly",
+  ]);
+  const idisorderGroup = findColumn(atomLoop, [
+    "_atom_site_disorder_group",
+    "_atom_site.disorder_group",
+  ]);
+  const ioccupancyRefinementFlag = findColumn(atomLoop, [
+    "_atom_site_refinement_flags_occupancy",
+    "_atom_site.refinement_flags_occupancy",
+  ]);
   const sites: AtomSite[] = atomLoop.rows.map((row, index) => {
     const label = ilabel >= 0 ? row[ilabel] : `A${index + 1}`;
     const wyckoffValue = iwyckoff >= 0 ? row[iwyckoff]?.trim() : undefined;
@@ -733,8 +960,11 @@ export function parseCif(text: string): CrystalStructure {
       occupancy: numeric(iocc >= 0 ? row[iocc] : undefined, 1),
       multiplicity: imult >= 0 ? numeric(row[imult], 0) || undefined : undefined,
       wyckoff: wyckoffValue && ![".", "?"].includes(wyckoffValue) ? wyckoffValue : "—",
+      disorderAssembly: optionalCifValue(idisorderAssembly >= 0 ? row[idisorderAssembly] : undefined),
+      disorderGroup: optionalCifValue(idisorderGroup >= 0 ? row[idisorderGroup] : undefined),
+      occupancyRefinementFlag: optionalCifValue(ioccupancyRefinementFlag >= 0 ? row[ioccupancyRefinementFlag] : undefined),
     };
-  }).filter((site) => site.occupancy > 0);
+  });
 
   const operationAliases = ["_space_group_symop_operation_xyz", "_symmetry_equiv_pos_as_xyz", "_space_group_symop.operation_xyz"];
   const operationLoop = loops.find((loop) => findColumn(loop, operationAliases) >= 0);
@@ -746,10 +976,14 @@ export function parseCif(text: string): CrystalStructure {
     warnings.push("文件未包含对称操作列表，当前仅显示恒等操作；建议导出包含 symop loop 的 CIF。");
     operations = [parseOperation("x,y,z", 1)];
   }
-  if (!sites.length) throw new Error("CIF 中没有可显示的原子位点。");
+  if (!sites.some((site) => site.occupancy > 0)) throw new Error("CIF 中没有可显示的原子位点。");
   const atoms = generateAtoms(sites, operations, cell);
   if (atoms.length > 1800) warnings.push("等价原子较多，视图已自动简化部分标签。");
   const bonds = atoms.length <= 500 ? generateBonds(atoms, cell) : [];
+  const disorder = analyzeDisorder(sites, cell);
+  if (disorder.occupancyIssues.some((issue) => issue.severity === "error")) {
+    warnings.push("占有率检查发现错误，请在“无序”面板中核对。");
+  }
   return {
     name: firstTag(tags, ["_chemical_name_common", "_chemical_name_mineral", "_chemical_name_systematic"]) ?? dataName,
     cell,
@@ -762,6 +996,7 @@ export function parseCif(text: string): CrystalStructure {
     atoms,
     bonds,
     formula: formulaFromCif(explicitFormula) ?? formulaFromAtoms(atoms),
+    disorder,
     warnings,
   };
 }

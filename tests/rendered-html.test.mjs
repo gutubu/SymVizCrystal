@@ -112,6 +112,11 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /Structure overview/);
   assert.match(page, /Hydrogen-bond geometry filter/);
   assert.match(page, /Coordinate calculator/);
+  assert.match(page, /三维构象切换/);
+  assert.match(page, /占有率一致性/);
+  assert.match(page, /Split-site/);
+  assert.match(page, /disorderSelections/);
+  assert.match(page, /Explicit disorder in CIF/);
   assert.match(page, /document\.documentElement\.lang/);
   assert.doesNotMatch(page, /rotation\.current\.pitch/);
   assert.match(parser, /_space_group_symop_operation_xyz/);
@@ -124,6 +129,11 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(parser, /findHydrogenBonds/);
   assert.match(parser, /molecularComponentIds/);
   assert.match(parser, /acceptorImageShift/);
+  assert.match(parser, /_atom_site_disorder_assembly/);
+  assert.match(parser, /_atom_site_disorder_group/);
+  assert.match(parser, /analyzeDisorder/);
+  assert.match(parser, /splitSiteCandidates/);
+  assert.match(parser, /disorderSitesCanCoexist/);
   assert.equal([...characterTableSource.matchAll(/^\s+hm: "/gm)].length, 32);
   assert.match(characterTableSource, /hm: "6\/mmm"/);
   assert.match(characterTableSource, /hm: "m-3m"/);
