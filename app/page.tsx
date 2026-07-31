@@ -49,6 +49,7 @@ type AxisFont = "mono" | "sans" | "serif";
 type AxisAppearance = { lineWidth: number; length: number; font: AxisFont; fontSize: number };
 type AppearanceMenu = { kind: "element"; element: string; x: number; y: number } | { kind: "axis"; x: number; y: number };
 type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "disorder" | "hydrogen" | "calculator";
+type LeftTab = "model" | "style" | "inspect";
 type HydrogenPreset = "strict" | "steiner" | "broad";
 type HydrogenBondAppearance = { color: string; lineWidth: number };
 type SupercellSettings = { a: number; b: number; c: number };
@@ -1380,6 +1381,7 @@ export default function Home() {
   const [selectedAtomIndex, setSelectedAtomIndex] = useState(0);
   const [selectedOperationId, setSelectedOperationId] = useState(1);
   const [rightTab, setRightTab] = useState<RightTab>("operations");
+  const [leftTab, setLeftTab] = useState<LeftTab>("model");
   const [characterPointGroup, setCharacterPointGroup] = useState(() => structure.pointGroup);
   const [operationFilter, setOperationFilter] = useState("all");
   const [calculatorInput, setCalculatorInput] = useState<[string, string, string]>(() => {
@@ -1733,26 +1735,59 @@ export default function Home() {
       }}
     >
       <header className="app-header">
-        <div className="brand">
-          <span className="brand-mark"><i /><b /><em /></span>
-          <div><strong>SYM<span>VIZ</span></strong><small>CRYSTAL SYMMETRY EXPLORER</small></div>
-        </div>
-        <div className="header-structure">
-          <span className="file-status">CIF</span>
-          <div><strong>{structure.name}</strong><small>{fileName}</small></div>
-        </div>
-        <div className="header-actions">
-          <div className="language-switch" role="group" aria-label={text("界面语言", "Interface language")}>
-            <button type="button" className={language === "zh-CN" ? "active" : ""} onClick={() => changeLanguage("zh-CN")}>中文</button>
-            <button type="button" className={language === "en-US" ? "active" : ""} title="English (US)" onClick={() => changeLanguage("en-US")}>EN-US</button>
+        <div className="desktop-title-strip">
+          <div className="brand">
+            <span className="brand-mark"><i /><b /><em /></span>
+            <div><strong>SYM<span>VIZ</span></strong><small>CRYSTAL SYMMETRY EXPLORER</small></div>
           </div>
-          <button type="button" className="ghost-button" onClick={exportReport}>⇩ {text("导出报告", "Export report")}</button>
-          <button type="button" className="primary-button" onClick={() => inputRef.current?.click()}>＋ {text("打开 CIF", "Open CIF")}</button>
+          <div className="header-structure">
+            <span className="file-status">CIF</span>
+            <div><strong>{structure.name}</strong><small>{fileName}</small></div>
+          </div>
+          <div className="header-actions">
+            <div className="language-switch" role="group" aria-label={text("界面语言", "Interface language")}>
+              <button type="button" className={language === "zh-CN" ? "active" : ""} onClick={() => changeLanguage("zh-CN")}>中文</button>
+              <button type="button" className={language === "en-US" ? "active" : ""} title="English (US)" onClick={() => changeLanguage("en-US")}>EN-US</button>
+            </div>
+          </div>
+        </div>
+
+        <nav className="desktop-menubar" aria-label={text("主菜单", "Main menu")}>
+          <button type="button" onClick={() => inputRef.current?.click()}>{text("文件", "File")}</button>
+          <button type="button" className={leftTab === "model" ? "active" : ""} onClick={() => setLeftTab("model")}>{text("结构", "Structure")}</button>
+          <button type="button" className={leftTab === "style" ? "active" : ""} onClick={() => setLeftTab("style")}>{text("样式", "Style")}</button>
+          <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>{text("对称性", "Symmetry")}</button>
+          <button type="button" className={rightTab === "hydrogen" || rightTab === "disorder" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>{text("分析", "Analysis")}</button>
+          <button type="button" className={rightTab === "calculator" ? "active" : ""} onClick={() => setRightTab("calculator")}>{text("工具", "Utilities")}</button>
+          <button type="button" className={rightTab === "characters" ? "active" : ""} onClick={() => setRightTab("characters")}>{text("点群表", "Point-group tables")}</button>
+        </nav>
+
+        <div className="desktop-toolbar" role="toolbar" aria-label={text("常用工具", "Common tools")}>
+          <div className="toolbar-group file-tools">
+            <button type="button" title={text("打开 CIF", "Open CIF")} onClick={() => inputRef.current?.click()}><span>⌁</span><small>{text("打开", "Open")}</small></button>
+            <button type="button" title={text("导出报告", "Export report")} onClick={exportReport}><span>⇩</span><small>{text("报告", "Report")}</small></button>
+          </div>
+          <i className="toolbar-separator" />
+          <div className="toolbar-group layer-tools">
+            <button type="button" className={display.atoms ? "active" : ""} aria-pressed={display.atoms} onClick={() => toggleDisplay("atoms")} title={text("显示原子", "Show atoms")}><span className="tool-atom">●</span><small>{text("原子", "Atoms")}</small></button>
+            <button type="button" className={display.bonds ? "active" : ""} aria-pressed={display.bonds} onClick={() => toggleDisplay("bonds")} title={text("显示化学键", "Show bonds")}><span className="tool-bond">━</span><small>{text("化学键", "Bonds")}</small></button>
+            <button type="button" className={display.cell ? "active" : ""} aria-pressed={display.cell} onClick={() => toggleDisplay("cell")} title={text("显示晶胞", "Show unit cell")}><span>◇</span><small>{text("晶胞", "Cell")}</small></button>
+            <button type="button" className={display.symmetry ? "active" : ""} aria-pressed={display.symmetry} onClick={() => toggleDisplay("symmetry")} title={text("显示对称元素", "Show symmetry elements")}><span>⌘</span><small>{text("对称", "Symmetry")}</small></button>
+            <button type="button" className={display.hydrogenBonds ? "active hbond-tool" : "hbond-tool"} aria-pressed={display.hydrogenBonds} onClick={() => toggleDisplay("hydrogenBonds")} title={text("显示氢键候选", "Show hydrogen-bond candidates")}><span>┄</span><small>{text("氢键", "H bonds")}</small></button>
+            <button type="button" className={display.zClipping ? "active" : ""} aria-pressed={display.zClipping} onClick={() => toggleDisplay("zClipping")} title={text("深度渐隐", "Depth fade")}><span>◐</span><small>Z fade</small></button>
+          </div>
+          <div className="toolbar-readout">
+            <span>{prettyGroup(structure.spaceGroup)}</span>
+            <i />
+            <span>{supercellText(supercell)}</span>
+            <i />
+            <span>{displayedAtomCount} {text("原子", "atoms")}</span>
+          </div>
           <input ref={inputRef} type="file" accept=".cif,text/plain" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) loadFile(file); event.target.value = ""; }} />
         </div>
       </header>
 
-      <aside className="left-panel panel-scroll">
+      <aside className="left-panel panel-scroll" data-active-tab={leftTab}>
         <div className="drawer-control">
           <button
             type="button"
@@ -1765,13 +1800,18 @@ export default function Home() {
             {!sidebarCollapsed && <b>{text("收起边栏", "Collapse")}</b>}
           </button>
         </div>
-        <section className="upload-card" onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}>
+        <nav className="left-mode-tabs" aria-label={text("左侧工作区", "Left workspace")}>
+          <button type="button" className={leftTab === "model" ? "active" : ""} onClick={() => setLeftTab("model")}>{text("模型", "Model")}</button>
+          <button type="button" className={leftTab === "style" ? "active" : ""} onClick={() => setLeftTab("style")}>{text("样式", "Style")}</button>
+          <button type="button" className={leftTab === "inspect" ? "active" : ""} onClick={() => setLeftTab("inspect")}>{text("检查", "Inspect")}</button>
+        </nav>
+        <section className="upload-card" data-left-section="model" onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}>
           <div className="upload-icon">⌁</div>
           <div><strong>{text("载入新的 CIF", "Load a new CIF")}</strong><small>{text("拖放文件，或点击浏览", "Drop a file or click to browse")}</small></div>
           <span>⌘O</span>
         </section>
 
-        <section className="side-section">
+        <section className="side-section" data-left-section="model">
           <div className="section-heading"><span>{text("结构概览", "Structure overview")}</span><small>ASYMMETRIC UNIT</small></div>
           <div className="formula-card">
             <div><span>{text("化学式 · 常规 / Hill 顺序", "Formula · conventional / Hill order")}</span><strong>{structure.formula}</strong></div>
@@ -1789,7 +1829,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="side-section supercell-section">
+        <section className="side-section supercell-section" data-left-section="model">
           <div className="section-heading"><span>{text("超胞 / 显示范围", "Supercell / display range")}</span><small>SUPERCELL</small></div>
           <div className="supercell-card">
             <div className="supercell-presets" aria-label={text("常用超胞预设", "Common supercell presets")}>
@@ -1829,7 +1869,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="side-section display-section">
+        <section className="side-section display-section" data-left-section="style">
           <div className="section-heading"><span>{text("显示控制", "Display controls")}</span><small>VIEW LAYERS</small></div>
           <Toggle label={text("原子球（哑光 CPK）", "Atoms (matte CPK)")} hint={english ? `${structure.atoms.length} equivalent atoms` : `${structure.atoms.length} 个等价原子`} checked={display.atoms} onChange={() => toggleDisplay("atoms")} />
           <Toggle
@@ -1900,7 +1940,7 @@ export default function Home() {
           </div>}
         </section>
 
-        <section className="side-section source-section">
+        <section className="side-section source-section" data-left-section="inspect">
           <div className="section-heading"><span>{text("数据完整性", "Data integrity")}</span><small>PARSE STATUS</small></div>
           <div className="status-line good"><i>✓</i><span>{text("晶胞参数", "Unit-cell parameters")}</span><strong>{text("完整", "Complete")}</strong></div>
           <div className="status-line good"><i>✓</i><span>{text("分数坐标", "Fractional coordinates")}</span><strong>{english ? `${structure.sites.length} sites` : `${structure.sites.length} 位点`}</strong></div>
@@ -1927,7 +1967,7 @@ export default function Home() {
 
       <section className="workspace">
         <div className="workspace-toolbar">
-          <div className="mode-tabs"><button type="button" className="active">{text("结构 + 对称", "Structure + symmetry")}</button><button type="button">{text("操作轨迹", "Operation path")}</button></div>
+          <div className="mode-tabs"><button type="button" className="active">{text("三维晶体视图", "3D crystal view")}</button><button type="button" onClick={() => setRightTab("operations")}>{text("对称检查器", "Symmetry inspector")}</button></div>
           <div className="workspace-stats"><span><i />{displayedAtomCount} {text("显示原子", "displayed atoms")}</span><span>{structure.bonds.length} {text("键", "bonds")} · {hydrogenBonds.length} {text("氢键类型", "H-bond types")}</span>{structure.disorder.explicit && <span>{text("无序组装", "disorder assemblies")} {structure.disorder.assemblies.length}</span>}<span>{supercellText(supercell)} · {display.completeMolecules ? text("完整分子", "complete molecules") : text("晶胞截断", "cell-clipped")}</span></div>
         </div>
         <CrystalCanvas
@@ -1965,6 +2005,12 @@ export default function Home() {
         />
 
         <div className="symmetry-story">
+          <nav className="output-tabbar" aria-label={text("结果面板", "Results panel")}>
+            <span className="active">{text("映射摘要", "Mapping summary")}</span>
+            <button type="button" onClick={() => setRightTab("operations")}>{text("操作", "Operations")}</button>
+            <button type="button" onClick={() => setRightTab("atoms")}>{text("原子轨迹", "Atom provenance")}</button>
+            <button type="button" onClick={() => setRightTab("wyckoff")}>Wyckoff</button>
+          </nav>
           <div className="story-title">
             <div><span className="eyebrow">SYMMETRY MAPPING</span><strong>{text("对称等价位置生成", "Symmetry-equivalent position generation")}</strong></div>
             <div className="story-tools">

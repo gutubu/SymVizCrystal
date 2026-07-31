@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,10 +13,35 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "SymViz — 晶体对称性可视化工作台",
-  description: "读取 CIF，在交互式三维晶胞中追踪空间群、点群、Wyckoff 位点与每个原子的生成操作。",
-};
+const title = "SymViz — 晶体对称性可视化工作台";
+const description = "读取 CIF，在交互式三维晶胞中追踪空间群、点群、Wyckoff 位点与每个原子的生成操作。";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host")
+    ?? requestHeaders.get("host")
+    ?? "symviz-crystal.pixiupi666.chatgpt.site";
+  const protocol = requestHeaders.get("x-forwarded-proto")
+    ?? (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+  const imageUrl = `${protocol}://${host}/og.png`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: "SymViz crystal symmetry workstation" }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [imageUrl],
+    },
+  };
+}
 
 export default function RootLayout({
   children,
