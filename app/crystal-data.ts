@@ -892,8 +892,17 @@ function formulaFromAtoms(atoms: AtomInstance[]) {
   }).join("");
 }
 
+function molecularFormulaFromAtoms(atoms: AtomInstance[]) {
+  const counts = new Map<string, number>();
+  atoms.forEach((atom) => counts.set(atom.element, (counts.get(atom.element) ?? 0) + 1));
+  return [...counts.entries()]
+    .sort(([a], [b]) => hillElementOrder(a, b, counts.has("C")))
+    .map(([element, count]) => element + formulaSubscript(count))
+    .join("");
+}
+
 export function hillElementOrder(a: string, b: string, containsCarbon = true) {
-  if (!containsCarbon) return 0;
+  if (!containsCarbon) return a.localeCompare(b, "en");
   if (containsCarbon) {
     if (a === "C") return b === "C" ? 0 : -1;
     if (b === "C") return 1;
@@ -901,6 +910,268 @@ export function hillElementOrder(a: string, b: string, containsCarbon = true) {
     if (b === "H") return 1;
   }
   return a.localeCompare(b, "en");
+}
+
+type CartesianAtomRecord = {
+  label: string;
+  element: string;
+  cart: Vec3;
+};
+
+type CartesianBondRecord = {
+  a: number;
+  b: number;
+};
+
+function molecularFileName(fileName: string, fallback: string) {
+  return fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() || fallback;
+}
+
+function createMolecularStructure(
+  name: string,
+  records: CartesianAtomRecord[],
+  bondRecords: CartesianBondRecord[],
+  format: "SDF" | "XYZ" | "MOL2" | "PDB",
+  extraWarnings: string[] = [],
+): CrystalStructure {
+  if (!records.length) throw new Error(`${format} 文件中没有找到可显示的原子坐标。`);
+  const minima: Vec3 = [0, 1, 2].map((axis) => Math.min(...records.map((record) => record.cart[axis]))) as Vec3;
+  const maxima: Vec3 = [0, 1, 2].map((axis) => Math.max(...records.map((record) => record.cart[axis]))) as Vec3;
+  const padding = 4;
+  const cell: UnitCell = {
+    a: Math.max(8, maxima[0] - minima[0] + padding * 2),
+    b: Math.max(8, maxima[1] - minima[1] + padding * 2),
+    c: Math.max(8, maxima[2] - minima[2] + padding * 2),
+    alpha: 90,
+    beta: 90,
+    gamma: 90,
+  };
+  const sites: AtomSite[] = records.map((record, index) => ({
+    label: record.label || `${record.element}${index + 1}`,
+    element: normalizeElement(record.element),
+    fract: [
+      (record.cart[0] - minima[0] + padding) / cell.a,
+      (record.cart[1] - minima[1] + padding) / cell.b,
+      (record.cart[2] - minima[2] + padding) / cell.c,
+    ],
+    occupancy: 1,
+    multiplicity: 1,
+    wyckoff: "—",
+  }));
+  const operations = [parseOperation("x,y,z", 1)];
+  const atoms = generateAtoms(sites, operations, cell);
+  atoms.forEach((atom, index) => {
+    atom.label = sites[index]?.label ?? atom.label;
+    atom.id = `${atom.label}-${index + 1}`;
+  });
+  const seenBonds = new Set<string>();
+  const explicitBonds = bondRecords.flatMap(({ a, b }) => {
+    if (a === b || a < 0 || b < 0 || a >= atoms.length || b >= atoms.length) return [];
+    const lower = Math.min(a, b);
+    const upper = Math.max(a, b);
+    const key = `${lower}:${upper}`;
+    if (seenBonds.has(key)) return [];
+    seenBonds.add(key);
+    const distance = Math.hypot(...atoms[lower].cart.map((value, axis) => value - atoms[upper].cart[axis]));
+    return [{ a: lower, b: upper, distance, imageShift: [0, 0, 0] as Vec3 }];
+  });
+  const bonds = explicitBonds.length ? explicitBonds : generateBonds(atoms, cell);
+  return {
+    name,
+    cell,
+    spaceGroup: "P 1",
+    pointGroup: "1",
+    crystalSystem: "分子坐标",
+    sites,
+    operations,
+    atoms,
+    bonds,
+    formula: molecularFormulaFromAtoms(atoms),
+    disorder: analyzeDisorder(sites, cell),
+    warnings: [
+      `${format} 不含完整的晶胞与空间群信息；当前使用自动生成的 P1 显示晶胞，对称性不代表实验晶体对称性。`,
+      ...extraWarnings,
+    ],
+  };
+}
+
+function parseSdfV3000(lines: string[], fileName: string, multipleRecords: boolean) {
+  const atomBegin = lines.findIndex((line) => /M\s+V30\s+BEGIN\s+ATOM/i.test(line));
+  const atomEnd = lines.findIndex((line) => /M\s+V30\s+END\s+ATOM/i.test(line));
+  const bondBegin = lines.findIndex((line) => /M\s+V30\s+BEGIN\s+BOND/i.test(line));
+  const bondEnd = lines.findIndex((line) => /M\s+V30\s+END\s+BOND/i.test(line));
+  if (atomBegin < 0 || atomEnd <= atomBegin) throw new Error("SDF V3000 中没有找到有效的 ATOM 区段。");
+  const atomIdToIndex = new Map<number, number>();
+  const atoms: CartesianAtomRecord[] = [];
+  lines.slice(atomBegin + 1, atomEnd).forEach((line) => {
+    const tokens = line.replace(/^\s*M\s+V30\s+/i, "").trim().split(/\s+/);
+    if (tokens.length < 5) return;
+    const id = Number.parseInt(tokens[0], 10);
+    const element = normalizeElement(tokens[1]);
+    const cart = tokens.slice(2, 5).map(Number) as Vec3;
+    if (!Number.isInteger(id) || !cart.every(Number.isFinite)) return;
+    atomIdToIndex.set(id, atoms.length);
+    atoms.push({ label: `${element}${id}`, element, cart });
+  });
+  const bonds: CartesianBondRecord[] = [];
+  if (bondBegin >= 0 && bondEnd > bondBegin) {
+    lines.slice(bondBegin + 1, bondEnd).forEach((line) => {
+      const tokens = line.replace(/^\s*M\s+V30\s+/i, "").trim().split(/\s+/);
+      if (tokens.length < 4) return;
+      const a = atomIdToIndex.get(Number.parseInt(tokens[2], 10));
+      const b = atomIdToIndex.get(Number.parseInt(tokens[3], 10));
+      if (a !== undefined && b !== undefined) bonds.push({ a, b });
+    });
+  }
+  return createMolecularStructure(
+    lines[0]?.trim() || molecularFileName(fileName, "SDF molecule"),
+    atoms,
+    bonds,
+    "SDF",
+    multipleRecords ? ["SDF 含有多个分子记录，当前仅载入第一个记录。"] : [],
+  );
+}
+
+function parseSdf(text: string, fileName: string) {
+  const records = text.replace(/\r/g, "").split(/\n\$\$\$\$\s*(?:\n|$)/);
+  const lines = records[0].split("\n");
+  if (lines.length < 4) throw new Error("SDF/MOL 文件内容不完整。");
+  const countsLine = lines[3] ?? "";
+  if (/V3000/i.test(countsLine) || lines.some((line) => /M\s+V30\s+BEGIN\s+CTAB/i.test(line))) {
+    return parseSdfV3000(lines, fileName, records.length > 1);
+  }
+  const splitCounts = countsLine.trim().split(/\s+/);
+  const atomCount = Number.parseInt(countsLine.slice(0, 3).trim() || splitCounts[0], 10);
+  const bondCount = Number.parseInt(countsLine.slice(3, 6).trim() || splitCounts[1], 10);
+  if (!Number.isFinite(atomCount) || atomCount <= 0) throw new Error("SDF/MOL 文件的原子计数无效。");
+  const atoms: CartesianAtomRecord[] = [];
+  for (let index = 0; index < atomCount; index += 1) {
+    const line = lines[4 + index] ?? "";
+    const tokens = line.trim().split(/\s+/);
+    const x = Number.parseFloat(line.slice(0, 10).trim() || tokens[0]);
+    const y = Number.parseFloat(line.slice(10, 20).trim() || tokens[1]);
+    const z = Number.parseFloat(line.slice(20, 30).trim() || tokens[2]);
+    const element = normalizeElement(line.slice(31, 34).trim() || tokens[3]);
+    if (![x, y, z].every(Number.isFinite)) throw new Error(`SDF/MOL 第 ${index + 1} 个原子的坐标无效。`);
+    atoms.push({ label: `${element}${index + 1}`, element, cart: [x, y, z] });
+  }
+  const bonds: CartesianBondRecord[] = [];
+  for (let index = 0; index < (Number.isFinite(bondCount) ? bondCount : 0); index += 1) {
+    const line = lines[4 + atomCount + index] ?? "";
+    const tokens = line.trim().split(/\s+/);
+    const a = Number.parseInt(line.slice(0, 3).trim() || tokens[0], 10) - 1;
+    const b = Number.parseInt(line.slice(3, 6).trim() || tokens[1], 10) - 1;
+    if (Number.isInteger(a) && Number.isInteger(b)) bonds.push({ a, b });
+  }
+  const name = lines[0]?.trim() || molecularFileName(fileName, "SDF molecule");
+  return createMolecularStructure(
+    name,
+    atoms,
+    bonds,
+    "SDF",
+    records.length > 1 ? ["SDF 含有多个分子记录，当前仅载入第一个记录。"] : [],
+  );
+}
+
+function parseXyz(text: string, fileName: string) {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const atomCount = Number.parseInt(lines[0]?.trim() ?? "", 10);
+  if (!Number.isFinite(atomCount) || atomCount <= 0) throw new Error("XYZ 首行必须是有效的原子数。");
+  const atoms: CartesianAtomRecord[] = [];
+  for (let index = 0; index < atomCount; index += 1) {
+    const tokens = (lines[index + 2] ?? "").trim().split(/\s+/);
+    if (tokens.length < 4) throw new Error(`XYZ 第 ${index + 1} 个原子记录不完整。`);
+    const element = normalizeElement(tokens[0]);
+    const cart = tokens.slice(1, 4).map(Number) as Vec3;
+    if (!cart.every(Number.isFinite)) throw new Error(`XYZ 第 ${index + 1} 个原子的坐标无效。`);
+    atoms.push({ label: `${element}${index + 1}`, element, cart });
+  }
+  const name = lines[1]?.trim() || molecularFileName(fileName, "XYZ molecule");
+  return createMolecularStructure(name, atoms, [], "XYZ");
+}
+
+function parseMol2(text: string, fileName: string) {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const moleculeSection = lines.findIndex((line) => line.trim().toUpperCase() === "@<TRIPOS>MOLECULE");
+  const atomSection = lines.findIndex((line) => line.trim().toUpperCase() === "@<TRIPOS>ATOM");
+  const bondSection = lines.findIndex((line) => line.trim().toUpperCase() === "@<TRIPOS>BOND");
+  if (atomSection < 0) throw new Error("MOL2 中没有找到 @<TRIPOS>ATOM 区段。");
+  const atomIdToIndex = new Map<number, number>();
+  const atoms: CartesianAtomRecord[] = [];
+  for (let lineIndex = atomSection + 1; lineIndex < lines.length && !lines[lineIndex].trim().startsWith("@<TRIPOS>"); lineIndex += 1) {
+    const tokens = lines[lineIndex].trim().split(/\s+/);
+    if (tokens.length < 6) continue;
+    const id = Number.parseInt(tokens[0], 10);
+    const cart = tokens.slice(2, 5).map(Number) as Vec3;
+    if (!Number.isInteger(id) || !cart.every(Number.isFinite)) continue;
+    const element = normalizeElement(tokens[5].split(".")[0] || tokens[1]);
+    atomIdToIndex.set(id, atoms.length);
+    atoms.push({ label: tokens[1] || `${element}${atoms.length + 1}`, element, cart });
+  }
+  const bonds: CartesianBondRecord[] = [];
+  if (bondSection >= 0) {
+    for (let lineIndex = bondSection + 1; lineIndex < lines.length && !lines[lineIndex].trim().startsWith("@<TRIPOS>"); lineIndex += 1) {
+      const tokens = lines[lineIndex].trim().split(/\s+/);
+      if (tokens.length < 4) continue;
+      const a = atomIdToIndex.get(Number.parseInt(tokens[1], 10));
+      const b = atomIdToIndex.get(Number.parseInt(tokens[2], 10));
+      if (a !== undefined && b !== undefined) bonds.push({ a, b });
+    }
+  }
+  const name = moleculeSection >= 0
+    ? lines.slice(moleculeSection + 1).find((line) => line.trim() && !line.trim().startsWith("@<TRIPOS>"))?.trim()
+    : undefined;
+  return createMolecularStructure(name || molecularFileName(fileName, "MOL2 molecule"), atoms, bonds, "MOL2");
+}
+
+function pdbFallbackElement(atomName: string) {
+  const cleaned = atomName.trim().replace(/^\d+/, "");
+  if (!cleaned) return "X";
+  return normalizeElement(cleaned.length > 1 && /[a-z]/.test(cleaned[1]) ? cleaned.slice(0, 2) : cleaned[0]);
+}
+
+function parsePdb(text: string, fileName: string) {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const serialToIndex = new Map<number, number>();
+  const atoms: CartesianAtomRecord[] = [];
+  lines.forEach((line) => {
+    const record = line.slice(0, 6).trim().toUpperCase();
+    if (record !== "ATOM" && record !== "HETATM") return;
+    const serial = Number.parseInt(line.slice(6, 11).trim(), 10);
+    const x = Number.parseFloat(line.slice(30, 38).trim());
+    const y = Number.parseFloat(line.slice(38, 46).trim());
+    const z = Number.parseFloat(line.slice(46, 54).trim());
+    if (![x, y, z].every(Number.isFinite)) return;
+    const atomName = line.slice(12, 16).trim();
+    const elementField = line.slice(76, 78).trim();
+    const element = elementField ? normalizeElement(elementField) : pdbFallbackElement(atomName);
+    if (Number.isInteger(serial)) serialToIndex.set(serial, atoms.length);
+    atoms.push({ label: `${atomName || element}${Number.isInteger(serial) ? serial : atoms.length + 1}`, element, cart: [x, y, z] });
+  });
+  const bonds: CartesianBondRecord[] = [];
+  lines.forEach((line) => {
+    if (line.slice(0, 6).trim().toUpperCase() !== "CONECT") return;
+    const serials = line.slice(6).trim().split(/\s+/).map((value) => Number.parseInt(value, 10));
+    const a = serialToIndex.get(serials[0]);
+    if (a === undefined) return;
+    serials.slice(1).forEach((serial) => {
+      const b = serialToIndex.get(serial);
+      if (b !== undefined) bonds.push({ a, b });
+    });
+  });
+  const title = lines.find((line) => line.startsWith("TITLE "))?.slice(10).trim();
+  const header = lines.find((line) => line.startsWith("HEADER"))?.slice(10).trim();
+  return createMolecularStructure(title || header || molecularFileName(fileName, "PDB structure"), atoms, bonds, "PDB");
+}
+
+export function parseStructureFile(text: string, fileName: string): CrystalStructure {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  if (extension === "cif") return parseCif(text);
+  if (extension === "sdf" || extension === "mol") return parseSdf(text, fileName);
+  if (extension === "xyz") return parseXyz(text, fileName);
+  if (extension === "mol2") return parseMol2(text, fileName);
+  if (extension === "pdb" || extension === "ent") return parsePdb(text, fileName);
+  throw new Error("暂不支持此文件格式。请选择 CIF、SDF、MOL、XYZ、MOL2 或 PDB 文件。");
 }
 
 export function parseCif(text: string): CrystalStructure {

@@ -43,3 +43,7 @@ next-env.d.ts
 *.tsbuildinfo
 /outputs/
 /work/
+/desktop-release/
+/gaussian-jobs/
+/CRASH
+/input_tmp.in

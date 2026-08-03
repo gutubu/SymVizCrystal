@@ -22,22 +22,32 @@ test("server-renders the SymViz application shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>SymViz — 晶体对称性可视化工作台<\/title>/i);
   assert.match(html, /CRYSTAL SYMMETRY EXPLORER/);
-  assert.match(html, /打开 CIF/);
+  assert.match(html, /打开结构文件/);
   assert.match(html, /对称操作/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
 test("ships CIF parsing and the interactive crystal viewer without starter assets", async () => {
-  const [page, parser, characterTableSource, layout, packageJson] = await Promise.all([
+  const [page, parser, characterTableSource, gaussianTools, bridge, desktopMain, desktopPreload, layout, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/crystal-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/character-tables.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/gaussian-tools.ts", import.meta.url), "utf8"),
+    readFile(new URL("../tools/gaussian-bridge.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../desktop/main.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../desktop/preload.cjs", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /<canvas/);
   assert.match(page, /loadFile\(file/);
+  assert.match(page, /aria-haspopup="menu"/);
+  assert.match(page, /className="desktop-menu-popup"/);
+  assert.match(page, /text\("打开结构文件…", "Open structure file…"\)/);
+  assert.doesNotMatch(page, /title=\{text\("打开 CIF", "Open CIF"\)\}/);
+  assert.match(page, /\.cif,\.sdf,\.mol,\.xyz,\.mol2,\.pdb,\.ent/);
+  assert.match(page, /parseStructureFile\(text, file\.name\)/);
   assert.match(page, /applyOperation/);
   assert.match(page, /onContextMenu/);
   assert.match(page, /聚焦该不对称位点/);
@@ -93,9 +103,9 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /step="0\.25"/);
   assert.match(page, /buildDisplayAtomInstances/);
   assert.match(page, /displayedAtomCount/);
-  assert.match(page, /Z clipping \/ fade/);
-  assert.match(page, /后边界/);
-  assert.match(page, /前边界/);
+  assert.match(page, /Z clipping \/ 后景渐隐/);
+  assert.match(page, /后方裁切位置/);
+  assert.doesNotMatch(page, /前边界|Front boundary|zClipping\.front|frontFade|clippingMaximum/);
   assert.match(page, /渐隐宽度/);
   assert.match(page, /clipSegmentToDepth/);
   assert.match(page, /clipPolygonToDepth/);
@@ -104,7 +114,8 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /smoothstep/);
   assert.match(page, /focusOpacity \* clippingOpacity/);
   assert.match(page, /depthVisible\(projection\.depth\)/);
-  assert.match(page, /越过边界后才完全隐藏/);
+  assert.match(page, /前方原子始终完整显示/);
+  assert.match(page, /return smoothstep\(\(depth - clippingMinimum\) \/ fadeDepth\)/);
   assert.match(page, /type Language = "zh-CN" \| "en-US"/);
   assert.match(page, /symviz-language/);
   assert.match(page, /EN-US/);
@@ -112,6 +123,27 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /Structure overview/);
   assert.match(page, /Hydrogen-bond geometry filter/);
   assert.match(page, /Coordinate calculator/);
+  assert.match(page, /Quantum ESPRESSO 周期晶体计算/);
+  assert.match(page, /Gaussian 分子计算与 Cube 三维数据/);
+  assert.match(page, /Quantum ESPRESSO input \(\.in\)/);
+  assert.match(page, /加入 QE 本地队列/);
+  assert.match(page, /理论方法/);
+  assert.match(page, /gaussianMethodGroups/);
+  assert.match(page, /gaussianBasisGroups/);
+  assert.match(page, /M06-2X/);
+  assert.match(page, /Def2TZVP/);
+  assert.match(page, /自定义理论方法/);
+  assert.match(page, /自定义基组/);
+  assert.match(page, /加入本地队列/);
+  assert.match(page, /本机 Gaussian 16 桥接器/);
+  assert.match(page, /Import Gaussian \.log \/ \.out/);
+  assert.match(page, /CubeSurfaceCanvas/);
+  assert.match(page, /正相位/);
+  assert.match(page, /负相位/);
+  assert.match(page, /v0\.1\.3/);
+  assert.match(page, /SymViz 桌面版 · Gaussian 16/);
+  assert.match(page, /选择 Gaussian 文件夹/);
+  assert.match(page, /window\.symvizDesktop/);
   assert.match(page, /三维构象切换/);
   assert.match(page, /占有率一致性/);
   assert.match(page, /className="occupancy-help"/);
@@ -137,6 +169,19 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(parser, /analyzeDisorder/);
   assert.match(parser, /splitSiteCandidates/);
   assert.match(parser, /disorderSitesCanCoexist/);
+  assert.match(gaussianTools, /buildGaussianInput/);
+  assert.match(gaussianTools, /parseGaussianOutput/);
+  assert.match(gaussianTools, /parseGaussianCube/);
+  assert.match(gaussianTools, /buildCubeIsosurface/);
+  assert.match(bridge, /127\.0\.0\.1/);
+  assert.match(bridge, /x-symviz-token/);
+  assert.match(bridge, /g16\.exe/);
+  assert.match(desktopMain, /contextIsolation: true/);
+  assert.match(desktopMain, /nodeIntegration: false/);
+  assert.match(desktopMain, /sandbox: true/);
+  assert.match(desktopMain, /trustedSender/);
+  assert.match(desktopPreload, /contextBridge\.exposeInMainWorld\("symvizDesktop"/);
+  assert.doesNotMatch(desktopPreload, /exposeInMainWorld\("symvizDesktop",\s*ipcRenderer\)/);
   assert.equal([...characterTableSource.matchAll(/^\s+hm: "/gm)].length, 32);
   assert.match(characterTableSource, /hm: "6\/mmm"/);
   assert.match(characterTableSource, /hm: "m-3m"/);

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 const title = "SymViz — 晶体对称性可视化工作台";
-const description = "读取 CIF，在交互式三维晶胞中追踪空间群、点群、Wyckoff 位点与每个原子的生成操作。";
+const description = "读取 CIF、SDF、XYZ、MOL2 与 PDB，在交互式三维视图中检查晶体对称性、原子与化学键。";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();

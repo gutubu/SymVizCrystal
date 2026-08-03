@@ -22,8 +22,41 @@ import {
   molecularDisplayFracts,
   operationKindLabel,
   parseCif,
+  parseStructureFile,
 } from "./crystal-data";
 import { characterTableForPointGroup, characterTables, normalizePointGroup } from "./character-tables";
+import {
+  type DensityMode,
+  type PowderPoint,
+  calculateDensitySlice,
+  calculatePowderPattern,
+  calculateReflections,
+  ewaldElectrostatics,
+  measureGeometry,
+  reducedCellCandidate,
+} from "./crystal-utilities";
+import {
+  type CubeData,
+  type GaussianCalculation,
+  type GaussianInputOptions,
+  type GaussianOutputSummary,
+  type GaussianScope,
+  type GaussianWorkflow,
+  buildCubeIsosurface,
+  buildGaussianInputFromModel,
+  defaultCubeIsovalue,
+  gaussianAtomIndices,
+  parseGaussianCube,
+  parseGaussianOutput,
+  prepareGaussianModel,
+} from "./gaussian-tools";
+import {
+  type QuantumEspressoInputOptions,
+  type QuantumEspressoOutputSummary,
+  buildQuantumEspressoInput,
+  parseQuantumEspressoOutput,
+  suggestQuantumEspressoPseudopotentials,
+} from "./quantum-espresso-tools";
 
 type DisplaySettings = {
   atoms: boolean;
@@ -48,13 +81,42 @@ type ElementAppearance = Record<string, { color: string; scale: number }>;
 type AxisFont = "mono" | "sans" | "serif";
 type AxisAppearance = { lineWidth: number; length: number; font: AxisFont; fontSize: number };
 type AppearanceMenu = { kind: "element"; element: string; x: number; y: number } | { kind: "axis"; x: number; y: number };
-type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "disorder" | "hydrogen" | "calculator";
+type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "disorder" | "hydrogen" | "calculator"
+  | "geometry" | "cellTools" | "electrostatics" | "diffraction" | "density" | "gaussian";
+type UtilityTarget = Extract<RightTab, "operations" | "geometry" | "cellTools" | "electrostatics" | "diffraction" | "density" | "gaussian">;
 type LeftTab = "model" | "style" | "inspect";
 type HydrogenPreset = "strict" | "steiner" | "broad";
 type HydrogenBondAppearance = { color: string; lineWidth: number };
 type SupercellSettings = { a: number; b: number; c: number };
-type ZClippingSettings = { back: number; front: number; fade: number };
+type ZClippingSettings = { back: number; fade: number };
 type DisorderSelections = Record<string, string>;
+type QuantumSubview = "qe" | "input" | "queue" | "results" | "cube";
+type GaussianJobStatus = "ready" | "queued" | "running" | "completed" | "failed" | "cancelled";
+type GaussianJob = {
+  id: string;
+  remoteId?: string;
+  name: string;
+  input: string;
+  status: GaussianJobStatus;
+  createdAt: string;
+  output?: string;
+  summary?: GaussianOutputSummary;
+};
+type GaussianBridgeHealth = {
+  available: boolean;
+  gaussianRoot?: string;
+  workRoot?: string;
+  message?: string;
+};
+type QuantumEspressoJob = {
+  id: string;
+  remoteId: string;
+  name: string;
+  status: SymVizDesktopJobStatus;
+  createdAt: string;
+  output?: string;
+  summary?: QuantumEspressoOutputSummary;
+};
 type DisplayAtomInstance = {
   atom: AtomInstance;
   index: number;
@@ -76,7 +138,7 @@ const defaultDisplay: DisplaySettings = {
   completeMolecules: true,
 };
 
-const defaultAxisAppearance: AxisAppearance = { lineWidth: 1.5, length: 25, font: "mono", fontSize: 10 };
+const defaultAxisAppearance: AxisAppearance = { lineWidth: 1.5, length: 25, font: "mono", fontSize: 13 };
 const hydrogenBondPresets: Record<HydrogenPreset, HydrogenBondCriteria> = {
   strict: {
     maxHydrogenAcceptorDistance: 2.5,
@@ -103,7 +165,44 @@ const hydrogenBondPresets: Record<HydrogenPreset, HydrogenBondCriteria> = {
 const defaultHydrogenBondCriteria = hydrogenBondPresets.steiner;
 const defaultHydrogenBondAppearance: HydrogenBondAppearance = { color: "#c2185b", lineWidth: 1.8 };
 const defaultSupercell: SupercellSettings = { a: 1, b: 1, c: 1 };
-const defaultZClipping: ZClippingSettings = { back: 0, front: 100, fade: 14 };
+const defaultZClipping: ZClippingSettings = { back: 0, fade: 14 };
+const gaussianMethodGroups = [
+  {
+    zh: "密度泛函方法（DFT）",
+    en: "Density functional methods (DFT)",
+    options: ["B3LYP", "PBE0", "TPSSh", "M06-2X", "wB97XD", "CAM-B3LYP"],
+  },
+  {
+    zh: "从头算与微扰方法",
+    en: "Ab initio and perturbation methods",
+    options: ["HF", "MP2"],
+  },
+] as const;
+const gaussianBasisGroups = [
+  {
+    zh: "Pople 基组",
+    en: "Pople basis sets",
+    options: ["STO-3G", "3-21G", "6-31G(d)", "6-31G(d,p)", "6-311G(d,p)", "6-311++G(d,p)"],
+  },
+  {
+    zh: "Karlsruhe / def2 基组",
+    en: "Karlsruhe / def2 basis sets",
+    options: ["Def2SVP", "Def2TZVP", "Def2TZVPP"],
+  },
+  {
+    zh: "Dunning 相关一致基组",
+    en: "Dunning correlation-consistent basis sets",
+    options: ["cc-pVDZ", "cc-pVTZ", "aug-cc-pVDZ"],
+  },
+  {
+    zh: "有效芯势（ECP）",
+    en: "Effective core potentials (ECP)",
+    options: ["LANL2DZ", "SDD"],
+  },
+] as const;
+const gaussianMethodValues = new Set<string>(gaussianMethodGroups.flatMap((group) => [...group.options]));
+const gaussianBasisValues = new Set<string>(gaussianBasisGroups.flatMap((group) => [...group.options]));
+const customGaussianOption = "__custom__";
 
 function supercellText(value: SupercellSettings) {
   const format = (extent: number) => Number.isInteger(extent) ? String(extent) : extent.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
@@ -259,6 +358,18 @@ function crystalSystemText(value: string, language: Language) {
 function hydrogenStrengthText(strength: HydrogenBond["strength"], language: Language) {
   if (language === "en-US") return { strong: "Strong", moderate: "Moderate", weak: "Weak" }[strength];
   return { strong: "强", moderate: "中等", weak: "弱" }[strength];
+}
+
+function gaussianJobStatusText(status: GaussianJobStatus, language: Language) {
+  const labels: Record<GaussianJobStatus, [string, string]> = {
+    ready: ["待提交", "Ready"],
+    queued: ["排队中", "Queued"],
+    running: ["计算中", "Running"],
+    completed: ["已完成", "Completed"],
+    failed: ["失败", "Failed"],
+    cancelled: ["已取消", "Cancelled"],
+  };
+  return labels[status][language === "en-US" ? 1 : 0];
 }
 
 function IrrepLabel({ value }: { value: string }) {
@@ -594,22 +705,16 @@ function CrystalCanvas({
     const maximumAtomDepth = atomDepths.length ? Math.max(...atomDepths) : 1;
     const atomDepthSpan = Math.max(1e-6, maximumAtomDepth - minimumAtomDepth);
     const clippingMinimum = minimumAtomDepth + atomDepthSpan * zClipping.back / 100;
-    const clippingMaximum = minimumAtomDepth + atomDepthSpan * zClipping.front / 100;
-    const fadeDepth = Math.min(
-      atomDepthSpan * zClipping.fade / 100,
-      Math.max(1e-6, (clippingMaximum - clippingMinimum) / 2),
-    );
+    const fadeDepth = Math.max(1e-6, atomDepthSpan * zClipping.fade / 100);
     const smoothstep = (value: number) => {
       const clamped = Math.max(0, Math.min(1, value));
       return clamped * clamped * (3 - 2 * clamped);
     };
     const depthOpacity = (depth: number) => {
       if (!display.zClipping) return 1;
-      if (zClipping.back > 0 && depth <= clippingMinimum) return 0;
-      if (zClipping.front < 100 && depth >= clippingMaximum) return 0;
-      const backFade = zClipping.back <= 0 ? 1 : smoothstep((depth - clippingMinimum) / fadeDepth);
-      const frontFade = zClipping.front >= 100 ? 1 : smoothstep((clippingMaximum - depth) / fadeDepth);
-      return Math.min(backFade, frontFade);
+      if (zClipping.back <= 0) return 1;
+      if (depth <= clippingMinimum) return 0;
+      return smoothstep((depth - clippingMinimum) / fadeDepth);
     };
     const depthVisible = (depth: number) => depthOpacity(depth) > 0.002;
     const depthStrokeStyle = (
@@ -630,12 +735,11 @@ function CrystalCanvas({
       let startT = 0;
       let endT = 1;
       const deltaDepth = b[2] - a[2];
-      for (const [boundary, keepAbove] of [[clippingMinimum, true], [clippingMaximum, false]] as const) {
-        const aInside = keepAbove ? a[2] >= boundary : a[2] <= boundary;
-        const bInside = keepAbove ? b[2] >= boundary : b[2] <= boundary;
-        if (!aInside && !bInside) return null;
-        if (aInside === bInside) continue;
-        const intersection = (boundary - a[2]) / deltaDepth;
+      const aInside = a[2] >= clippingMinimum;
+      const bInside = b[2] >= clippingMinimum;
+      if (!aInside && !bInside) return null;
+      if (aInside !== bInside) {
+        const intersection = (clippingMinimum - a[2]) / deltaDepth;
         if (!aInside) startT = Math.max(startT, intersection);
         else endT = Math.min(endT, intersection);
       }
@@ -661,8 +765,6 @@ function CrystalCanvas({
         return output;
       };
       polygon = clipAtBoundary(polygon, clippingMinimum, true);
-      if (!polygon.length) return [];
-      polygon = clipAtBoundary(polygon, clippingMaximum, false);
       return polygon.map(projectRotated);
     };
 
@@ -779,7 +881,7 @@ function CrystalCanvas({
             const label = english
               ? `${selectedOperation.label}  ·  rotate ${Math.round(360 / selectedOperation.order)}°  +  translate ${screwTranslationText(selectedOperation, axisFract)} along axis`
               : `${selectedOperation.label}  ·  旋转 ${Math.round(360 / selectedOperation.order)}°  +  轴向平移 ${screwTranslationText(selectedOperation, axisFract)}`;
-            context.font = "600 10px ui-monospace, monospace";
+            context.font = "600 13px ui-monospace, monospace";
             const labelWidth = context.measureText(label).width + 16;
             const labelX = Math.max(10, Math.min(width - labelWidth - 10, b.x + 10));
             const labelY = Math.max(36, Math.min(height - 30, b.y - 10));
@@ -998,7 +1100,7 @@ function CrystalCanvas({
         context.closePath();
         context.fill();
         if (Math.hypot(target.x - source.x, target.y - source.y) > 30) {
-          context.font = "600 11px ui-monospace, monospace";
+          context.font = "600 14px ui-monospace, monospace";
           context.fillText(`${english ? "Operation" : "操作"} ${selectedOperation.id}`, (source.x + target.x) / 2 + 5, (source.y + target.y) / 2 - 5);
         }
         context.restore();
@@ -1060,7 +1162,7 @@ function CrystalCanvas({
 
         if (display.labels && displayAtoms.length <= 120) {
           context.fillStyle = index === selectedAtomIndex ? "#0f5f62" : "rgba(51, 65, 85, .82)";
-          context.font = `${index === selectedAtomIndex ? 650 : 500} 10px ui-monospace, monospace`;
+          context.font = `${index === selectedAtomIndex ? 650 : 500} 13px ui-monospace, monospace`;
           context.fillText(atom.label, projection.x + radius + 4, projection.y - radius - 1);
         }
         context.restore();
@@ -1258,7 +1360,7 @@ function CrystalCanvas({
           <div className={isCrystallographicSupercell(supercell) ? "supercell-chip" : "supercell-chip fractional"}>
             <i />{isCrystallographicSupercell(supercell) ? (english ? "Supercell" : "超胞") : (english ? "Fractional range" : "分数范围")} {supercellText(supercell)}
           </div>
-          {display.zClipping && <div className="z-clipping-chip"><i /> Z fade {zClipping.back}–{zClipping.front}% · {zClipping.fade}%</div>}
+          {display.zClipping && <div className="z-clipping-chip"><i /> {english ? "Rear fade" : "后景渐隐"} {zClipping.back}% · {zClipping.fade}%</div>}
           {display.hydrogenBonds && <div
             className="hydrogen-bond-chip"
             style={{ "--hbond-view-color": hydrogenBondAppearance.color } as React.CSSProperties}
@@ -1370,6 +1472,328 @@ function splitCandidateReasonText(
   }[reason];
 }
 
+function PowderPatternCanvas({
+  points,
+  language,
+}: {
+  points: PowderPoint[];
+  language: Language;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || points.length < 2) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    const margin = { left: 34, right: 9, top: 10, bottom: 24 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    context.strokeStyle = "#bdc4cb";
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(margin.left, margin.top);
+    context.lineTo(margin.left, margin.top + plotHeight);
+    context.lineTo(margin.left + plotWidth, margin.top + plotHeight);
+    context.stroke();
+    context.strokeStyle = "#286fae";
+    context.lineWidth = 1.25;
+    context.beginPath();
+    points.forEach((point, index) => {
+      const x = margin.left + index / (points.length - 1) * plotWidth;
+      const y = margin.top + (1 - point.intensity / 100) * plotHeight;
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    context.stroke();
+    context.fillStyle = "#5f6974";
+    context.font = "11px Segoe UI, sans-serif";
+    context.textAlign = "center";
+    const minimum = points[0].twoTheta;
+    const maximum = points[points.length - 1].twoTheta;
+    for (let tick = 0; tick <= 4; tick += 1) {
+      const x = margin.left + tick / 4 * plotWidth;
+      const value = minimum + tick / 4 * (maximum - minimum);
+      context.fillText(value.toFixed(0), x, height - 9);
+    }
+    context.save();
+    context.translate(10, margin.top + plotHeight / 2);
+    context.rotate(-Math.PI / 2);
+    context.fillText(language === "en-US" ? "Relative intensity" : "相对强度", 0, 0);
+    context.restore();
+    context.fillText(language === "en-US" ? "2θ (°)" : "2θ（°）", margin.left + plotWidth / 2, height - 1);
+  }, [points, language]);
+  return <canvas ref={canvasRef} className="utility-chart powder-chart" aria-label={language === "en-US" ? "Calculated powder diffraction pattern" : "计算粉末衍射图"} />;
+}
+
+function DensityMapCanvas({
+  density,
+  mode,
+  language,
+}: {
+  density: ReturnType<typeof calculateDensitySlice>;
+  mode: DensityMode;
+  language: Language;
+}) {
+  const mapRef = useRef<HTMLCanvasElement>(null);
+  const profileRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = mapRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const ratio = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    const image = context.createImageData(density.size, density.size);
+    density.values.forEach((value, index) => {
+      const shaped = Math.sqrt(value);
+      const red = Math.round(247 - shaped * 205);
+      const green = Math.round(250 - shaped * 117);
+      const blue = Math.round(252 - shaped * 51);
+      image.data[index * 4] = red;
+      image.data[index * 4 + 1] = green;
+      image.data[index * 4 + 2] = blue;
+      image.data[index * 4 + 3] = 255;
+    });
+    const temporary = document.createElement("canvas");
+    temporary.width = density.size;
+    temporary.height = density.size;
+    temporary.getContext("2d")?.putImageData(image, 0, 0);
+    context.imageSmoothingEnabled = true;
+    context.drawImage(temporary, 0, 0, width, height);
+    context.strokeStyle = "rgba(255,255,255,.82)";
+    context.setLineDash([4, 3]);
+    context.beginPath();
+    context.moveTo(0, height / 2);
+    context.lineTo(width, height / 2);
+    context.stroke();
+  }, [density]);
+  useEffect(() => {
+    const canvas = profileRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const ratio = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, width, height);
+    context.strokeStyle = "#bbc3cb";
+    context.beginPath();
+    context.moveTo(25, 7);
+    context.lineTo(25, height - 17);
+    context.lineTo(width - 7, height - 17);
+    context.stroke();
+    context.strokeStyle = "#286fae";
+    context.lineWidth = 1.4;
+    context.beginPath();
+    density.lineProfile.forEach((value, index) => {
+      const x = 25 + index / Math.max(density.lineProfile.length - 1, 1) * (width - 32);
+      const y = 7 + (1 - value) * (height - 24);
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    context.stroke();
+    context.fillStyle = "#68727d";
+    context.font = "11px Segoe UI, sans-serif";
+    context.fillText(language === "en-US" ? "line y = 0.5" : "线剖面 y = 0.5", 30, 13);
+  }, [density, language]);
+  const title = mode === "electron"
+    ? (language === "en-US" ? "Model electron-density slice" : "模型电子密度切片")
+    : mode === "nuclear"
+      ? (language === "en-US" ? "Nuclear-position map" : "核位置密度图")
+      : (language === "en-US" ? "Model Patterson map" : "模型 Patterson 图");
+  return <div className="density-canvases">
+    <canvas ref={mapRef} className="utility-chart density-map" aria-label={title} />
+    <canvas ref={profileRef} className="utility-chart density-profile" aria-label={language === "en-US" ? "Density line profile" : "密度线剖面"} />
+  </div>;
+}
+
+function cubeAtomColor(atomicNumber: number) {
+  return {
+    1: "#f5f7fa",
+    6: "#4f5c6b",
+    7: "#4776e6",
+    8: "#f14f69",
+    9: "#56b86a",
+    15: "#f29a38",
+    16: "#e3c447",
+    17: "#42ad68",
+  }[atomicNumber] ?? "#8a95a4";
+}
+
+function CubeSurfaceCanvas({
+  cube,
+  isovalue,
+  showPositive,
+  showNegative,
+  language,
+}: {
+  cube: CubeData;
+  isovalue: number;
+  showPositive: boolean;
+  showNegative: boolean;
+  language: Language;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rotation = useRef<Quaternion>(initialViewQuaternion());
+  const drag = useRef({ active: false, x: 0, y: 0 });
+  const zoom = useRef(1);
+  const mesh = useMemo(
+    () => buildCubeIsosurface(cube, Math.max(1e-8, Math.abs(isovalue)), showPositive, showNegative),
+    [cube, isovalue, showPositive, showNegative],
+  );
+  const bounds = useMemo(() => {
+    const points = [
+      ...cube.atoms.map((atom) => atom.position),
+      ...mesh.triangles.flatMap((triangle) => [triangle.a, triangle.b, triangle.c]),
+    ];
+    if (!points.length) return { center: [0, 0, 0] as Vec3, radius: 1 };
+    const minimum: Vec3 = [Infinity, Infinity, Infinity];
+    const maximum: Vec3 = [-Infinity, -Infinity, -Infinity];
+    points.forEach((point) => point.forEach((value, axis) => {
+      minimum[axis] = Math.min(minimum[axis], value);
+      maximum[axis] = Math.max(maximum[axis], value);
+    }));
+    const center = minimum.map((value, axis) => (value + maximum[axis]) / 2) as Vec3;
+    const radius = Math.max(1e-6, ...points.map((point) => Math.hypot(
+      point[0] - center[0],
+      point[1] - center[1],
+      point[2] - center[2],
+    )));
+    return { center, radius };
+  }, [cube, mesh]);
+
+  const redraw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(width * ratio));
+    canvas.height = Math.max(1, Math.round(height * ratio));
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    const scale = Math.min(width, height) * 0.39 / bounds.radius * zoom.current;
+    const project = (point: Vec3) => {
+      const relative: Vec3 = [
+        point[0] - bounds.center[0],
+        point[1] - bounds.center[1],
+        point[2] - bounds.center[2],
+      ];
+      const rotated = rotateByQuaternion(relative, rotation.current);
+      return {
+        x: width / 2 + rotated[0] * scale,
+        y: height / 2 - rotated[1] * scale,
+        depth: rotated[2],
+      };
+    };
+    const projectedTriangles = mesh.triangles.map((triangle) => {
+      const a = project(triangle.a);
+      const b = project(triangle.b);
+      const c = project(triangle.c);
+      return { ...triangle, a, b, c, depth: (a.depth + b.depth + c.depth) / 3 };
+    }).sort((a, b) => a.depth - b.depth);
+    projectedTriangles.forEach((triangle) => {
+      context.beginPath();
+      context.moveTo(triangle.a.x, triangle.a.y);
+      context.lineTo(triangle.b.x, triangle.b.y);
+      context.lineTo(triangle.c.x, triangle.c.y);
+      context.closePath();
+      context.fillStyle = triangle.sign > 0 ? "rgba(42, 111, 176, .38)" : "rgba(217, 82, 66, .34)";
+      context.strokeStyle = triangle.sign > 0 ? "rgba(34, 90, 145, .42)" : "rgba(169, 58, 47, .38)";
+      context.lineWidth = 0.45;
+      context.fill();
+      context.stroke();
+    });
+    cube.atoms
+      .map((atom) => ({ atom, projection: project(atom.position) }))
+      .sort((a, b) => a.projection.depth - b.projection.depth)
+      .forEach(({ atom, projection }) => {
+        const atomRadius = Math.max(2.4, Math.min(6.5, 3.4 + atom.atomicNumber ** (1 / 3) * 0.42));
+        context.beginPath();
+        context.arc(projection.x, projection.y, atomRadius, 0, Math.PI * 2);
+        context.fillStyle = cubeAtomColor(atom.atomicNumber);
+        context.strokeStyle = atom.atomicNumber === 1 ? "#aab4bf" : "rgba(42, 49, 58, .65)";
+        context.lineWidth = 0.9;
+        context.fill();
+        context.stroke();
+      });
+    context.fillStyle = "#5e6874";
+    context.font = "12px Segoe UI, sans-serif";
+    context.fillText(
+      language === "en-US"
+        ? `Drag to rotate · wheel to zoom · ${mesh.triangles.length.toLocaleString()} triangles`
+        : `拖拽旋转 · 滚轮缩放 · ${mesh.triangles.length.toLocaleString()} 个三角面`,
+      12,
+      height - 12,
+    );
+  }, [bounds, cube, language, mesh]);
+
+  useEffect(() => {
+    redraw();
+    const resize = new ResizeObserver(redraw);
+    if (canvasRef.current) resize.observe(canvasRef.current);
+    return () => resize.disconnect();
+  }, [redraw]);
+
+  return <div className="cube-canvas-shell">
+    <canvas
+      ref={canvasRef}
+      className="cube-surface-canvas"
+      aria-label={language === "en-US" ? "Gaussian Cube isosurface viewer" : "Gaussian Cube 等值面查看器"}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { active: true, x: event.clientX, y: event.clientY };
+      }}
+      onPointerMove={(event) => {
+        if (!drag.current.active) return;
+        const dx = event.clientX - drag.current.x;
+        const dy = event.clientY - drag.current.y;
+        drag.current.x = event.clientX;
+        drag.current.y = event.clientY;
+        const yaw = quaternionFromAxis([0, 1, 0], dx * 0.008);
+        const pitch = quaternionFromAxis([1, 0, 0], dy * 0.008);
+        rotation.current = normalizeQuaternion(quaternionMultiply(pitch, quaternionMultiply(yaw, rotation.current)));
+        redraw();
+      }}
+      onPointerUp={() => { drag.current.active = false; }}
+      onPointerCancel={() => { drag.current.active = false; }}
+      onWheel={(event) => {
+        event.preventDefault();
+        zoom.current = Math.min(3.5, Math.max(0.35, zoom.current * Math.exp(-event.deltaY * 0.001)));
+        redraw();
+      }}
+    />
+    <div className="cube-legend">
+      {showPositive && <span><i className="positive" />+{Math.abs(isovalue).toExponential(2)}</span>}
+      {showNegative && <span><i className="negative" />−{Math.abs(isovalue).toExponential(2)}</span>}
+      {mesh.stride > 1 && <small>{language === "en-US" ? `preview stride ${mesh.stride}` : `预览步长 ${mesh.stride}`}</small>}
+    </div>
+  </div>;
+}
+
 export default function Home() {
   const [structure, setStructure] = useState<CrystalStructure>(() => parseCif(DEFAULT_CIF));
   const [fileName, setFileName] = useState("alpha-quartz.cif");
@@ -1403,12 +1827,90 @@ export default function Home() {
   }));
   const [hydrogenPreset, setHydrogenPreset] = useState<HydrogenPreset | "custom">("steiner");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [utilitiesMenuOpen, setUtilitiesMenuOpen] = useState(false);
+  const [geometryIndices, setGeometryIndices] = useState<[number, number, number, number]>([0, 1, 2, 3]);
+  const [wavelength, setWavelength] = useState(1.5406);
+  const [diffractionRange, setDiffractionRange] = useState<[number, number]>([5, 80]);
+  const [peakWidth, setPeakWidth] = useState(0.18);
+  const [elementCharges, setElementCharges] = useState<Record<string, number>>({});
+  const [densityMode, setDensityMode] = useState<DensityMode>("electron");
+  const [densitySlice, setDensitySlice] = useState(0.5);
+  const [quantumSubview, setQuantumSubview] = useState<QuantumSubview>("qe");
+  const [qeOptions, setQeOptions] = useState<QuantumEspressoInputOptions>(() => {
+    const elements = [...new Set(structure.atoms.map((atom) => atom.element))];
+    return {
+      title: `${structure.name} — SymViz periodic DFT`,
+      prefix: structure.name.replace(/[^A-Za-z0-9_.-]+/g, "-") || "symviz-qe",
+      calculation: "relax",
+      inputDft: "PBE",
+      dispersion: "d3-bj",
+      occupations: "fixed",
+      smearing: "gaussian",
+      degaussRy: 0.01,
+      ecutwfcRy: 60,
+      ecutrhoRy: 480,
+      kPoints: [2, 2, 2],
+      kPointShift: [0, 0, 0],
+      convThr: 1e-8,
+      forceConvThr: 1e-4,
+      pressureConvThr: 0.5,
+      pseudopotentials: suggestQuantumEspressoPseudopotentials(elements, []),
+    };
+  });
+  const [qeStatus, setQeStatus] = useState<SymVizQeStatus | null>(null);
+  const [qeJobs, setQeJobs] = useState<QuantumEspressoJob[]>([]);
+  const [selectedQeJobId, setSelectedQeJobId] = useState<string | null>(null);
+  const [liveQeOutput, setLiveQeOutput] = useState<SymVizDesktopOutputSnapshot & { jobId: string | null }>({ text: "", size: 0, truncated: false, updatedAt: null, jobId: null });
+  const [followQeOutput, setFollowQeOutput] = useState(true);
+  const [gaussianScope, setGaussianScope] = useState<GaussianScope>("selected-molecule");
+  const [gaussianOptions, setGaussianOptions] = useState<GaussianInputOptions>(() => ({
+    title: `${structure.name} — SymViz`,
+    charge: 0,
+    multiplicity: 1,
+    method: "B3LYP",
+    basis: "6-311G(d,p)",
+    calculation: "opt-freq",
+    memoryGB: 8,
+    processors: 4,
+    solvent: "",
+    routeExtras: "",
+    checkpointName: structure.name.replace(/[^\w.-]+/g, "-") || "symviz-job",
+    workflow: "preopt-final",
+    preoptimizationMethod: "B3LYP",
+    preoptimizationBasis: "6-31G(d)",
+  }));
+  const [gaussianJobs, setGaussianJobs] = useState<GaussianJob[]>([]);
+  const [selectedGaussianJobId, setSelectedGaussianJobId] = useState<string | null>(null);
+  const [liveGaussianOutput, setLiveGaussianOutput] = useState<SymVizDesktopOutputSnapshot & { jobId: string | null }>({ text: "", size: 0, truncated: false, updatedAt: null, jobId: null });
+  const [followGaussianOutput, setFollowGaussianOutput] = useState(true);
+  const [gaussianBridgeUrl, setGaussianBridgeUrl] = useState("http://127.0.0.1:8765");
+  const [gaussianBridgeToken, setGaussianBridgeToken] = useState("");
+  const [gaussianBridgeHealth, setGaussianBridgeHealth] = useState<GaussianBridgeHealth | null>(null);
+  const [desktopStatus, setDesktopStatus] = useState<SymVizDesktopStatus | null>(null);
+  const [cube, setCube] = useState<CubeData | null>(null);
+  const [cubeFileName, setCubeFileName] = useState("");
+  const [cubeProperty, setCubeProperty] = useState<"density" | "esp" | "homo" | "lumo">("density");
+  const [cubeIsovalue, setCubeIsovalue] = useState(0.02);
+  const [cubePositive, setCubePositive] = useState(true);
+  const [cubeNegative, setCubeNegative] = useState(true);
   const [appearanceMenu, setAppearanceMenu] = useState<AppearanceMenu | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const gaussianOutputRef = useRef<HTMLInputElement>(null);
+  const cubeInputRef = useRef<HTMLInputElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
+  const utilitiesMenuRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const appearanceMenuRef = useRef<HTMLDivElement>(null);
+  const liveGaussianOutputRef = useRef<HTMLPreElement>(null);
+  const liveQeOutputRef = useRef<HTMLPreElement>(null);
   const english = language === "en-US";
   const text = (zh: string, en: string) => english ? en : zh;
+  const desktopMode = desktopStatus !== null;
+  const gaussianMethodIsCustom = !gaussianMethodValues.has(gaussianOptions.method);
+  const gaussianBasisIsCustom = !gaussianBasisValues.has(gaussianOptions.basis);
+  const gaussianPreoptimizationMethodIsCustom = !gaussianMethodValues.has(gaussianOptions.preoptimizationMethod ?? "B3LYP");
+  const gaussianPreoptimizationBasisIsCustom = !gaussianBasisValues.has(gaussianOptions.preoptimizationBasis ?? "6-31G(d)");
 
   useEffect(() => {
     const stored = window.localStorage.getItem("symviz-language");
@@ -1419,6 +1921,116 @@ export default function Home() {
       document.documentElement.lang = stored;
     });
     return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    let disposed = false;
+    const mergeQeJobs = async (desktopJobs: SymVizDesktopJob[]) => {
+      const enriched = await Promise.all(desktopJobs.map(async (job) => {
+        const output = ["completed", "failed"].includes(job.status)
+          ? await desktop.getQeOutput(job.id).catch(() => "")
+          : "";
+        return { job, output, summary: output ? parseQuantumEspressoOutput(output) : undefined };
+      }));
+      if (disposed) return;
+      setQeJobs((current) => {
+        const next = [...current];
+        enriched.forEach(({ job, output, summary }) => {
+          const existingIndex = next.findIndex((candidate) => candidate.remoteId === job.id);
+          const value: QuantumEspressoJob = {
+            id: existingIndex >= 0 ? next[existingIndex].id : `qe-${job.id}`,
+            remoteId: job.id,
+            name: job.name,
+            status: job.status,
+            createdAt: job.submittedAt,
+            output: output || (existingIndex >= 0 ? next[existingIndex].output : undefined),
+            summary: summary || (existingIndex >= 0 ? next[existingIndex].summary : undefined),
+          };
+          if (existingIndex >= 0) next[existingIndex] = value;
+          else next.push(value);
+        });
+        return next.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      });
+    };
+    void Promise.all([desktop.getQeStatus(), desktop.listQeJobs()]).then(([status, jobs]) => {
+      if (disposed) return;
+      setQeStatus(status);
+      const elements = [...new Set(structure.atoms.map((atom) => atom.element))];
+      const suggestions = suggestQuantumEspressoPseudopotentials(elements, status.pseudopotentials);
+      setQeOptions((current) => ({
+        ...current,
+        pseudopotentials: Object.fromEntries(elements.map((element) => [
+          element,
+          current.pseudopotentials[element] && current.pseudopotentials[element] !== `${element}.UPF`
+            ? current.pseudopotentials[element]
+            : suggestions[element],
+        ])),
+      }));
+      void mergeQeJobs(jobs);
+    });
+    const unsubscribe = desktop.onQeEvent((job) => { void mergeQeJobs([job]); });
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  // The desktop bridge is initialized once. Structure-specific pseudo suggestions are refreshed when a file is loaded.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    let disposed = false;
+    const mergeDesktopJobs = async (desktopJobs: SymVizDesktopJob[]) => {
+      const enriched = await Promise.all(desktopJobs.map(async (job) => {
+        let output: string | undefined;
+        let summary: GaussianOutputSummary | undefined;
+        if (["completed", "failed"].includes(job.status)) {
+          output = await desktop.getOutput(job.id).catch(() => "");
+          summary = output ? parseGaussianOutput(output) : undefined;
+        }
+        return { job, output, summary };
+      }));
+      if (disposed) return;
+      setGaussianJobs((current) => {
+        const next = [...current];
+        enriched.forEach(({ job, output, summary }) => {
+          const existingIndex = next.findIndex((candidate) => candidate.remoteId === job.id);
+          const value: GaussianJob = {
+            id: existingIndex >= 0 ? next[existingIndex].id : `desktop-${job.id}`,
+            remoteId: job.id,
+            name: job.name,
+            input: existingIndex >= 0 ? next[existingIndex].input : "",
+            status: job.status,
+            createdAt: job.submittedAt,
+            output: output || (existingIndex >= 0 ? next[existingIndex].output : undefined),
+            summary: summary || (existingIndex >= 0 ? next[existingIndex].summary : undefined),
+          };
+          if (existingIndex >= 0) next[existingIndex] = value;
+          else next.push(value);
+        });
+        return next.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      });
+    };
+    void Promise.all([desktop.getStatus(), desktop.listJobs()]).then(([status, jobs]) => {
+      if (disposed) return;
+      setDesktopStatus(status);
+      setGaussianBridgeHealth({
+        available: status.available,
+        gaussianRoot: status.gaussianRoot,
+        workRoot: status.workRoot,
+      });
+      void mergeDesktopJobs(jobs);
+    });
+    const unsubscribe = desktop.onGaussianEvent((job) => {
+      void mergeDesktopJobs([job]);
+    });
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
   }, []);
 
   function changeLanguage(nextLanguage: Language) {
@@ -1479,6 +2091,133 @@ export default function Home() {
     structure.atoms.forEach((atom) => counts.set(atom.element, (counts.get(atom.element) ?? 0) + 1));
     return [...counts.entries()].sort(([a], [b]) => hillElementOrder(a, b, counts.has("C")));
   }, [structure]);
+  const validGeometryIndices = useMemo(
+    () => geometryIndices.map((index) => Math.min(index, Math.max(0, structure.atoms.length - 1))) as [number, number, number, number],
+    [geometryIndices, structure.atoms.length],
+  );
+  const geometryResult = useMemo(
+    () => measureGeometry(structure, validGeometryIndices),
+    [structure, validGeometryIndices],
+  );
+  const reducedCandidate = useMemo(() => reducedCellCandidate(structure.cell), [structure.cell]);
+  const reflections = useMemo(
+    () => calculateReflections(structure, wavelength, diffractionRange[0], diffractionRange[1]),
+    [structure, wavelength, diffractionRange],
+  );
+  const powderPattern = useMemo(
+    () => calculatePowderPattern(reflections, diffractionRange[0], diffractionRange[1], 0.1, peakWidth),
+    [reflections, diffractionRange, peakWidth],
+  );
+  const strongestReflections = useMemo(
+    () => [...reflections].sort((a, b) => b.intensity - a.intensity).slice(0, 80),
+    [reflections],
+  );
+  const electrostatics = useMemo(
+    () => ewaldElectrostatics(structure, elementCharges),
+    [structure, elementCharges],
+  );
+  const density = useMemo(
+    () => calculateDensitySlice(structure, densityMode, densitySlice),
+    [structure, densityMode, densitySlice],
+  );
+  const gaussianIndices = useMemo(
+    () => gaussianAtomIndices(structure, selectedAtomIndex, gaussianScope),
+    [structure, selectedAtomIndex, gaussianScope],
+  );
+  const gaussianModel = useMemo(
+    () => prepareGaussianModel(structure, gaussianIndices, gaussianScope),
+    [structure, gaussianIndices, gaussianScope],
+  );
+  const gaussianInput = useMemo(
+    () => buildGaussianInputFromModel(structure, gaussianModel, gaussianOptions),
+    [structure, gaussianModel, gaussianOptions],
+  );
+  const qePreparedInput = useMemo(
+    () => buildQuantumEspressoInput(structure, qeOptions),
+    [structure, qeOptions],
+  );
+  const availableQePseudoNames = useMemo(
+    () => new Set((qeStatus?.pseudopotentials ?? []).map((file) => file.toLocaleLowerCase())),
+    [qeStatus?.pseudopotentials],
+  );
+  const unavailableQePseudopotentials = qeStatus?.pseudoRoot
+    ? qePreparedInput.requiredPseudopotentials.filter((file) => !availableQePseudoNames.has(file.toLocaleLowerCase()))
+    : qePreparedInput.requiredPseudopotentials;
+  const selectedQeJob = qeJobs.find((job) => job.id === selectedQeJobId) ?? qeJobs[0] ?? null;
+  const runningQeJob = qeJobs.find((job) => job.status === "running") ?? null;
+  const liveQeRemoteId = runningQeJob?.remoteId ?? null;
+  const visibleLiveQeOutput = liveQeOutput.jobId === liveQeRemoteId
+    ? liveQeOutput
+    : { text: "", size: 0, truncated: false, updatedAt: null };
+  const selectedGaussianJob = gaussianJobs.find((job) => job.id === selectedGaussianJobId) ?? gaussianJobs[0] ?? null;
+  const runningGaussianJobs = gaussianJobs.filter((job) => job.status === "running");
+  const queuedGaussianJobs = gaussianJobs.filter((job) => job.status === "queued");
+  const liveGaussianJob = runningGaussianJobs.find((job) => job.remoteId) ?? null;
+  const liveGaussianRemoteId = liveGaussianJob?.remoteId ?? null;
+  const visibleLiveGaussianOutput = liveGaussianOutput.jobId === liveGaussianRemoteId
+    ? liveGaussianOutput
+    : { text: "", size: 0, truncated: false, updatedAt: null };
+  const visibleGaussianJobs = useMemo(() => {
+    const newerNames = new Set<string>();
+    return gaussianJobs.filter((job) => {
+      const key = job.name.trim().toLocaleLowerCase();
+      const obsoleteRetry = newerNames.has(key) && ["failed", "cancelled"].includes(job.status);
+      newerNames.add(key);
+      return !obsoleteRetry;
+    });
+  }, [gaussianJobs]);
+
+  useEffect(() => {
+    const desktop = window.symvizDesktop;
+    if (!desktop || !liveGaussianRemoteId) return;
+    let disposed = false;
+    let timer = 0;
+    const pollOutput = async () => {
+      try {
+        const snapshot = await desktop.getOutputTail(liveGaussianRemoteId, 240_000);
+        if (!disposed) setLiveGaussianOutput({ ...snapshot, jobId: liveGaussianRemoteId });
+      } catch {
+        // The output file may not exist during Gaussian startup; retry quietly.
+      }
+      if (!disposed) timer = window.setTimeout(pollOutput, 1000);
+    };
+    void pollOutput();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, [liveGaussianRemoteId]);
+
+  useEffect(() => {
+    if (!followGaussianOutput || !liveGaussianOutputRef.current) return;
+    liveGaussianOutputRef.current.scrollTop = liveGaussianOutputRef.current.scrollHeight;
+  }, [followGaussianOutput, visibleLiveGaussianOutput.text]);
+
+  useEffect(() => {
+    const desktop = window.symvizDesktop;
+    if (!desktop || !liveQeRemoteId) return;
+    let disposed = false;
+    let timer = 0;
+    const pollOutput = async () => {
+      try {
+        const snapshot = await desktop.getQeOutputTail(liveQeRemoteId, 240_000);
+        if (!disposed) setLiveQeOutput({ ...snapshot, jobId: liveQeRemoteId });
+      } catch {
+        // pw.x may not have created its output file yet; retry quietly.
+      }
+      if (!disposed) timer = window.setTimeout(pollOutput, 1000);
+    };
+    void pollOutput();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, [liveQeRemoteId]);
+
+  useEffect(() => {
+    if (!followQeOutput || !liveQeOutputRef.current) return;
+    liveQeOutputRef.current.scrollTop = liveQeOutputRef.current.scrollHeight;
+  }, [followQeOutput, visibleLiveQeOutput.text]);
 
   const hydrogenBonds = useMemo(
     () => findHydrogenBonds(structure, hydrogenBondCriteria),
@@ -1536,6 +2275,8 @@ export default function Home() {
   useEffect(() => {
     const closeMenu = (event: PointerEvent) => {
       const target = event.target as Node;
+      if (!fileMenuRef.current?.contains(target)) setFileMenuOpen(false);
+      if (!utilitiesMenuRef.current?.contains(target)) setUtilitiesMenuOpen(false);
       if (!contextMenuRef.current?.contains(target) && !appearanceMenuRef.current?.contains(target)) {
         setContextMenu(null);
         setAppearanceMenu(null);
@@ -1543,8 +2284,15 @@ export default function Home() {
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        setFileMenuOpen(false);
+        setUtilitiesMenuOpen(false);
         setContextMenu(null);
         setAppearanceMenu(null);
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") {
+        event.preventDefault();
+        setFileMenuOpen(false);
+        inputRef.current?.click();
       }
     };
     document.addEventListener("pointerdown", closeMenu);
@@ -1556,29 +2304,51 @@ export default function Home() {
   }, []);
 
   async function loadFile(file: File) {
-    if (!file.name.toLowerCase().endsWith(".cif")) {
-      setNotice(text("请选择 .cif 格式的晶体结构文件", "Please select a crystal structure file in .cif format"));
+    if (!/\.(?:cif|sdf|mol|xyz|mol2|pdb|ent)$/i.test(file.name)) {
+      setNotice(text("请选择 CIF、SDF、MOL、XYZ、MOL2 或 PDB 结构文件", "Please select a CIF, SDF, MOL, XYZ, MOL2, or PDB structure file"));
       return;
     }
     try {
       const text = await file.text();
-      const next = parseCif(text);
+      const next = parseStructureFile(text, file.name);
       setStructure(next);
       setFileName(file.name);
       setSelectedAtomIndex(0);
       setSelectedOperationId(next.operations[0]?.id ?? 1);
+      setGeometryIndices([
+        0,
+        Math.min(1, Math.max(0, next.atoms.length - 1)),
+        Math.min(2, Math.max(0, next.atoms.length - 1)),
+        Math.min(3, Math.max(0, next.atoms.length - 1)),
+      ]);
+      setElementCharges({});
       setDisorderSelections({});
       setCharacterPointGroup(next.pointGroup);
       setCalculatorOperationId(next.operations[0]?.id ?? 1);
       setCalculatorInput(next.sites[0]
         ? next.sites[0].fract.map((value) => value.toFixed(6)) as [string, string, string]
         : ["0", "0", "0"]);
+      setGaussianOptions((current) => ({
+        ...current,
+        title: `${next.name} — SymViz`,
+        checkpointName: next.name.replace(/[^\w.-]+/g, "-") || "symviz-job",
+      }));
+      const qeElements = [...new Set(next.atoms.map((atom) => atom.element))];
+      const qePseudos = suggestQuantumEspressoPseudopotentials(qeElements, qeStatus?.pseudopotentials ?? []);
+      setQeOptions((current) => ({
+        ...current,
+        title: `${next.name} — SymViz periodic DFT`,
+        prefix: next.name.replace(/[^A-Za-z0-9_.-]+/g, "-") || "symviz-qe",
+        pseudopotentials: qePseudos,
+      }));
+      setCube(null);
+      setCubeFileName("");
       setAtomFocus({ mode: "none", sourceLabel: null });
       setContextMenu(null);
       setAppearanceMenu(null);
       setNotice(english
-        ? `Parsed ${next.atoms.length} equivalent atoms and ${next.operations.length} symmetry operations`
-        : `已解析 ${next.atoms.length} 个等价原子与 ${next.operations.length} 个对称操作`);
+        ? `Loaded ${file.name}: ${next.atoms.length} atoms and ${next.bonds.length} bonds`
+        : `已载入 ${file.name}：${next.atoms.length} 个原子、${next.bonds.length} 条化学键`);
     } catch (error) {
       setNotice(english ? "Could not parse the CIF. Please check the file format." : (error instanceof Error ? error.message : "CIF 解析失败，请检查文件格式"));
     }
@@ -1589,6 +2359,417 @@ export default function Home() {
     setCalculatorOperationId(operation.id);
     const matchingAtom = structure.atoms.findIndex((atom) => atom.operationIds.includes(operation.id));
     if (matchingAtom >= 0) setSelectedAtomIndex(matchingAtom);
+  }
+
+  function openUtility(target: UtilityTarget, mode?: DensityMode) {
+    setUtilitiesMenuOpen(false);
+    setRightTab(target);
+    if (mode) setDensityMode(mode);
+  }
+
+  function downloadTextFile(name: string, contents: string, type = "text/plain;charset=utf-8") {
+    const blob = new Blob([contents], { type });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = name;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function chooseQuantumEspressoRoot() {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    try {
+      setQeStatus(await desktop.chooseQeRoot());
+      setNotice(text("Quantum ESPRESSO 安装目录已连接", "Quantum ESPRESSO installation connected"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法选择 Quantum ESPRESSO 目录", "Could not select the Quantum ESPRESSO folder"));
+    }
+  }
+
+  async function chooseQuantumEspressoPseudoRoot() {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    try {
+      const status = await desktop.chooseQePseudoRoot();
+      setQeStatus(status);
+      const suggestions = suggestQuantumEspressoPseudopotentials(qePreparedInput.diagnostics.elements, status.pseudopotentials);
+      setQeOptions((current) => ({ ...current, pseudopotentials: suggestions }));
+      setNotice(text("QE 赝势目录已连接，并已按元素自动匹配", "QE pseudopotentials connected and matched by element"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法选择赝势目录", "Could not select the pseudopotential folder"));
+    }
+  }
+
+  async function refreshQuantumEspresso() {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    try {
+      const [status, jobs] = await Promise.all([desktop.getQeStatus(), desktop.listQeJobs()]);
+      setQeStatus(status);
+      const refreshed = await Promise.all(jobs.map(async (job) => {
+        const output = ["completed", "failed"].includes(job.status) ? await desktop.getQeOutput(job.id).catch(() => "") : "";
+        return {
+          id: `qe-${job.id}`,
+          remoteId: job.id,
+          name: job.name,
+          status: job.status,
+          createdAt: job.submittedAt,
+          output: output || undefined,
+          summary: output ? parseQuantumEspressoOutput(output) : undefined,
+        } satisfies QuantumEspressoJob;
+      }));
+      setQeJobs(refreshed);
+      setNotice(text("Quantum ESPRESSO 状态已刷新", "Quantum ESPRESSO status refreshed"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法刷新 QE 状态", "Could not refresh QE status"));
+    }
+  }
+
+  async function submitQuantumEspressoJob() {
+    const desktop = window.symvizDesktop;
+    const issues = [...qePreparedInput.diagnostics.blockingIssues];
+    if (unavailableQePseudopotentials.length) issues.push(`UPF: ${unavailableQePseudopotentials.join(", ")}`);
+    if (issues.length) {
+      setNotice(text(`QE 导出已阻止：${issues.join("；")}`, `QE export blocked: ${issues.join("; ")}`));
+      return;
+    }
+    if (!desktop || !qeStatus?.available) {
+      setNotice(text("尚未检测到 pw.exe / pw.x；可先下载输入文件", "pw.exe / pw.x is not connected; the input can still be downloaded"));
+      return;
+    }
+    try {
+      const submitted = await desktop.submitQeJob({
+        name: qeOptions.prefix,
+        input: qePreparedInput.input,
+        pseudopotentials: qePreparedInput.requiredPseudopotentials,
+      });
+      const job: QuantumEspressoJob = {
+        id: `qe-${submitted.id}`,
+        remoteId: submitted.id,
+        name: submitted.name,
+        status: submitted.status,
+        createdAt: submitted.submittedAt,
+      };
+      setQeJobs((current) => [job, ...current.filter((candidate) => candidate.remoteId !== job.remoteId)]);
+      setSelectedQeJobId(job.id);
+      setNotice(text("周期 DFT 任务已加入 QE 本地队列", "Periodic DFT job added to the local QE queue"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("QE 任务提交失败", "Could not submit the QE job"));
+    }
+  }
+
+  async function cancelQuantumEspressoJob(job: QuantumEspressoJob) {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    try {
+      const cancelled = await desktop.cancelQeJob(job.remoteId);
+      setQeJobs((current) => current.map((candidate) => candidate.remoteId === job.remoteId
+        ? { ...candidate, status: cancelled.status }
+        : candidate));
+      setNotice(text("Quantum ESPRESSO 任务已取消", "Quantum ESPRESSO job cancelled"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法取消 QE 任务", "Could not cancel the QE job"));
+    }
+  }
+
+  function createGaussianJob() {
+    if (gaussianModel.diagnostics.blockingIssues.length) {
+      setNotice(text(
+        `Gaussian 导出已阻止：${gaussianModel.diagnostics.blockingIssues.join("；")}`,
+        `Gaussian export blocked: ${gaussianModel.diagnostics.blockingIssues.join(" ")}`,
+      ));
+      return;
+    }
+    const id = window.crypto?.randomUUID?.() ?? `job-${Date.now()}`;
+    const stem = (gaussianOptions.checkpointName || gaussianOptions.title || "symviz-job")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[^\w.-]+/g, "-") || "symviz-job";
+    const job: GaussianJob = {
+      id,
+      name: stem,
+      input: gaussianInput,
+      status: "ready",
+      createdAt: new Date().toISOString(),
+    };
+    setGaussianJobs((current) => [job, ...current]);
+    setSelectedGaussianJobId(id);
+    setQuantumSubview("queue");
+    setRightTab("gaussian");
+    setNotice(text("Gaussian 输入已加入本地队列", "Gaussian input added to the local queue"));
+  }
+
+  async function importGaussianOutput(file: File) {
+    try {
+      const output = await file.text();
+      const summary = parseGaussianOutput(output);
+      const id = window.crypto?.randomUUID?.() ?? `output-${Date.now()}`;
+      const job: GaussianJob = {
+        id,
+        name: file.name.replace(/\.(?:log|out)$/i, "") || "gaussian-output",
+        input: "",
+        status: summary.status === "completed" ? "completed" : summary.status === "failed" ? "failed" : "running",
+        createdAt: new Date(file.lastModified || Date.now()).toISOString(),
+        output,
+        summary,
+      };
+      setGaussianJobs((current) => [job, ...current]);
+      setSelectedGaussianJobId(id);
+      setQuantumSubview("results");
+      setRightTab("gaussian");
+      setNotice(summary.normalTermination
+        ? text("Gaussian 输出解析完成", "Gaussian output parsed")
+        : text("输出已载入，但未检测到正常终止", "Output loaded; normal termination was not detected"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("Gaussian 输出解析失败", "Could not parse the Gaussian output"));
+    }
+  }
+
+  async function importCubeFile(file: File) {
+    try {
+      const nextCube = parseGaussianCube(await file.text());
+      setCube(nextCube);
+      setCubeFileName(file.name);
+      setCubeIsovalue(defaultCubeIsovalue(nextCube));
+      setQuantumSubview("cube");
+      setRightTab("gaussian");
+      setNotice(text(`已载入 ${file.name} 的三维网格`, `Loaded the 3D grid from ${file.name}`));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("Cube 文件解析失败", "Could not parse the Cube file"));
+    }
+  }
+
+  async function checkGaussianBridge() {
+    if (window.symvizDesktop) {
+      try {
+        const status = await window.symvizDesktop.getStatus();
+        setDesktopStatus(status);
+        setGaussianBridgeHealth({
+          available: status.available,
+          gaussianRoot: status.gaussianRoot,
+          workRoot: status.workRoot,
+        });
+        setNotice(status.available
+          ? text("桌面版已连接 Gaussian 16", "Gaussian 16 is connected to the desktop app")
+          : text("尚未检测到 Gaussian 16", "Gaussian 16 has not been detected"));
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : text("无法检查 Gaussian", "Could not check Gaussian"));
+      }
+      return;
+    }
+    try {
+      const response = await fetch(`${gaussianBridgeUrl.replace(/\/$/, "")}/health`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const health = await response.json() as {
+        gaussianRoot?: string;
+        workRoot?: string;
+        binaries?: Record<string, { available: boolean }>;
+      };
+      const available = Boolean(health.binaries?.g16?.available);
+      setGaussianBridgeHealth({ available, gaussianRoot: health.gaussianRoot, workRoot: health.workRoot });
+      setNotice(available
+        ? text("本机 Gaussian 16 桥接器已连接", "Connected to the local Gaussian 16 bridge")
+        : text("桥接器已连接，但未找到 Gaussian 16", "Bridge connected, but Gaussian 16 was not found"));
+    } catch (error) {
+      setGaussianBridgeHealth({
+        available: false,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      setNotice(text("未连接本机 Gaussian 桥接器", "The local Gaussian bridge is not connected"));
+    }
+  }
+
+  async function chooseDesktopGaussianRoot() {
+    if (!window.symvizDesktop) return;
+    try {
+      const status = await window.symvizDesktop.chooseGaussianRoot();
+      setDesktopStatus(status);
+      setGaussianBridgeHealth({
+        available: status.available,
+        gaussianRoot: status.gaussianRoot,
+        workRoot: status.workRoot,
+      });
+      setNotice(status.available
+        ? text("Gaussian 16 安装目录已连接", "Gaussian 16 installation connected")
+        : text("未选择 Gaussian 16 安装目录", "No Gaussian 16 installation selected"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法选择 Gaussian 目录", "Could not select the Gaussian folder"));
+    }
+  }
+
+  async function cancelGaussianJob(job: GaussianJob) {
+    if (!window.symvizDesktop || !job.remoteId) return;
+    try {
+      const cancelled = await window.symvizDesktop.cancelJob(job.remoteId);
+      setGaussianJobs((current) => current.map((candidate) => candidate.id === job.id
+        ? { ...candidate, status: cancelled.status }
+        : candidate));
+      setNotice(text("Gaussian 任务已取消", "Gaussian job cancelled"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法取消任务", "Could not cancel the job"));
+    }
+  }
+
+  async function submitGaussianJob(job: GaussianJob) {
+    if (window.symvizDesktop) {
+      try {
+        setGaussianJobs((current) => current.map((candidate) => candidate.id === job.id ? { ...candidate, status: "queued" } : candidate));
+        const submitted = await window.symvizDesktop.submitJob({ name: job.name, input: job.input });
+        setGaussianJobs((current) => current.map((candidate) => candidate.id === job.id
+          ? { ...candidate, remoteId: submitted.id, status: submitted.status }
+          : candidate));
+        setNotice(text("Gaussian 已由 SymViz 桌面版直接启动", "Gaussian was started directly by SymViz Desktop"));
+      } catch (error) {
+        setGaussianJobs((current) => current.map((candidate) => candidate.id === job.id ? { ...candidate, status: "failed" } : candidate));
+        setNotice(error instanceof Error ? error.message : text("任务启动失败", "Could not start the job"));
+      }
+      return;
+    }
+    if (!gaussianBridgeToken.trim()) {
+      setNotice(text("请先填写桥接器终端显示的访问令牌", "Enter the access token shown by the bridge terminal"));
+      return;
+    }
+    try {
+      setGaussianJobs((current) => current.map((candidate) => candidate.id === job.id ? { ...candidate, status: "queued" } : candidate));
+      const response = await fetch(`${gaussianBridgeUrl.replace(/\/$/, "")}/jobs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-symviz-token": gaussianBridgeToken.trim(),
+        },
+        body: JSON.stringify({ name: job.name, input: job.input }),
+      });
+      const result = await response.json() as { job?: { id: string; status: GaussianJobStatus }; error?: string };
+      if (!response.ok || !result.job) throw new Error(result.error || `HTTP ${response.status}`);
+      setGaussianJobs((current) => current.map((candidate) => candidate.id === job.id
+        ? { ...candidate, remoteId: result.job!.id, status: result.job!.status }
+        : candidate));
+      setNotice(text("Gaussian 任务已提交至本机", "Gaussian job submitted locally"));
+    } catch (error) {
+      setGaussianJobs((current) => current.map((candidate) => candidate.id === job.id ? { ...candidate, status: "failed" } : candidate));
+      setNotice(error instanceof Error ? error.message : text("任务提交失败", "Job submission failed"));
+    }
+  }
+
+  async function refreshGaussianJobs() {
+    if (window.symvizDesktop) {
+      try {
+        const remoteJobs = await window.symvizDesktop.listJobs();
+        const refreshed = await Promise.all(gaussianJobs.map(async (job) => {
+          if (!job.remoteId) return job;
+          const remote = remoteJobs.find((candidate) => candidate.id === job.remoteId);
+          if (!remote) return job;
+          const output = ["completed", "failed"].includes(remote.status)
+            ? await window.symvizDesktop!.getOutput(remote.id).catch(() => job.output || "")
+            : job.output;
+          return {
+            ...job,
+            status: remote.status,
+            output,
+            summary: output ? parseGaussianOutput(output) : job.summary,
+          };
+        }));
+        const knownRemoteIds = new Set(refreshed.map((job) => job.remoteId).filter(Boolean));
+        remoteJobs.forEach((remote) => {
+          if (knownRemoteIds.has(remote.id)) return;
+          refreshed.push({
+            id: `desktop-${remote.id}`,
+            remoteId: remote.id,
+            name: remote.name,
+            input: "",
+            status: remote.status,
+            createdAt: remote.submittedAt,
+          });
+        });
+        setGaussianJobs(refreshed.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+        setNotice(text("桌面任务状态已刷新", "Desktop job status refreshed"));
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : text("无法刷新桌面任务", "Could not refresh desktop jobs"));
+      }
+      return;
+    }
+    if (!gaussianBridgeToken.trim()) {
+      setNotice(text("请填写桥接器访问令牌", "Enter the bridge access token"));
+      return;
+    }
+    try {
+      const base = gaussianBridgeUrl.replace(/\/$/, "");
+      const headers = { "x-symviz-token": gaussianBridgeToken.trim() };
+      const response = await fetch(`${base}/jobs`, { headers, cache: "no-store" });
+      const result = await response.json() as { jobs?: Array<{ id: string; status: GaussianJobStatus }>; error?: string };
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      const remoteJobs = new Map((result.jobs ?? []).map((job) => [job.id, job]));
+      const refreshed = await Promise.all(gaussianJobs.map(async (job) => {
+        if (!job.remoteId) return job;
+        const remote = remoteJobs.get(job.remoteId);
+        if (!remote) return job;
+        if (!["completed", "failed"].includes(remote.status)) return { ...job, status: remote.status };
+        const outputResponse = await fetch(`${base}/jobs/${job.remoteId}/output`, { headers, cache: "no-store" });
+        const output = outputResponse.ok ? await outputResponse.text() : job.output;
+        return {
+          ...job,
+          status: remote.status,
+          output,
+          summary: output ? parseGaussianOutput(output) : job.summary,
+        };
+      }));
+      setGaussianJobs(refreshed);
+      setNotice(text("本地任务状态已刷新", "Local job status refreshed"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法刷新任务", "Could not refresh jobs"));
+    }
+  }
+
+  async function generateCubeForJob(job: GaussianJob) {
+    if (window.symvizDesktop && job.remoteId) {
+      try {
+        setNotice(text("正在由 Gaussian 检查点生成 Cube…", "Generating a Cube file from the Gaussian checkpoint…"));
+        await window.symvizDesktop.generateCube(job.remoteId, cubeProperty);
+        const result = await window.symvizDesktop.readCube(job.remoteId, cubeProperty);
+        const nextCube = parseGaussianCube(result.text);
+        setCube(nextCube);
+        setCubeFileName(result.fileName);
+        setCubeIsovalue(defaultCubeIsovalue(nextCube));
+        setQuantumSubview("cube");
+        setNotice(text("Cube 已生成并载入三维查看器", "Cube generated and loaded in the 3D viewer"));
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : text("Cube 生成失败", "Cube generation failed"));
+      }
+      return;
+    }
+    if (!job.remoteId || !gaussianBridgeToken.trim()) {
+      setNotice(text("只有由本机桥接器完成的任务可以直接生成 Cube", "Only jobs completed by the local bridge can generate a Cube directly"));
+      return;
+    }
+    try {
+      const base = gaussianBridgeUrl.replace(/\/$/, "");
+      const headers = {
+        "content-type": "application/json",
+        "x-symviz-token": gaussianBridgeToken.trim(),
+      };
+      setNotice(text("正在由检查点文件生成 Cube…", "Generating a Cube file from the checkpoint…"));
+      const response = await fetch(`${base}/jobs/${job.remoteId}/cube`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ property: cubeProperty }),
+      });
+      const result = await response.json() as { fileName?: string; downloadUrl?: string; error?: string };
+      if (!response.ok || !result.downloadUrl) throw new Error(result.error || `HTTP ${response.status}`);
+      const cubeResponse = await fetch(`${base}${result.downloadUrl}`, {
+        headers: { "x-symviz-token": gaussianBridgeToken.trim() },
+        cache: "no-store",
+      });
+      if (!cubeResponse.ok) throw new Error(`HTTP ${cubeResponse.status}`);
+      const nextCube = parseGaussianCube(await cubeResponse.text());
+      setCube(nextCube);
+      setCubeFileName(result.fileName || `${job.name}-${cubeProperty}.cube`);
+      setCubeIsovalue(defaultCubeIsovalue(nextCube));
+      setQuantumSubview("cube");
+      setNotice(text("Cube 已生成并载入三维查看器", "Cube generated and loaded in the 3D viewer"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("Cube 生成失败", "Cube generation failed"));
+    }
   }
 
   function selectAtom(index: number) {
@@ -1625,8 +2806,7 @@ export default function Home() {
 
   function updateZClipping(side: keyof ZClippingSettings, value: number) {
     setZClipping((current) => {
-      if (side === "back") return { ...current, back: Math.min(value, current.front - 2) };
-      if (side === "front") return { ...current, front: Math.max(value, current.back + 2) };
+      if (side === "back") return { ...current, back: Math.max(0, Math.min(98, value)) };
       return { ...current, fade: Math.max(1, Math.min(40, value)) };
     });
   }
@@ -1739,9 +2919,11 @@ export default function Home() {
           <div className="brand">
             <span className="brand-mark"><i /><b /><em /></span>
             <div><strong>SYM<span>VIZ</span></strong><small>CRYSTAL SYMMETRY EXPLORER</small></div>
+            <span className="app-version">v0.1.3</span>
+            {desktopMode && <span className="desktop-edition-badge">DESKTOP</span>}
           </div>
           <div className="header-structure">
-            <span className="file-status">CIF</span>
+            <span className="file-status">{fileName.split(".").pop()?.toUpperCase() ?? "DATA"}</span>
             <div><strong>{structure.name}</strong><small>{fileName}</small></div>
           </div>
           <div className="header-actions">
@@ -1753,18 +2935,103 @@ export default function Home() {
         </div>
 
         <nav className="desktop-menubar" aria-label={text("主菜单", "Main menu")}>
-          <button type="button" onClick={() => inputRef.current?.click()}>{text("文件", "File")}</button>
+          <div className="menubar-menu" ref={fileMenuRef}>
+            <button
+              type="button"
+              className={fileMenuOpen ? "menu-trigger active" : "menu-trigger"}
+              aria-haspopup="menu"
+              aria-expanded={fileMenuOpen}
+              onClick={() => setFileMenuOpen((current) => !current)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setFileMenuOpen(true);
+                }
+              }}
+            >
+              {text("文件", "File")}<span aria-hidden="true">▾</span>
+            </button>
+            <div className="desktop-menu-popup" role="menu" hidden={!fileMenuOpen}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFileMenuOpen(false);
+                  inputRef.current?.click();
+                }}
+              >
+                <span aria-hidden="true">⌁</span>
+                <b>{text("打开结构文件…", "Open structure file…")}</b>
+                <kbd>Ctrl+O</kbd>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFileMenuOpen(false);
+                  exportReport();
+                }}
+              >
+                <span aria-hidden="true">⇩</span>
+                <b>{text("导出报告", "Export report")}</b>
+              </button>
+              <div className="desktop-menu-formats">CIF · SDF · MOL · XYZ · MOL2 · PDB</div>
+            </div>
+          </div>
           <button type="button" className={leftTab === "model" ? "active" : ""} onClick={() => setLeftTab("model")}>{text("结构", "Structure")}</button>
           <button type="button" className={leftTab === "style" ? "active" : ""} onClick={() => setLeftTab("style")}>{text("样式", "Style")}</button>
           <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>{text("对称性", "Symmetry")}</button>
           <button type="button" className={rightTab === "hydrogen" || rightTab === "disorder" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>{text("分析", "Analysis")}</button>
-          <button type="button" className={rightTab === "calculator" ? "active" : ""} onClick={() => setRightTab("calculator")}>{text("工具", "Utilities")}</button>
+          <div className="menubar-menu" ref={utilitiesMenuRef}>
+            <button
+              type="button"
+              className={[
+                "menu-trigger",
+                utilitiesMenuOpen ? "active" : "",
+                ["calculator", "geometry", "cellTools", "electrostatics", "diffraction", "density", "gaussian"].includes(rightTab) ? "active" : "",
+              ].filter(Boolean).join(" ")}
+              aria-haspopup="menu"
+              aria-expanded={utilitiesMenuOpen}
+              onClick={() => setUtilitiesMenuOpen((current) => !current)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setUtilitiesMenuOpen(true);
+                }
+              }}
+            >
+              {text("工具", "Utilities")}<span aria-hidden="true">▾</span>
+            </button>
+            <div className="desktop-menu-popup utilities-menu-popup" role="menu" hidden={!utilitiesMenuOpen}>
+              <button type="button" role="menuitem" onClick={() => openUtility("operations")}><span>≡</span><b>{text("等价位置…", "Equivalent Positions…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => openUtility("geometry")}><span>∠</span><b>{text("几何参数…", "Geometrical Parameters…")}</b></button>
+              <div className="desktop-menu-divider" />
+              <button type="button" role="menuitem" onClick={() => openUtility("cellTools")}><span>□</span><b>{text("晶体数据标准化", "Standardization of Crystal Data")}</b></button>
+              <button type="button" role="menuitem" onClick={() => openUtility("cellTools")}><span>N</span><b>{text("Niggli 约化晶胞", "Niggli-Reduced Cell")}</b></button>
+              <button type="button" role="menuitem" onClick={() => openUtility("electrostatics")}><span>±</span><b>{text("位点电势与 Madelung 能…", "Site Potentials and Madelung Energy…")}</b></button>
+              <div className="desktop-menu-divider" />
+              <button type="button" role="menuitem" onClick={() => openUtility("diffraction")}><span>⌁</span><b>{text("粉末衍射图…", "Powder Diffraction Pattern…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => openUtility("diffraction")}><span>F</span><b>{text("结构因子…", "Structure Factors…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => openUtility("density", "electron")}><span>Σ</span><b>{text("傅里叶合成…", "Fourier Synthesis…")}</b></button>
+              <div className="desktop-menu-divider" />
+              <button type="button" role="menuitem" onClick={() => openUtility("density", "electron")}><span>e</span><b>{text("模型电子密度…", "Model Electron Densities…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => openUtility("density", "nuclear")}><span>n</span><b>{text("模型核密度…", "Model Nuclear Densities…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => openUtility("density", "patterson")}><span>P</span><b>Patterson {text("密度…", "Densities…")}</b></button>
+              <div className="desktop-menu-divider" />
+              <button type="button" role="menuitem" onClick={() => openUtility("density")}><span>▦</span><b>{text("二维数据显示…", "2D Data Display…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => openUtility("density")}><span>⌇</span><b>{text("线剖面…", "Line Profile…")}</b></button>
+              <div className="desktop-menu-divider" />
+              <button type="button" role="menuitem" onClick={() => { openUtility("gaussian"); setQuantumSubview("qe"); }}><span>Q</span><b>{text("Quantum ESPRESSO 周期计算…", "Quantum ESPRESSO Periodic DFT…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => { openUtility("gaussian"); setQuantumSubview("input"); }}><span>G</span><b>{text("Gaussian 分子计算…", "Gaussian Molecular Calculation…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => { openUtility("gaussian"); setQuantumSubview("cube"); }}><span>◈</span><b>{text("Cube 三维等值面…", "Cube Isosurfaces…")}</b></button>
+            </div>
+          </div>
+          <button type="button" className={rightTab === "gaussian" ? "active" : ""} onClick={() => { setRightTab("gaussian"); setQuantumSubview("qe"); }}>{text("量化", "Quantum")}</button>
           <button type="button" className={rightTab === "characters" ? "active" : ""} onClick={() => setRightTab("characters")}>{text("点群表", "Point-group tables")}</button>
         </nav>
 
         <div className="desktop-toolbar" role="toolbar" aria-label={text("常用工具", "Common tools")}>
           <div className="toolbar-group file-tools">
-            <button type="button" title={text("打开 CIF", "Open CIF")} onClick={() => inputRef.current?.click()}><span>⌁</span><small>{text("打开", "Open")}</small></button>
             <button type="button" title={text("导出报告", "Export report")} onClick={exportReport}><span>⇩</span><small>{text("报告", "Report")}</small></button>
           </div>
           <i className="toolbar-separator" />
@@ -1783,7 +3050,9 @@ export default function Home() {
             <i />
             <span>{displayedAtomCount} {text("原子", "atoms")}</span>
           </div>
-          <input ref={inputRef} type="file" accept=".cif,text/plain" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) loadFile(file); event.target.value = ""; }} />
+          <input ref={inputRef} type="file" accept=".cif,.sdf,.mol,.xyz,.mol2,.pdb,.ent,text/plain,chemical/x-cif,chemical/x-mdl-sdfile,chemical/x-mol2,chemical/x-xyz" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) loadFile(file); event.target.value = ""; }} />
+          <input ref={gaussianOutputRef} type="file" accept=".log,.out,text/plain" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importGaussianOutput(file); event.target.value = ""; }} />
+          <input ref={cubeInputRef} type="file" accept=".cube,.cub,text/plain" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importCubeFile(file); event.target.value = ""; }} />
         </div>
       </header>
 
@@ -1807,7 +3076,7 @@ export default function Home() {
         </nav>
         <section className="upload-card" data-left-section="model" onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") inputRef.current?.click(); }}>
           <div className="upload-icon">⌁</div>
-          <div><strong>{text("载入新的 CIF", "Load a new CIF")}</strong><small>{text("拖放文件，或点击浏览", "Drop a file or click to browse")}</small></div>
+          <div><strong>{text("载入结构文件", "Load a structure file")}</strong><small>CIF · SDF · XYZ · MOL2 · PDB</small></div>
           <span>⌘O</span>
         </section>
 
@@ -1893,35 +3162,23 @@ export default function Home() {
           <Toggle label={text("原子标签", "Atom labels")} hint={text("元素与编号", "Element and index")} checked={display.labels} onChange={() => toggleDisplay("labels")} />
           <Toggle label={text("对称元素", "Symmetry elements")} hint={text("轴 / 面 / 映射轨迹", "Axes / planes / mapping path")} checked={display.symmetry} onChange={() => toggleDisplay("symmetry")} />
           <Toggle
-            label="Z clipping / fade"
-            hint={display.zClipping ? (english ? `Fade across ${zClipping.back}–${zClipping.front}% along the view direction` : `沿观察方向在 ${zClipping.back}–${zClipping.front}% 内渐隐`) : text("沿当前观察方向平滑虚化深度", "Fade depth smoothly along the current view direction")}
+            label={text("Z clipping / 后景渐隐", "Z clipping / rear fade")}
+            hint={display.zClipping ? (english ? `Rear cutoff ${zClipping.back}% with a ${zClipping.fade}% feather` : `仅虚化后景：裁切 ${zClipping.back}%，渐隐宽度 ${zClipping.fade}%`) : text("仅沿当前观察方向虚化后景", "Fade only the rear depth along the current view direction")}
             checked={display.zClipping}
             onChange={() => toggleDisplay("zClipping")}
           />
           {display.zClipping && <div className="z-clipping-controls">
-            <div className="z-clipping-head"><span>{text("深度渐隐范围", "Depth fade range")}</span><button type="button" onClick={() => setZClipping(defaultZClipping)}>{text("重置", "Reset")}</button></div>
+            <div className="z-clipping-head"><span>{text("后景深度渐隐", "Rear depth fade")}</span><button type="button" onClick={() => setZClipping(defaultZClipping)}>{text("重置", "Reset")}</button></div>
             <label>
-              <span>{text("后边界", "Back boundary")}<output>{zClipping.back}%</output></span>
+              <span>{text("后方裁切位置", "Rear cutoff")}<output>{zClipping.back}%</output></span>
               <input
                 type="range"
                 min="0"
                 max="98"
                 step="1"
                 value={zClipping.back}
-                aria-label={text("后渐隐边界", "Back fade boundary")}
+                aria-label={text("后方裁切位置", "Rear cutoff")}
                 onChange={(event) => updateZClipping("back", Number(event.target.value))}
-              />
-            </label>
-            <label>
-              <span>{text("前边界", "Front boundary")}<output>{zClipping.front}%</output></span>
-              <input
-                type="range"
-                min="2"
-                max="100"
-                step="1"
-                value={zClipping.front}
-                aria-label={text("前渐隐边界", "Front fade boundary")}
-                onChange={(event) => updateZClipping("front", Number(event.target.value))}
               />
             </label>
             <label>
@@ -1936,7 +3193,7 @@ export default function Home() {
                 onChange={(event) => updateZClipping("fade", Number(event.target.value))}
               />
             </label>
-            <p>{text("边界内按渐隐宽度平滑虚化，越过边界后才完全隐藏；旋转晶体后会按新视角更新。", "Objects fade smoothly inside each boundary over the feather width and disappear only beyond it. The fade updates after rotation.")}</p>
+            <p>{text("前方原子始终完整显示；只有后景从裁切位置向前平滑渐显。旋转后按新视角更新。", "Front atoms always remain fully opaque. Only the rear depth fades in smoothly from the cutoff, updating with the view.")}</p>
           </div>}
         </section>
 
@@ -2067,7 +3324,17 @@ export default function Home() {
           <button type="button" className={rightTab === "wyckoff" ? "active" : ""} onClick={() => setRightTab("wyckoff")}>Wyckoff</button>
           <button type="button" className={rightTab === "disorder" ? "active" : ""} onClick={() => setRightTab("disorder")}>{text("无序", "Disorder")}</button>
           <button type="button" className={rightTab === "hydrogen" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>{text("氢键", "H bonds")}</button>
-          <button type="button" className={rightTab === "calculator" ? "active" : ""} onClick={() => setRightTab("calculator")}>{text("坐标计算器", "Coordinate calculator")}</button>
+          <button type="button" className={rightTab === "gaussian" ? "active" : ""} onClick={() => { setRightTab("gaussian"); setQuantumSubview("qe"); }}>{text("量化", "Quantum")}</button>
+          <button
+            type="button"
+            className={["calculator", "geometry", "cellTools", "electrostatics", "diffraction", "density"].includes(rightTab) ? "active" : ""}
+            onClick={() => setRightTab("calculator")}
+          >{rightTab === "geometry" ? text("几何参数", "Geometry")
+            : rightTab === "cellTools" ? text("晶胞工具", "Cell tools")
+              : rightTab === "electrostatics" ? text("静电势", "Electrostatics")
+                : rightTab === "diffraction" ? text("衍射", "Diffraction")
+                  : rightTab === "density" ? text("密度图", "Density maps")
+                    : text("坐标计算器", "Coordinate calculator")}</button>
         </nav>
 
         {rightTab === "operations" && <div className="right-content panel-scroll">
@@ -2420,8 +3687,8 @@ export default function Home() {
             <p>{english ? <><b>Steiner (2002)</b>: hydrogen-bond strength is continuous and has no natural boundary. For automated screening, H···A distances up to 3.0–3.2 Å may be considered; an angular lower limit of 90° is permissive and 110° is more conservative.</> : <><b>Steiner (2002)</b>：氢键强度连续、没有天然分界。若必须自动筛选，可考虑 H···A 至 3.0–3.2 Å；角度下限可取 90°，更保守取 110°。</>}</p>
             <div className="hydrogen-guide-table">
               <span>{text("几何引导值", "Geometry guide")}</span><b>{text("强", "Strong")}</b><b>{text("中等", "Moderate")}</b><b>{text("弱", "Weak")}</b>
-              <span>H···A / Å</span><em>1.2–1.5</em><em>1.5–2.2</em><em>&gt; 2.2</em>
-              <span>D···A / Å</span><em>2.2–2.5</em><em>2.5–3.2</em><em>&gt; 3.2</em>
+              <span>{text("H···A（Å）", "H···A (Å)")}</span><em>1.2–1.5</em><em>1.5–2.2</em><em>&gt; 2.2</em>
+              <span>{text("D···A（Å）", "D···A (Å)")}</span><em>2.2–2.5</em><em>2.5–3.2</em><em>&gt; 3.2</em>
               <span>∠D–H···A</span><em>170–180°</em><em>&gt; 130°</em><em>&gt; 90°</em>
             </div>
             <p className="hydrogen-caution">{text("几何命中只表示“候选”。IUPAC 2011 要求至少有实验或理论证据；电子密度、光谱、能量和化学环境可能改变结论。", "A geometry match indicates only a candidate. IUPAC 2011 requires experimental or theoretical evidence; electron density, spectroscopy, energy, and chemical environment may change the conclusion.")}</p>
@@ -2430,6 +3697,583 @@ export default function Home() {
               <a href="https://publications.iupac.org/pac/83/8/1637/index.html" target="_blank" rel="noreferrer">IUPAC 2011 ↗</a>
             </div>
           </details>
+        </div>}
+
+        {rightTab === "geometry" && <div className="right-content panel-scroll utility-panel geometry-panel">
+          <div className="utility-intro">
+            <span>{text("几何参数", "Geometrical parameters")}</span>
+            <p>{text("距离使用周期性最小镜像；角度以第 2 个原子为顶点；二面角按 1–2–3–4 顺序计算。", "Distances use the periodic minimum image; atom 2 is the angle vertex; the dihedral follows atoms 1–2–3–4.")}</p>
+          </div>
+          <div className="geometry-pickers">
+            {validGeometryIndices.map((atomIndex, position) => <label key={position}>
+              <span>{text(`原子 ${position + 1}`, `Atom ${position + 1}`)}</span>
+              <select value={atomIndex} onChange={(event) => setGeometryIndices((current) => current.map((value, index) => index === position ? Number(event.target.value) : value) as [number, number, number, number])}>
+                {structure.atoms.slice(0, 500).map((atom, index) => <option key={atom.id} value={index}>{atom.label} · {atom.source.label} · {coordinateText(atom.fract)}</option>)}
+              </select>
+            </label>)}
+          </div>
+          <div className="geometry-results">
+            <article><span>{text("键长 / 距离", "Bond length / distance")}</span><strong>{geometryResult.distance?.toFixed(4) ?? "—"} <small>Å</small></strong><code>{structure.atoms[validGeometryIndices[0]]?.label} ··· {structure.atoms[validGeometryIndices[1]]?.label}</code></article>
+            <article><span>{text("键角", "Angle")}</span><strong>{geometryResult.angle?.toFixed(3) ?? "—"} <small>°</small></strong><code>{validGeometryIndices.slice(0, 3).map((index) => structure.atoms[index]?.label).join("–")}</code></article>
+            <article><span>{text("二面角", "Dihedral")}</span><strong>{geometryResult.dihedral?.toFixed(3) ?? "—"} <small>°</small></strong><code>{validGeometryIndices.map((index) => structure.atoms[index]?.label).join("–")}</code></article>
+          </div>
+          <section className="utility-section">
+            <div className="utility-section-head"><span>{text("从已识别化学键选择", "Choose from detected bonds")}</span><small>{Math.min(structure.bonds.length, 80)} / {structure.bonds.length}</small></div>
+            <div className="geometry-bond-list">
+              {structure.bonds.slice(0, 80).map((bond, index) => <button type="button" key={`${bond.a}-${bond.b}-${index}`} onClick={() => setGeometryIndices((current) => [bond.a, bond.b, current[2], current[3]])}>
+                <span>{structure.atoms[bond.a].label}–{structure.atoms[bond.b].label}</span><b>{bond.distance.toFixed(3)} Å</b>
+              </button>)}
+            </div>
+          </section>
+        </div>}
+
+        {rightTab === "cellTools" && <div className="right-content panel-scroll utility-panel cell-tools-panel">
+          <div className="utility-intro">
+            <span>{text("晶体数据标准化与约化晶胞", "Crystal-data standardization and reduced cell")}</span>
+            <p>{text("先检查当前晶胞、空间群设置和候选基矢；不会静默改写原子坐标或空间群。", "Inspect the current cell, space-group setting, and candidate basis first; atomic coordinates and space group are never silently rewritten.")}</p>
+          </div>
+          <section className="utility-section">
+            <div className="utility-section-head"><span>{text("标准设置检查", "Standard-setting check")}</span><small>{structure.spaceGroupNumber ? `#${structure.spaceGroupNumber}` : text("编号缺失", "number missing")}</small></div>
+            <div className="standardization-status">
+              <i className={structure.spaceGroupNumber ? "pass" : "warning"}>{structure.spaceGroupNumber ? "✓" : "!"}</i>
+              <span><strong>{structure.spaceGroup}</strong><small>{structure.spaceGroupNumber
+                ? text("具有 International Tables 空间群编号；当前设置保留原 CIF 的轴与原点选择。", "An International Tables number is available; the original CIF axis and origin setting is retained.")
+                : text("CIF 未提供空间群编号，无法自动认证 conventional setting。", "The CIF does not provide a space-group number, so a conventional setting cannot be certified automatically.")}</small></span>
+            </div>
+          </section>
+          <section className="utility-section">
+            <div className="utility-section-head"><span>Niggli {text("约化候选", "reduction candidate")}</span><small>{reducedCandidate.changed ? text("基矢已重排", "basis reordered") : text("无需重排", "unchanged")}</small></div>
+            <div className="cell-comparison">
+              <div><span>{text("当前晶胞", "Current cell")}</span>
+                {(["a", "b", "c", "alpha", "beta", "gamma"] as const).map((key) => <code key={key}>{key.replace("alpha", "α").replace("beta", "β").replace("gamma", "γ")} <b>{structure.cell[key].toFixed(key.length === 1 ? 4 : 3)}{key.length === 1 ? " Å" : "°"}</b></code>)}
+              </div>
+              <b>→</b>
+              <div><span>{text("候选约化晶胞", "Candidate reduced cell")}</span>
+                {(["a", "b", "c", "alpha", "beta", "gamma"] as const).map((key) => <code key={key}>{key.replace("alpha", "α").replace("beta", "β").replace("gamma", "γ")} <b>{reducedCandidate.cell[key].toFixed(key.length === 1 ? 4 : 3)}{key.length === 1 ? " Å" : "°"}</b></code>)}
+              </div>
+            </div>
+            <div className="basis-transform">
+              <span>{text("整数基变换（候选）", "Integer basis transform (candidate)")}</span>
+              <code>{reducedCandidate.transform.map((row) => `[${row.join("  ")}]`).join("  ")}</code>
+            </div>
+            <details className="utility-help">
+              <summary>？ {text("为何标记为“候选”", "Why is this labelled a candidate?")}</summary>
+              <p>{text("此处在有限的幺模整数变换中搜索满足主要度量条件的短基矢，适合交互预检；边界晶胞可能对舍入非常敏感。导出、数据库匹配或发表前应使用 spglib、cctbx、Gemmi 等经验证实现复核。", "This interactive precheck searches a finite set of unimodular transforms for a short basis satisfying the principal metric conditions. Boundary cells can be highly rounding-sensitive. Verify with a validated implementation such as spglib, cctbx, or Gemmi before export, database matching, or publication.")}</p>
+            </details>
+          </section>
+        </div>}
+
+        {rightTab === "electrostatics" && <div className="right-content panel-scroll utility-panel electrostatics-panel">
+          <div className="utility-intro">
+            <span>{text("位点电势与 Madelung 能", "Site potentials and Madelung energy")}</span>
+            <p>{text("使用三维周期 Ewald 求和。必须由用户提供形式电荷，并且展开晶胞保持电中性。", "Uses a three-dimensional periodic Ewald sum. User-supplied formal charges are required and the expanded unit cell must be neutral.")}</p>
+          </div>
+          <section className="utility-section charge-editor">
+            <div className="utility-section-head"><span>{text("元素形式电荷", "Formal charges by element")}</span><small>e</small></div>
+            {composition.map(([element, count]) => <label key={element}>
+              <span><i style={{ background: currentElementColor(element) }} />{element}<small>× {count}</small></span>
+              <input type="number" step="0.25" value={elementCharges[element] ?? 0} onChange={(event) => setElementCharges((current) => ({ ...current, [element]: Number(event.target.value) || 0 }))} />
+            </label>)}
+            <div className={electrostatics.neutral ? "charge-balance neutral" : "charge-balance charged"}>
+              <span>{text("晶胞净电荷", "Net cell charge")}</span><strong>{electrostatics.netCharge >= 0 ? "+" : ""}{electrostatics.netCharge.toFixed(4)} e</strong>
+            </div>
+          </section>
+          {!electrostatics.neutral ? <div className="utility-warning"><strong>{text("无法计算：晶胞不电中性", "Cannot calculate: the cell is not neutral")}</strong><p>{text("请检查价态、部分占有率和无序构象。带电周期体系需要额外的背景电荷约定，本面板不会自动添加。", "Check oxidation states, partial occupancies, and disorder conformers. Charged periodic systems require a background-charge convention, which this panel does not add automatically.")}</p></div>
+            : electrostatics.energyEv === null ? <div className="utility-empty"><strong>{text("请输入非零形式电荷", "Enter non-zero formal charges")}</strong><p>{text("SymViz 不会仅根据元素名称猜测氧化态。", "SymViz does not guess oxidation states from element names alone.")}</p></div>
+              : <>
+                <div className="electrostatic-summary">
+                  <span>{text("Madelung 静电能（每晶胞）", "Madelung electrostatic energy (per cell)")}<strong>{electrostatics.energyEv.toFixed(5)} eV</strong></span>
+                  <span>Ewald α<strong>{electrostatics.alpha.toFixed(5)} Å⁻¹</strong></span>
+                </div>
+                <section className="utility-section">
+                  <div className="utility-section-head"><span>{text("位点电势", "Site potentials")}</span><small>{text("（eV·e⁻¹）", "(eV·e⁻¹)")}</small></div>
+                  <div className="site-potential-list">{structure.atoms.slice(0, 160).map((atom, index) => <button type="button" key={atom.id} onClick={() => selectAtom(index)}>
+                    <span>{atom.label}<small>{atom.source.label}</small></span><b>{electrostatics.potentialsEv[index]?.toFixed(5)}</b>
+                  </button>)}</div>
+                </section>
+              </>}
+          <details className="utility-help">
+            <summary>？ {text("计算约定", "Calculation convention")}</summary>
+            <p>{text("能量仅含点电荷库仑项，不含极化、短程排斥、共价成键或介电屏蔽。无序位点按 CIF 占有率加权。结果适合检查模型与比较相同约定下的结构，不等同于总晶格能。", "The energy contains point-charge Coulomb terms only; polarization, short-range repulsion, covalency, and dielectric screening are omitted. Disordered sites are occupancy-weighted. Use it to audit models or compare structures under identical conventions, not as a total lattice energy.")}</p>
+          </details>
+        </div>}
+
+        {rightTab === "diffraction" && <div className="right-content panel-scroll utility-panel diffraction-panel">
+          <div className="utility-intro">
+            <span>{text("粉末衍射与结构因子", "Powder diffraction and structure factors")}</span>
+            <p>{text("由当前原子模型计算；默认 Cu Kα₁。可用于峰位与系统消光的快速检查。", "Calculated from the current atomic model with Cu Kα₁ by default. Intended for rapid checks of peak positions and systematic absences.")}</p>
+          </div>
+          <div className="diffraction-controls">
+            <label><span>{text("波长（Å）", "Wavelength (Å)")}</span><input type="number" min="0.2" max="4" step="0.0001" value={wavelength} onChange={(event) => setWavelength(Math.max(0.2, Number(event.target.value) || 1.5406))} /></label>
+                <label><span>{text("2θ min（°）", "2θ min (°)")}</span><input type="number" min="0" max={diffractionRange[1] - 1} step="1" value={diffractionRange[0]} onChange={(event) => setDiffractionRange(([, maximum]) => [Math.min(Number(event.target.value) || 0, maximum - 1), maximum])} /></label>
+            <label><span>{text("2θ max（°）", "2θ max (°)")}</span><input type="number" min={diffractionRange[0] + 1} max="170" step="1" value={diffractionRange[1]} onChange={(event) => setDiffractionRange(([minimum, maximum]) => [minimum, Math.max(Number(event.target.value) || maximum, minimum + 1)])} /></label>
+            <label><span>{text("FWHM（°）", "FWHM (°)")}</span><input type="number" min="0.02" max="2" step="0.02" value={peakWidth} onChange={(event) => setPeakWidth(Math.max(0.02, Number(event.target.value) || 0.18))} /></label>
+          </div>
+          <PowderPatternCanvas points={powderPattern} language={language} />
+          <div className="diffraction-meta"><span>{reflections.length} {text("个 hkl 贡献", "hkl contributions")}</span><span>{text("最高峰归一化至 100", "Maximum normalized to 100")}</span></div>
+          <details className="utility-help diffraction-assumption">
+            <summary>？ {text("强度近似与限制", "Intensity approximation and limits")}</summary>
+            <p>{text("当前 F(hkl) 使用原子序数 Z 作为点散射权重，并计入占有率；尚未使用随 sinθ/λ 变化的 X 射线原子散射因子、Debye–Waller 因子、反常散射、精确多重性、择优取向或仪器函数。因此峰位可靠性高于相对强度。", "The current F(hkl) uses atomic number Z as a point-scatterer weight and includes occupancy. It does not yet include angle-dependent X-ray form factors, Debye–Waller factors, anomalous scattering, exact multiplicity, preferred orientation, or an instrument function. Peak positions are therefore more reliable than relative intensities.")}</p>
+          </details>
+          <section className="utility-section">
+            <div className="utility-section-head"><span>{text("最强结构因子", "Strongest structure factors")}</span><small>{text("按计算强度排序", "sorted by calculated intensity")}</small></div>
+            <div className="reflection-table-wrap"><table className="reflection-table">
+              <thead><tr><th>h</th><th>k</th><th>l</th><th>{text("d（Å）", "d (Å)")}</th><th>{text("2θ（°）", "2θ (°)")}</th><th>Re F</th><th>Im F</th><th>|F|²</th></tr></thead>
+              <tbody>{strongestReflections.map((reflection) => <tr key={`${reflection.h},${reflection.k},${reflection.l}`}>
+                <td>{reflection.h}</td><td>{reflection.k}</td><td>{reflection.l}</td><td>{reflection.d.toFixed(4)}</td><td>{reflection.twoTheta.toFixed(3)}</td><td>{reflection.real.toFixed(2)}</td><td>{reflection.imaginary.toFixed(2)}</td><td>{(reflection.real ** 2 + reflection.imaginary ** 2).toFixed(1)}</td>
+              </tr>)}</tbody>
+            </table></div>
+          </section>
+        </div>}
+
+        {rightTab === "density" && <div className="right-content panel-scroll utility-panel density-panel">
+          <div className="utility-intro">
+            <span>{text("密度图、Patterson 与剖面", "Density maps, Patterson, and profiles")}</span>
+            <p>{text("从当前结构模型生成 (001) 二维周期切片；白色虚线是下方线剖面的取样位置。", "Generates a periodic (001) two-dimensional slice from the current structural model; the white dashed line is sampled in the profile below.")}</p>
+          </div>
+          <div className="density-mode-switch" role="group" aria-label={text("密度类型", "Density type")}>
+            <button type="button" className={densityMode === "electron" ? "active" : ""} onClick={() => setDensityMode("electron")}>{text("电子密度", "Electron")}</button>
+            <button type="button" className={densityMode === "nuclear" ? "active" : ""} onClick={() => setDensityMode("nuclear")}>{text("核位置", "Nuclear")}</button>
+            <button type="button" className={densityMode === "patterson" ? "active" : ""} onClick={() => setDensityMode("patterson")}>Patterson</button>
+          </div>
+          <label className="density-slice-control">
+            <span>{densityMode === "patterson" ? "w" : "z"} {text("分数坐标切片", "fractional-coordinate slice")}<output>{densitySlice.toFixed(2)}</output></span>
+            <input type="range" min="0" max="1" step="0.01" value={densitySlice} onChange={(event) => setDensitySlice(Number(event.target.value))} />
+          </label>
+          <DensityMapCanvas density={density} mode={densityMode} language={language} />
+          <div className="density-meta">
+            <span>{text("网格", "Grid")} {density.size} × {density.size}</span>
+            <span>{text("归一化显示", "Normalized display")} 0–1</span>
+          </div>
+          <details className="utility-help" open>
+            <summary>？ {text("这些图表示什么", "What do these maps represent?")}</summary>
+            <p>{densityMode === "electron"
+              ? text("电子密度是以 Z 加权的原子高斯模型，不是由实测 Fobs 和相位进行的实验傅里叶合成。", "Electron density is a Z-weighted Gaussian atom model, not an experimental Fourier synthesis from measured Fobs values and phases.")
+              : densityMode === "nuclear"
+                ? text("核位置图对每个原子核使用单位权重；未输入同位素相干散射长度，因此不是定量中子散射长度密度。", "The nuclear-position map uses unit weight per nucleus. Isotope-dependent coherent scattering lengths are not supplied, so this is not a quantitative neutron scattering-length density.")
+                : text("Patterson 图由所有原子对的差矢量构成，峰权重近似为 ZiZj；原点峰和重原子对通常最强。", "The Patterson map is built from all interatomic difference vectors with approximate ZiZj weights; the origin peak and heavy-atom pairs are usually strongest.")}</p>
+          </details>
+          <div className="utility-warning experimental-data-note">
+            <strong>{text("实验傅里叶合成的输入条件", "Input required for experimental Fourier synthesis")}</strong>
+            <p>{text("需要 CIF/FCF 中的 hkl、Fobs 或 Iobs、σ 以及相位或可生成相位的结构模型。当前载入器尚未把反射环保存为数据集，因此本页明确显示模型图；不会把它标成实验电子密度。", "An experimental synthesis needs hkl indices, Fobs or Iobs, uncertainties, and phases or a model capable of generating phases. The current loader does not yet preserve reflection loops as a dataset, so this page explicitly shows model maps and never labels them experimental electron density.")}</p>
+          </div>
+        </div>}
+
+        {rightTab === "gaussian" && <div className="right-content panel-scroll utility-panel gaussian-panel">
+          <div className="utility-intro quantum-intro">
+            <span>{quantumSubview === "qe"
+              ? text("Quantum ESPRESSO 周期晶体计算", "Quantum ESPRESSO periodic crystal calculations")
+              : text("Gaussian 分子计算与 Cube 三维数据", "Gaussian molecular calculations and 3D Cube data")}</span>
+            <p>{quantumSubview === "qe"
+              ? text("从完整周期晶胞生成平面波 DFT 输入；结构、赝势、输入和输出均保留在本机。", "Generate plane-wave DFT input from the complete periodic cell; structures, pseudopotentials, inputs, and outputs remain local.")
+              : text("结构准备、任务队列、输出解析和等值面显示均在本机完成；网页不会把计算文件上传至云端。", "Structure preparation, job queuing, output parsing, and isosurface display stay on this computer; the web app does not upload calculation files to the cloud.")}</p>
+          </div>
+          <nav className="quantum-switch" aria-label={text("量化计算工作区", "Quantum workspace")}>
+            {([
+              ["qe", text("周期 DFT", "Periodic DFT")],
+              ["input", text("Gaussian 输入", "Gaussian input")],
+              ["queue", text("Gaussian 队列", "Gaussian queue")],
+              ["results", text("Gaussian 结果", "Gaussian results")],
+              ["cube", "Cube"],
+            ] as Array<[QuantumSubview, string]>).map(([value, label]) => <button
+              type="button"
+              key={value}
+              className={quantumSubview === value ? "active" : ""}
+              onClick={() => setQuantumSubview(value)}
+            >{label}</button>)}
+          </nav>
+
+          {quantumSubview === "qe" && <>
+            <section className="utility-section bridge-card desktop-gaussian-card qe-desktop-card">
+              <div className="utility-section-head"><span>{text("SymViz 桌面版 · Quantum ESPRESSO", "SymViz Desktop · Quantum ESPRESSO")}</span><small className={qeStatus?.available ? "bridge-online" : "bridge-offline"}>{qeStatus?.available ? (qeStatus.runtime === "wsl" ? `WSL2 · ${qeStatus.wslDistro}${qeStatus.qeVersion ? ` · QE ${qeStatus.qeVersion}` : ""}` : text("Windows 原生", "Windows native")) : text("未检测到", "Not detected")}</small></div>
+              <div className="desktop-gaussian-status">
+                <span><small>{text("QE 运行时", "QE runtime")}</small><code>{qeStatus?.qeRoot || text("尚未检测到 pw.x", "pw.x not detected")}</code></span>
+                <span><small>{text("赝势目录", "Pseudopotential folder")}</small><code>{qeStatus?.pseudoRoot || text("尚未选择", "Not selected")}</code></span>
+                <span><small>{text("任务保存目录", "Job folder")}</small><code>{qeStatus?.workRoot || text("仅桌面版可运行", "Desktop app required")}</code></span>
+              </div>
+              {qeStatus && <div className="desktop-binary-status">
+                {(["pw", "ph", "pp", "bands", "dos", "projwfc"] as const).map((binary) => <span key={binary} className={qeStatus.binaries[binary]?.available ? "available" : "missing"}><i />{binary}.x</span>)}
+                <span className={qeStatus.pseudopotentials.length ? "available" : "missing"}><i />UPF {qeStatus.pseudopotentials.length}</span>
+              </div>}
+              <div className="gaussian-actions">
+                <button type="button" onClick={() => void refreshQuantumEspresso()}>{text("检测 WSL / QE", "Detect WSL / QE")}</button>
+                <button type="button" onClick={() => void chooseQuantumEspressoRoot()}>{text("选择 Windows QE…", "Choose Windows QE…")}</button>
+                <button type="button" onClick={() => void chooseQuantumEspressoPseudoRoot()}>{text("选择赝势文件夹…", "Choose pseudopotential folder…")}</button>
+              </div>
+              {qeStatus?.runtime === "wsl" && /^6\./.test(qeStatus.qeVersion) && <div className="utility-warning"><strong>{text("当前为联调版本", "Validation runtime")}</strong><p>{text(`已检测到 QE ${qeStatus.qeVersion}。它可以用于 SCF 和结构优化联调；正式 Berry-phase 自发极化计算前将升级到 QE 7.5。`, `QE ${qeStatus.qeVersion} is available for SCF and structural-relaxation validation. Upgrade to QE 7.5 before production Berry-phase polarization calculations.`)}</p></div>}
+              <details className="utility-help">
+                <summary>？ {text("WSL 与赝势如何连接？", "How are WSL and pseudopotentials connected?")}</summary>
+                <p>{text("SymViz 会自动检测 WSL2 Ubuntu 中的 pw.x 和 quantum-espresso-data-sssp。每次提交时，只把当前元素需要的 UPF 文件复制到 Windows 任务目录，然后通过 wsl.exe 运行 Linux 版 pw.x。也可用右侧按钮覆盖为 Windows 原生程序或自定义 UPF 文件夹。", "SymViz automatically detects pw.x and quantum-espresso-data-sssp in WSL2 Ubuntu. For each submission it copies only the required UPF files into the Windows job folder, then runs Linux pw.x through wsl.exe. The buttons can override this with a native Windows executable or a custom UPF folder.")}</p>
+              </details>
+            </section>
+
+            <section className="utility-section">
+              <div className="utility-section-head"><span>{text("周期计算设置", "Periodic calculation setup")}</span><small>{qePreparedInput.diagnostics.atomCount} {text("原子", "atoms")} · {qePreparedInput.diagnostics.elementCount} {text("元素", "elements")}</small></div>
+              <div className="gaussian-form-grid qe-form-grid">
+                <label className="span-two"><span>{text("任务标题", "Job title")}</span><input value={qeOptions.title} onChange={(event) => setQeOptions((current) => ({ ...current, title: event.target.value }))} /></label>
+                <label><span>{text("计算类型", "Calculation")}</span><select value={qeOptions.calculation} onChange={(event) => setQeOptions((current) => ({ ...current, calculation: event.target.value as QuantumEspressoInputOptions["calculation"] }))}>
+                  <option value="scf">SCF</option>
+                  <option value="relax">relax</option>
+                  <option value="vc-relax">vc-relax</option>
+                </select></label>
+                <label><span>{text("交换-相关泛函", "Exchange-correlation")}</span><select value={qeOptions.inputDft} disabled><option value="PBE">PBE</option></select></label>
+                <label><span>{text("色散修正", "Dispersion correction")}</span><select value={qeOptions.dispersion} onChange={(event) => setQeOptions((current) => ({ ...current, dispersion: event.target.value as QuantumEspressoInputOptions["dispersion"] }))}>
+                  <option value="d3-bj">Grimme D3(BJ)</option><option value="none">None</option>
+                </select></label>
+                <label><span>{text("占据方式", "Occupations")}</span><select value={qeOptions.occupations} onChange={(event) => setQeOptions((current) => ({ ...current, occupations: event.target.value as QuantumEspressoInputOptions["occupations"] }))}>
+                  <option value="fixed">fixed ({text("绝缘体", "insulator")})</option><option value="smearing">smearing ({text("金属", "metal")})</option>
+                </select></label>
+                <label><span>{text("波函数截断能（Ry）", "Wavefunction cutoff (Ry)")}</span><input type="number" min="1" step="5" value={qeOptions.ecutwfcRy} onChange={(event) => setQeOptions((current) => ({ ...current, ecutwfcRy: Number(event.target.value) || 1 }))} /></label>
+                <label><span>{text("电荷密度截断能（Ry）", "Charge-density cutoff (Ry)")}</span><input type="number" min="1" step="10" value={qeOptions.ecutrhoRy} onChange={(event) => setQeOptions((current) => ({ ...current, ecutrhoRy: Number(event.target.value) || 1 }))} /></label>
+                <label className="span-two"><span>k-point mesh</span><div className="qe-triplet-input">{qeOptions.kPoints.map((value, axis) => <input key={axis} aria-label={`k${axis + 1}`} type="number" min="1" step="1" value={value} onChange={(event) => setQeOptions((current) => ({ ...current, kPoints: current.kPoints.map((item, index) => index === axis ? Math.max(1, Math.round(Number(event.target.value) || 1)) : item) as [number, number, number] }))} />)}</div></label>
+                <label><span>SCF conv_thr</span><input type="number" min="1e-14" step="1e-9" value={qeOptions.convThr} onChange={(event) => setQeOptions((current) => ({ ...current, convThr: Number(event.target.value) || 1e-8 }))} /></label>
+                <label><span>{text("任务前缀", "Job prefix")}</span><input value={qeOptions.prefix} onChange={(event) => setQeOptions((current) => ({ ...current, prefix: event.target.value }))} /></label>
+              </div>
+            </section>
+
+            <section className="utility-section">
+              <div className="utility-section-head"><span>{text("元素与赝势", "Elements and pseudopotentials")}</span><small>PBE · UPF</small></div>
+              <datalist id="qe-pseudopotential-files">{(qeStatus?.pseudopotentials ?? []).map((file) => <option value={file} key={file} />)}</datalist>
+              <div className="qe-pseudo-grid">{qePreparedInput.diagnostics.elements.map((element) => {
+                const file = qeOptions.pseudopotentials[element] ?? "";
+                const available = availableQePseudoNames.has(file.toLocaleLowerCase());
+                return <label key={element} className={available ? "available" : "missing"}><strong>{element}</strong><input list="qe-pseudopotential-files" value={file} onChange={(event) => setQeOptions((current) => ({ ...current, pseudopotentials: { ...current.pseudopotentials, [element]: event.target.value } }))} /><i>{available ? "✓" : "!"}</i></label>;
+              })}</div>
+              {unavailableQePseudopotentials.length > 0 && <div className="utility-warning"><strong>{text("赝势尚未就绪", "Pseudopotentials not ready")}</strong><p>{text("请连接 UPF 文件夹，并为每种元素选择实际存在且与 PBE 匹配的赝势。", "Connect an UPF folder and select an existing PBE-compatible pseudopotential for every element.")} {unavailableQePseudopotentials.join(", ")}</p></div>}
+            </section>
+
+            <section className="utility-section gaussian-input-preview">
+              <div className="utility-section-head"><span>Quantum ESPRESSO input (.in)</span><small>{qePreparedInput.input.split("\n").length} {text("行", "lines")}</small></div>
+              <div className="gaussian-model-diagnostics">
+                <span><small>{text("晶胞原子", "Cell atoms")}</small><strong>{qePreparedInput.diagnostics.atomCount}</strong></span>
+                <span className={qePreparedInput.diagnostics.partialOccupancyLabels.length ? "problem" : "ok"}><small>{text("部分占有", "Partial occupancy")}</small><strong>{qePreparedInput.diagnostics.partialOccupancyLabels.length}</strong></span>
+                <span className={structure.disorder.explicit ? "problem" : "ok"}><small>{text("无序", "Disorder")}</small><strong>{structure.disorder.explicit ? text("需处理", "Resolve") : text("无", "None")}</strong></span>
+                <span className={unavailableQePseudopotentials.length ? "problem" : "ok"}><small>{text("赝势", "Pseudos")}</small><strong>{unavailableQePseudopotentials.length ? text("缺失", "Missing") : text("就绪", "Ready")}</strong></span>
+              </div>
+              {qePreparedInput.diagnostics.blockingIssues.map((issue) => <div className="utility-warning gaussian-export-blocker" key={issue}><strong>{text("已阻止周期计算", "Periodic calculation blocked")}</strong><p>{issue}</p></div>)}
+              {qePreparedInput.diagnostics.warnings.map((warning) => <div className="utility-warning" key={warning}><p>{warning}</p></div>)}
+              <textarea readOnly spellCheck={false} value={qePreparedInput.input} aria-label="Quantum ESPRESSO input preview" />
+              <div className="gaussian-actions">
+                <button type="button" className="primary" disabled={!qeStatus?.available || qePreparedInput.diagnostics.blockingIssues.length > 0 || unavailableQePseudopotentials.length > 0} onClick={() => void submitQuantumEspressoJob()}>{text("加入 QE 本地队列", "Add to local QE queue")}</button>
+                <button type="button" onClick={() => downloadTextFile(`${qeOptions.prefix || "symviz-qe"}.in`, qePreparedInput.input)}>{text("下载 .in", "Download .in")}</button>
+              </div>
+            </section>
+
+            <section className="utility-section">
+              <div className="utility-section-head"><span>{text("QE 任务队列", "QE job queue")}</span><small>{qeJobs.length}</small></div>
+              {qeJobs.length === 0 ? <div className="utility-empty"><strong>{text("尚无周期计算任务", "No periodic jobs yet")}</strong><p>{text("连接 pw.x 和赝势后，即可运行当前预览。", "Connect pw.x and pseudopotentials, then run the current preview.")}</p></div>
+                : <div className="gaussian-job-list">{qeJobs.map((job) => <article key={job.id} className={`gaussian-job-card status-${job.status}`}>
+                  <button type="button" className="job-main" onClick={() => setSelectedQeJobId(job.id)}><span><i />{job.name}</span><small>{new Date(job.createdAt).toLocaleString(language)}</small><b>{gaussianJobStatusText(job.status, language)}</b></button>
+                  <div className="job-actions">
+                    {job.status === "running" && <button type="button" onClick={() => void cancelQuantumEspressoJob(job)}>{text("取消", "Cancel")}</button>}
+                    <button type="button" onClick={() => void window.symvizDesktop?.revealQeJob(job.remoteId)}>{text("打开目录", "Open folder")}</button>
+                  </div>
+                </article>)}</div>}
+            </section>
+
+            {qeStatus && runningQeJob && <section className="utility-section gaussian-live-section qe-live-section">
+              <div className="utility-section-head"><span className="gaussian-live-title"><i />{text("pw.x 实时输出", "Live pw.x output")}</span><small>{visibleLiveQeOutput.updatedAt ? new Date(visibleLiveQeOutput.updatedAt).toLocaleTimeString(language) : text("等待输出", "Waiting for output")}</small></div>
+              <pre ref={liveQeOutputRef} className="gaussian-live-output" role="log" tabIndex={0}>{visibleLiveQeOutput.text || text("Quantum ESPRESSO 正在初始化……", "Quantum ESPRESSO is starting…")}</pre>
+              <div className="gaussian-actions gaussian-live-actions"><button type="button" onClick={() => setFollowQeOutput((current) => !current)}>{followQeOutput ? text("暂停自动滚动", "Pause auto-scroll") : text("继续自动滚动", "Resume auto-scroll")}</button><button type="button" disabled={!visibleLiveQeOutput.text} onClick={() => void navigator.clipboard.writeText(visibleLiveQeOutput.text)}>{text("复制输出", "Copy output")}</button></div>
+            </section>}
+
+            {selectedQeJob?.summary && <section className="gaussian-results qe-results">
+              <div className={`termination-banner ${selectedQeJob.summary.status}`}><i>{selectedQeJob.summary.jobDone ? "✓" : selectedQeJob.summary.status === "failed" ? "!" : "…"}</i><span><strong>{selectedQeJob.name}</strong><small>{selectedQeJob.summary.jobDone ? "JOB DONE" : selectedQeJob.summary.errorMessage || text("输出尚未完成", "Output incomplete")}</small></span></div>
+              <div className="quantum-result-grid">
+                <span>{text("总能量（Ry）", "Total energy (Ry)")}<strong>{selectedQeJob.summary.totalEnergyRy?.toFixed(9) ?? "—"}</strong><small>{selectedQeJob.summary.totalEnergyEv?.toFixed(5) ?? "—"} eV</small></span>
+                <span>{text("压力（kbar）", "Pressure (kbar)")}<strong>{selectedQeJob.summary.pressureKbar?.toFixed(4) ?? "—"}</strong><small>cell stress</small></span>
+                <span>{text("费米能（eV）", "Fermi energy (eV)")}<strong>{selectedQeJob.summary.fermiEnergyEv?.toFixed(5) ?? "—"}</strong><small>{selectedQeJob.summary.convergenceReached ? text("SCF 已收敛", "SCF converged") : text("待确认", "Check output")}</small></span>
+              </div>
+            </section>}
+
+            <details className="utility-help">
+              <summary>？ {text("当前阶段与 Ps 后续流程", "Current scope and the later Ps workflow")}</summary>
+              <p>{text("当前版本先提供周期 SCF、原子优化和变晶胞优化。Berry-phase 自发极化还需要极性相、参考相、连续绝热路径以及极化量子分支展开；后续将在此基础上加入，而不会把单个晶胞偶极误标为 Ps。", "This version first provides periodic SCF, ionic relaxation, and variable-cell relaxation. Berry-phase spontaneous polarization additionally requires polar and reference states, a continuous adiabatic path, and polarization-branch unwrapping; those will build on this backend rather than treating a single-cell dipole as Ps.")}</p>
+            </details>
+          </>}
+
+          {quantumSubview === "input" && <>
+            <section className="utility-section">
+              <div className="utility-section-head"><span>{text("计算模型", "Calculation model")}</span><small>{gaussianIndices.length} {text("个原子", "atoms")}</small></div>
+              <div className="gaussian-form-grid">
+                <label className="span-two"><span>{text("坐标范围", "Coordinate scope")}</span><select value={gaussianScope} onChange={(event) => setGaussianScope(event.target.value as GaussianScope)}>
+                  <option value="selected-molecule">{text("当前选中原子所在分子", "Molecule containing the selected atom")}</option>
+                  <option value="asymmetric-unit">{text("CIF 不对称单元", "CIF asymmetric unit")}</option>
+                  <option value="generated-atoms">{text("当前晶胞全部等价原子", "All generated atoms in the current cell")}</option>
+                </select></label>
+                <label className="span-two"><span>{text("任务标题", "Job title")}</span><input value={gaussianOptions.title} onChange={(event) => setGaussianOptions((current) => ({ ...current, title: event.target.value }))} /></label>
+                <label className="span-two"><span>{text("计算流程", "Calculation workflow")}</span><select value={gaussianOptions.workflow ?? "single"} onChange={(event) => setGaussianOptions((current) => ({ ...current, workflow: event.target.value as GaussianWorkflow }))}>
+                  <option value="preopt-final">{text("分阶段：小基组初步优化 → 大基组最终计算", "Staged: small-basis preoptimization → large-basis final calculation")}</option>
+                  <option value="single">{text("单阶段（高级）", "Single stage (advanced)")}</option>
+                </select></label>
+                {gaussianOptions.workflow === "preopt-final" && <>
+                  <label className={gaussianPreoptimizationMethodIsCustom ? "gaussian-preset-custom gaussian-stage-field" : "gaussian-stage-field"}><span>{text("初步优化方法", "Preoptimization method")}</span><select
+                    value={gaussianPreoptimizationMethodIsCustom ? customGaussianOption : gaussianOptions.preoptimizationMethod}
+                    onChange={(event) => setGaussianOptions((current) => ({ ...current, preoptimizationMethod: event.target.value === customGaussianOption ? "" : event.target.value }))}
+                  >
+                    {gaussianMethodGroups.map((group) => <optgroup key={`pre-${group.en}`} label={text(group.zh, group.en)}>
+                      {group.options.map((method) => <option key={`pre-${method}`} value={method}>{method}</option>)}
+                    </optgroup>)}
+                    <option value={customGaussianOption}>{text("自定义…", "Custom…")}</option>
+                  </select>{gaussianPreoptimizationMethodIsCustom && <input
+                    aria-label={text("自定义初步优化方法", "Custom preoptimization method")}
+                    value={gaussianOptions.preoptimizationMethod ?? ""}
+                    onChange={(event) => setGaussianOptions((current) => ({ ...current, preoptimizationMethod: event.target.value }))}
+                  />}</label>
+                  <label className={gaussianPreoptimizationBasisIsCustom ? "gaussian-preset-custom gaussian-stage-field" : "gaussian-stage-field"}><span>{text("初步优化基组", "Preoptimization basis")}</span><select
+                    value={gaussianPreoptimizationBasisIsCustom ? customGaussianOption : gaussianOptions.preoptimizationBasis}
+                    onChange={(event) => setGaussianOptions((current) => ({ ...current, preoptimizationBasis: event.target.value === customGaussianOption ? "" : event.target.value }))}
+                  >
+                    {gaussianBasisGroups.map((group) => <optgroup key={`pre-${group.en}`} label={text(group.zh, group.en)}>
+                      {group.options.map((basis) => <option key={`pre-${basis}`} value={basis}>{basis}</option>)}
+                    </optgroup>)}
+                    <option value={customGaussianOption}>{text("自定义…", "Custom…")}</option>
+                  </select>{gaussianPreoptimizationBasisIsCustom && <input
+                    aria-label={text("自定义初步优化基组", "Custom preoptimization basis")}
+                    value={gaussianOptions.preoptimizationBasis ?? ""}
+                    onChange={(event) => setGaussianOptions((current) => ({ ...current, preoptimizationBasis: event.target.value }))}
+                  />}</label>
+                </>}
+                <label><span>{text("任务类型", "Calculation")}</span><select value={gaussianOptions.calculation} onChange={(event) => setGaussianOptions((current) => ({ ...current, calculation: event.target.value as GaussianCalculation }))}>
+                  <option value="sp">{text("单点能", "Single point")}</option>
+                  <option value="opt">{text("几何优化", "Optimization")}</option>
+                  <option value="freq">{text("频率", "Frequency")}</option>
+                  <option value="opt-freq">{text("优化 + 频率", "Optimization + frequency")}</option>
+                  <option value="td">TD-DFT</option>
+                </select></label>
+                <label className={gaussianMethodIsCustom ? "gaussian-preset-custom" : undefined}><span>{text("理论方法", "Theoretical method")}</span><select
+                  value={gaussianMethodIsCustom ? customGaussianOption : gaussianOptions.method}
+                  onChange={(event) => setGaussianOptions((current) => ({
+                    ...current,
+                    method: event.target.value === customGaussianOption ? "" : event.target.value,
+                  }))}
+                >
+                  {gaussianMethodGroups.map((group) => <optgroup key={group.en} label={text(group.zh, group.en)}>
+                    {group.options.map((method) => <option key={method} value={method}>{method}</option>)}
+                  </optgroup>)}
+                  <option value={customGaussianOption}>{text("自定义…", "Custom…")}</option>
+                </select>{gaussianMethodIsCustom && <input
+                  aria-label={text("自定义理论方法", "Custom theoretical method")}
+                  placeholder={text("输入 Gaussian 方法关键字", "Enter a Gaussian method keyword")}
+                  value={gaussianOptions.method}
+                  onChange={(event) => setGaussianOptions((current) => ({ ...current, method: event.target.value }))}
+                />}</label>
+                <label className={gaussianBasisIsCustom ? "gaussian-preset-custom" : undefined}><span>{text("基组", "Basis set")}</span><select
+                  value={gaussianBasisIsCustom ? customGaussianOption : gaussianOptions.basis}
+                  onChange={(event) => setGaussianOptions((current) => ({
+                    ...current,
+                    basis: event.target.value === customGaussianOption ? "" : event.target.value,
+                  }))}
+                >
+                  {gaussianBasisGroups.map((group) => <optgroup key={group.en} label={text(group.zh, group.en)}>
+                    {group.options.map((basis) => <option key={basis} value={basis}>{basis}</option>)}
+                  </optgroup>)}
+                  <option value={customGaussianOption}>{text("自定义…", "Custom…")}</option>
+                </select>{gaussianBasisIsCustom && <input
+                  aria-label={text("自定义基组", "Custom basis set")}
+                  placeholder={text("输入 Gaussian 基组关键字", "Enter a Gaussian basis-set keyword")}
+                  value={gaussianOptions.basis}
+                  onChange={(event) => setGaussianOptions((current) => ({ ...current, basis: event.target.value }))}
+                />}</label>
+                <label><span>{text("溶剂（SMD，可空）", "Solvent (SMD, optional)")}</span><input value={gaussianOptions.solvent} placeholder={text("例如 Water", "e.g. Water")} onChange={(event) => setGaussianOptions((current) => ({ ...current, solvent: event.target.value }))} /></label>
+                <label><span>{text("电荷", "Charge")}</span><input type="number" step="1" value={gaussianOptions.charge} onChange={(event) => setGaussianOptions((current) => ({ ...current, charge: Number(event.target.value) || 0 }))} /></label>
+                <label><span>{text("自旋多重度", "Multiplicity")}</span><input type="number" min="1" step="1" value={gaussianOptions.multiplicity} onChange={(event) => setGaussianOptions((current) => ({ ...current, multiplicity: Math.max(1, Math.round(Number(event.target.value) || 1)) }))} /></label>
+                <label><span>{text("内存（GB）", "Memory (GB)")}</span><input type="number" min="1" step="1" value={gaussianOptions.memoryGB} onChange={(event) => setGaussianOptions((current) => ({ ...current, memoryGB: Math.max(1, Number(event.target.value) || 1) }))} /></label>
+                <label><span>{text("处理器核心数", "Processor cores")}</span><input type="number" min="1" step="1" value={gaussianOptions.processors} onChange={(event) => setGaussianOptions((current) => ({ ...current, processors: Math.max(1, Math.round(Number(event.target.value) || 1)) }))} /></label>
+                <label><span>{text("检查点文件名", "Checkpoint name")}</span><input value={gaussianOptions.checkpointName} onChange={(event) => setGaussianOptions((current) => ({ ...current, checkpointName: event.target.value }))} /></label>
+                <label className="span-two"><span>{text("附加 route 关键词（可空）", "Additional route keywords (optional)")}</span><input value={gaussianOptions.routeExtras} placeholder="Pop=Full EmpiricalDispersion=GD3BJ" onChange={(event) => setGaussianOptions((current) => ({ ...current, routeExtras: event.target.value }))} /></label>
+              </div>
+            </section>
+            <section className="utility-section gaussian-input-preview">
+              <div className="utility-section-head"><span>Gaussian input (.gjf)</span><small>{gaussianInput.split("\n").length} {text("行", "lines")}</small></div>
+              <div className="gaussian-model-diagnostics" aria-label={text("Gaussian 模型预检", "Gaussian model validation")}>
+                <span><small>{text("分子数", "Molecules")}</small><strong>{gaussianModel.diagnostics.moleculeCount}</strong></span>
+                <span className={gaussianModel.diagnostics.fragmentCount !== gaussianModel.diagnostics.moleculeCount ? "problem" : ""}><small>{text("片段数", "Fragments")}</small><strong>{gaussianModel.diagnostics.fragmentCount}</strong></span>
+                <span className={gaussianModel.diagnostics.isolatedAtomIndices.length ? "problem" : ""}><small>{text("孤立原子数", "Isolated atoms")}</small><strong>{gaussianModel.diagnostics.isolatedAtomIndices.length}</strong></span>
+                <span className={gaussianModel.diagnostics.graphConsistent ? "ok" : "problem"}><small>{text("连接图", "Bond graph")}</small><strong>{gaussianModel.diagnostics.graphConsistent ? text("一致", "Matched") : text("不一致", "Mismatch")}</strong></span>
+              </div>
+              {!gaussianModel.diagnostics.graphConsistent && <div className="utility-warning gaussian-export-blocker"><strong>{text("已阻止加入队列：周期连接图与 Gaussian 笛卡尔连接图不一致", "Queueing blocked: the periodic and Gaussian Cartesian bond graphs do not match")}</strong><p>{text(
+                `缺失键 ${gaussianModel.diagnostics.missingBondCount}；额外键 ${gaussianModel.diagnostics.extraBondCount}；异常片段 ${gaussianModel.diagnostics.abnormalFragmentCount}。`,
+                `${gaussianModel.diagnostics.missingBondCount} missing bonds; ${gaussianModel.diagnostics.extraBondCount} extra bonds; ${gaussianModel.diagnostics.abnormalFragmentCount} abnormal fragments.`,
+              )}</p></div>}
+              {gaussianModel.diagnostics.isolatedLabels.length > 0 && <div className="utility-warning gaussian-export-blocker"><strong>{text("检测到孤立原子", "Isolated atoms detected")}</strong><p>{gaussianModel.diagnostics.isolatedLabels.join(", ")}</p></div>}
+              {gaussianModel.diagnostics.graphConsistent && gaussianModel.diagnostics.blockingIssues.length === 0 && <div className="gaussian-export-ready"><i>✓</i><span>{text("周期边界已重拼，连接图检查通过。", "Periodic fragments reconnected; bond-graph validation passed.")}</span></div>}
+              <textarea readOnly spellCheck={false} value={gaussianInput} aria-label="Gaussian input preview" />
+              <div className="gaussian-actions">
+                <button type="button" className="primary" disabled={gaussianModel.diagnostics.blockingIssues.length > 0} onClick={createGaussianJob}>{text("加入本地队列", "Add to local queue")}</button>
+                <button type="button" onClick={() => downloadTextFile(`${gaussianOptions.checkpointName || "symviz-job"}.gjf`, gaussianInput)}>{text("下载 .gjf", "Download .gjf")}</button>
+              </div>
+            </section>
+            <details className="utility-help">
+              <summary>？ {text("模型与计算边界", "Model and calculation boundaries")}</summary>
+              <p>{text("Gaussian 是非周期分子程序。选用“当前晶胞全部原子”时，晶胞边界会成为有限簇边界，并不等同于周期固体计算。计算前请核对电荷、多重度、末端原子和无序构象；SymViz 不会替用户猜测这些化学条件。", "Gaussian is a non-periodic molecular program. “All generated atoms” creates a finite cluster at the cell boundary and is not a periodic-solid calculation. Check charge, multiplicity, terminal atoms, and disorder conformers before running; SymViz does not infer these chemical conditions.")}</p>
+            </details>
+          </>}
+
+          {quantumSubview === "queue" && <>
+            {desktopStatus ? <section className="utility-section bridge-card desktop-gaussian-card">
+              <div className="utility-section-head"><span>{text("SymViz 桌面版 · Gaussian 16", "SymViz Desktop · Gaussian 16")}</span><small className={desktopStatus.available ? "bridge-online" : "bridge-offline"}>{desktopStatus.available ? text("可直接运行", "Ready") : text("未检测到", "Not detected")}</small></div>
+              <div className="desktop-gaussian-status">
+                <span><small>{text("Gaussian 安装目录", "Gaussian installation")}</small><code>{desktopStatus.gaussianRoot || text("尚未选择", "Not selected")}</code></span>
+                <span><small>{text("任务保存目录", "Job folder")}</small><code>{desktopStatus.workRoot}</code></span>
+              </div>
+              <div className="desktop-binary-status">
+                {(["g16", "formchk", "cubegen"] as const).map((binary) => <span key={binary} className={desktopStatus.binaries[binary]?.available ? "available" : "missing"}><i />{binary}.exe</span>)}
+              </div>
+              <div className="gaussian-actions">
+                <button type="button" onClick={() => void checkGaussianBridge()}>{text("重新检测", "Detect again")}</button>
+                <button type="button" onClick={() => void chooseDesktopGaussianRoot()}>{text("选择 Gaussian 文件夹…", "Choose Gaussian folder…")}</button>
+                <button type="button" onClick={() => void refreshGaussianJobs()}>{text("刷新任务", "Refresh jobs")}</button>
+              </div>
+              <details className="utility-help">
+                <summary>？ {text("桌面版如何运行 Gaussian", "How desktop Gaussian integration works")}</summary>
+                <p>{text("SymViz 桌面版直接调用本机 g16.exe，不需要 PowerShell、地址或访问令牌。输入、输出、检查点和 Cube 文件只保存在上方任务目录。关闭窗口后，已完成任务仍会保留；正在运行的任务会被标记为中断。", "SymViz Desktop calls the local g16.exe directly, without PowerShell, an address, or an access token. Inputs, outputs, checkpoints, and Cube files stay in the job folder above. Completed jobs remain after the app closes; running jobs are marked as interrupted.")}</p>
+              </details>
+            </section> : <section className="utility-section bridge-card">
+              <div className="utility-section-head"><span>{text("本机 Gaussian 16 桥接器", "Local Gaussian 16 bridge")}</span><small className={gaussianBridgeHealth?.available ? "bridge-online" : "bridge-offline"}>{gaussianBridgeHealth?.available ? text("已连接", "Connected") : text("未连接", "Not connected")}</small></div>
+              <div className="bridge-fields">
+                <label><span>URL</span><input value={gaussianBridgeUrl} onChange={(event) => setGaussianBridgeUrl(event.target.value)} /></label>
+                <label><span>{text("访问令牌", "Access token")}</span><input type="password" autoComplete="off" value={gaussianBridgeToken} onChange={(event) => setGaussianBridgeToken(event.target.value)} placeholder={text("粘贴终端显示的令牌", "Paste the token shown in the terminal")} /></label>
+              </div>
+              <div className="gaussian-actions">
+                <button type="button" onClick={() => void checkGaussianBridge()}>{text("检查连接", "Check connection")}</button>
+                <button type="button" onClick={() => void refreshGaussianJobs()}>{text("刷新状态", "Refresh status")}</button>
+              </div>
+              {gaussianBridgeHealth?.workRoot && <code className="bridge-path">{gaussianBridgeHealth.workRoot}</code>}
+              <details className="utility-help">
+                <summary>？ {text("如何启动", "How to start")}</summary>
+                <p>{text("网页模式仍需运行本机桥接器；如果希望完全免配置，请使用 SymViz 桌面版。", "Web mode still requires the local bridge. Use SymViz Desktop for a configuration-free Gaussian connection.")}</p>
+              </details>
+            </section>}
+            <section className="utility-section">
+              <div className="utility-section-head"><span>{text("任务队列", "Job queue")}</span><small>{runningGaussianJobs.length > 0
+                ? text(`${runningGaussianJobs.length} 个运行中 · ${queuedGaussianJobs.length} 个等待`, `${runningGaussianJobs.length} running · ${queuedGaussianJobs.length} waiting`)
+                : visibleGaussianJobs.length}</small></div>
+              {visibleGaussianJobs.length === 0 ? <div className="utility-empty"><strong>{text("队列为空", "The queue is empty")}</strong><p>{text("先在“输入”页生成一个任务，或在“结果”页导入现有 .log 文件。", "Create a job on the Input page, or import an existing .log file on the Results page.")}</p></div>
+                : <div className="gaussian-job-list">{visibleGaussianJobs.map((job) => <article key={job.id} className={`gaussian-job-card status-${job.status}`}>
+                  <button type="button" className="job-main" onClick={() => { setSelectedGaussianJobId(job.id); setQuantumSubview(job.summary ? "results" : "queue"); }}>
+                    <span><i />{job.name}</span>
+                    <small>{new Date(job.createdAt).toLocaleString(language)}</small>
+                    <b>{gaussianJobStatusText(job.status, language)}</b>
+                  </button>
+                  <div className="job-actions">
+                    {job.input && <button type="button" onClick={() => downloadTextFile(`${job.name}.gjf`, job.input)}>{text("保存输入", "Save input")}</button>}
+                    {job.status === "ready" && <button type="button" className="primary" disabled={desktopMode && !desktopStatus?.available} onClick={() => void submitGaussianJob(job)}>{text("本机运行", "Run locally")}</button>}
+                    {desktopMode && job.status === "running" && job.remoteId && <button type="button" onClick={() => void cancelGaussianJob(job)}>{text("取消", "Cancel")}</button>}
+                    {desktopMode && job.remoteId && <button type="button" onClick={() => void window.symvizDesktop?.revealJob(job.remoteId!)}>{text("打开目录", "Open folder")}</button>}
+                    {job.summary && <button type="button" onClick={() => { setSelectedGaussianJobId(job.id); setQuantumSubview("results"); }}>{text("查看结果", "View results")}</button>}
+                  </div>
+                </article>)}</div>}
+            </section>
+            {desktopStatus && liveGaussianJob && <section className="utility-section gaussian-live-section">
+              <div className="utility-section-head">
+                <span className="gaussian-live-title"><i />{text("Gaussian 实时输出", "Live Gaussian output")}</span>
+                <small>{visibleLiveGaussianOutput.updatedAt
+                  ? text(`每秒刷新 · ${new Date(visibleLiveGaussianOutput.updatedAt).toLocaleTimeString(language)}`, `1 s refresh · ${new Date(visibleLiveGaussianOutput.updatedAt).toLocaleTimeString(language)}`)
+                  : text("等待输出文件", "Waiting for output")}</small>
+              </div>
+              <div className="gaussian-live-meta">
+                <strong>{liveGaussianJob.name}</strong>
+                <span>{text("1 个 Gaussian 任务正在运行", "1 Gaussian job is running")}</span>
+                {visibleLiveGaussianOutput.truncated && <span>{text("仅显示最新输出", "Showing the latest output")}</span>}
+              </div>
+              <pre ref={liveGaussianOutputRef} className="gaussian-live-output" role="log" aria-live="off" tabIndex={0}>{visibleLiveGaussianOutput.text || text("Gaussian 正在初始化，输出出现后会自动显示在这里……", "Gaussian is starting. Output will appear here automatically…")}</pre>
+              <div className="gaussian-actions gaussian-live-actions">
+                <button type="button" onClick={() => setFollowGaussianOutput((current) => !current)}>{followGaussianOutput ? text("暂停自动滚动", "Pause auto-scroll") : text("继续自动滚动", "Resume auto-scroll")}</button>
+                <button type="button" disabled={!visibleLiveGaussianOutput.text} onClick={() => void navigator.clipboard.writeText(visibleLiveGaussianOutput.text)}>{text("复制输出", "Copy output")}</button>
+                {liveGaussianJob.remoteId && <button type="button" onClick={() => void window.symvizDesktop?.revealJob(liveGaussianJob.remoteId!)}>{text("打开目录", "Open folder")}</button>}
+              </div>
+              <details className="utility-help gaussian-process-help">
+                <summary>？ {text("为什么任务管理器里有多个 Gaussian 进程？", "Why are several Gaussian processes shown in Task Manager?")}</summary>
+                <p>{text("一个 Gaussian 任务通常由 g16.exe 主控程序依次调用 Link 模块（例如进行 SCF 的 l502.exe）。它们属于同一任务，不是重复计算。SymViz 现在一次只运行一个任务，其余任务自动排队。", "A Gaussian job normally uses the g16.exe controller to invoke Link modules in sequence, such as l502.exe for SCF. They belong to one job and are not duplicate calculations. SymViz now runs one job at a time and queues the rest.")}</p>
+              </details>
+            </section>}
+          </>}
+
+          {quantumSubview === "results" && <>
+            <div className="gaussian-actions result-import-actions">
+              <button type="button" className="primary" onClick={() => gaussianOutputRef.current?.click()}>{text("导入 Gaussian .log / .out", "Import Gaussian .log / .out")}</button>
+              {selectedGaussianJob?.output && <button type="button" onClick={() => downloadTextFile(`${selectedGaussianJob.name}.log`, selectedGaussianJob.output!)}>{text("保存输出", "Save output")}</button>}
+              {selectedGaussianJob?.remoteId && selectedGaussianJob.status === "completed" && <>
+                <select className="cube-property-select" value={cubeProperty} onChange={(event) => setCubeProperty(event.target.value as typeof cubeProperty)} aria-label={text("Cube 数据类型", "Cube property")}>
+                  <option value="density">{text("电子密度", "Electron density")}</option>
+                  <option value="esp">{text("静电势", "Electrostatic potential")}</option>
+                  <option value="homo">HOMO</option>
+                  <option value="lumo">LUMO</option>
+                </select>
+                <button type="button" onClick={() => void generateCubeForJob(selectedGaussianJob)}>{text("生成 Cube", "Generate Cube")}</button>
+              </>}
+            </div>
+            {!selectedGaussianJob?.summary ? <div className="utility-empty"><strong>{text("尚无可解析的结果", "No parsed result yet")}</strong><p>{text("导入 Gaussian 输出，或刷新已完成的本地任务。", "Import a Gaussian output or refresh a completed local job.")}</p></div>
+              : <section className="gaussian-results">
+                <div className={`termination-banner ${selectedGaussianJob.summary.status}`}>
+                  <i>{selectedGaussianJob.summary.normalTermination ? "✓" : selectedGaussianJob.summary.errorTermination ? "!" : "…"}</i>
+                  <span><strong>{selectedGaussianJob.name}</strong><small>{selectedGaussianJob.summary.normalTermination
+                    ? text("Gaussian 正常终止", "Gaussian normal termination")
+                    : selectedGaussianJob.summary.errorTermination
+                      ? text("Gaussian 错误终止", "Gaussian error termination")
+                      : text("计算未结束或输出不完整", "Calculation unfinished or output incomplete")}</small></span>
+                </div>
+                <div className="quantum-result-grid">
+                  <span>{text("电子能（Hartree）", "Electronic energy (Hartree)")}<strong>{selectedGaussianJob.summary.scfEnergyHartree?.toFixed(9) ?? "—"}</strong><small>{selectedGaussianJob.summary.methodLabel ?? "SCF"}</small></span>
+                  <span>HOMO–LUMO gap (eV)<strong>{selectedGaussianJob.summary.gapEv?.toFixed(4) ?? "—"}</strong><small>{selectedGaussianJob.summary.homoHartree !== null && selectedGaussianJob.summary.lumoHartree !== null
+                    ? `${selectedGaussianJob.summary.homoHartree.toFixed(4)} → ${selectedGaussianJob.summary.lumoHartree.toFixed(4)} Ha`
+                    : "—"}</small></span>
+                  <span>{text("偶极矩（Debye）", "Dipole moment (Debye)")}<strong>{selectedGaussianJob.summary.dipoleDebye?.toFixed(4) ?? "—"}</strong><small>{text("总量", "total")}</small></span>
+                  <span>{text("热自由能（Hartree）", "Thermal free energy (Hartree)")}<strong>{selectedGaussianJob.summary.thermalFreeEnergyHartree?.toFixed(9) ?? "—"}</strong><small>{text("电子 + 热修正", "electronic + thermal")}</small></span>
+                  <span>{text("零点修正（Hartree）", "Zero-point correction (Hartree)")}<strong>{selectedGaussianJob.summary.zeroPointCorrectionHartree?.toFixed(6) ?? "—"}</strong><small>ZPE</small></span>
+                  <span>{text("虚频数", "Imaginary frequencies")}<strong>{selectedGaussianJob.summary.imaginaryFrequencyCount}</strong><small>{selectedGaussianJob.summary.frequenciesCm1.length} {text("个频率", "frequencies")}</small></span>
+                </div>
+                {selectedGaussianJob.summary.frequenciesCm1.length > 0 && <section className="utility-section frequency-list">
+                  <div className="utility-section-head"><span>{text("振动频率（cm⁻¹）", "Vibrational frequencies (cm⁻¹)")}</span><small>{text("负值为虚频", "negative values are imaginary")}</small></div>
+                  <div>{selectedGaussianJob.summary.frequenciesCm1.map((frequency, index) => <code key={`${frequency}-${index}`} className={frequency < 0 ? "imaginary" : ""}>{frequency.toFixed(2)}</code>)}</div>
+                </section>}
+                {selectedGaussianJob.summary.errorMessage && <div className="utility-warning"><strong>{text("错误摘要", "Error summary")}</strong><p>{selectedGaussianJob.summary.errorMessage}</p></div>}
+              </section>}
+            <details className="utility-help">
+              <summary>？ {text("结果解析范围", "What is parsed")}</summary>
+              <p>{text("当前读取最终 SCF 能、相关能、热化学校正、HOMO/LUMO、偶极矩、频率和终止状态。它是快速审阅器，不替代 GaussView、Multiwfn 或对原始输出的人工检查。", "The current parser reads final SCF and correlated energies, thermochemical corrections, HOMO/LUMO values, dipole moment, frequencies, and termination status. It is a rapid reviewer, not a replacement for GaussView, Multiwfn, or inspection of the raw output.")}</p>
+            </details>
+          </>}
+
+          {quantumSubview === "cube" && <>
+            <div className="gaussian-actions result-import-actions">
+              <button type="button" className="primary" onClick={() => cubeInputRef.current?.click()}>{text("打开 .cube / .cub", "Open .cube / .cub")}</button>
+              {cubeFileName && <span className="cube-file-name">{cubeFileName}</span>}
+            </div>
+            {!cube ? <div className="utility-empty cube-empty"><strong>{text("导入 Gaussian Cube 文件", "Import a Gaussian Cube file")}</strong><p>{text("支持电子密度、静电势与分子轨道网格。分子轨道可同时显示正、负相位。", "Electron-density, electrostatic-potential, and molecular-orbital grids are supported. Molecular orbitals can show positive and negative phases together.")}</p></div>
+              : <>
+                <section className="utility-section cube-controls">
+                  <div className="utility-section-head"><span>{text("等值面", "Isosurface")}</span><small>{cube.dimensions.join(" × ")} grid</small></div>
+                  <label className="cube-isovalue-control">
+                    <span>{text("等值（原子单位）", "Isovalue (atomic units)")}<output>{cubeIsovalue.toExponential(3)}</output></span>
+                    <input
+                      type="range"
+                      min={Math.max(1e-8, Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum)) / 1000)}
+                      max={Math.max(1e-7, Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum)) * 0.8)}
+                      step={Math.max(1e-8, Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum)) / 500)}
+                      value={cubeIsovalue}
+                      onChange={(event) => setCubeIsovalue(Number(event.target.value))}
+                    />
+                  </label>
+                  <div className="cube-phase-switch">
+                    <label><input type="checkbox" checked={cubePositive} onChange={(event) => setCubePositive(event.target.checked)} /><i className="positive" />{text("正相位", "Positive phase")}</label>
+                    <label><input type="checkbox" checked={cubeNegative} onChange={(event) => setCubeNegative(event.target.checked)} /><i className="negative" />{text("负相位", "Negative phase")}</label>
+                  </div>
+                </section>
+                <CubeSurfaceCanvas cube={cube} isovalue={cubeIsovalue} showPositive={cubePositive} showNegative={cubeNegative} language={language} />
+                <div className="cube-stats">
+                  <span>min<strong>{cube.minimum.toExponential(4)}</strong></span>
+                  <span>max<strong>{cube.maximum.toExponential(4)}</strong></span>
+                  <span>RMS<strong>{cube.rms.toExponential(4)}</strong></span>
+                  <span>{text("原子数", "Atoms")}<strong>{cube.atoms.length}</strong></span>
+                </div>
+              </>}
+            <details className="utility-help">
+              <summary>？ {text("Cube 数据说明", "About Cube data")}</summary>
+              <p>{text("等值面来自网格线性插值。大型网格会自动降低预览采样密度，以保持交互流畅；原始数值不会被修改。轨道的正负颜色表示波函数相位，不表示正负电荷。", "The isosurface uses linear interpolation on the grid. Large grids are automatically downsampled for interactive preview without modifying the original values. Positive and negative orbital colors indicate wavefunction phase, not positive and negative charge.")}</p>
+            </details>
+          </>}
         </div>}
 
         {rightTab === "calculator" && <div className="right-content panel-scroll calculator-panel">
@@ -2568,7 +4412,7 @@ export default function Home() {
         </label>
         <label className="appearance-range-row">
           <span>{text("字母大小", "Label size")}</span><output>{axisAppearance.fontSize} px</output>
-          <input type="range" min="7" max="20" step="1" value={axisAppearance.fontSize} onChange={(event) => setAxisAppearance((current) => ({ ...current, fontSize: Number(event.target.value) }))} />
+          <input type="range" min="10" max="23" step="1" value={axisAppearance.fontSize} onChange={(event) => setAxisAppearance((current) => ({ ...current, fontSize: Number(event.target.value) }))} />
         </label>
         <button type="button" className="appearance-reset" onClick={() => setAxisAppearance({ ...defaultAxisAppearance })}>{text("恢复坐标轴默认外观", "Restore default axis appearance")}</button>
       </div>}
@@ -2607,7 +4451,7 @@ export default function Home() {
         </div>;
       })()}
       {notice && <div className="toast"><i>✓</i><span>{notice}</span></div>}
-      {structure.warnings.length > 0 && <div className="warning-ribbon">{english ? "CIF warning: some symmetry metadata may be incomplete." : structure.warnings[0]}</div>}
+      {structure.warnings.length > 0 && <div className="warning-ribbon">{english ? "Structure warning: symmetry or unit-cell metadata may be incomplete." : structure.warnings[0]}</div>}
     </main>
   );
 }
