@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>SymViz · 对称操作与铁电相变</title><link rel="stylesheet" href="./gallery.css"><link rel="stylesheet" href="./ferro-transition.css"><script src="./projection-diagrams.js" defer></script><script src="./ferro-transition.js" defer></script><script src="./gallery.js" defer></script></head>
+<body><div id="polar-space-group-gallery">
+  
+  <nav class="pg-suite-tabs" role="tablist" aria-label="演示主题">
+    <button class="btn" type="button" id="pg-space-tab" role="tab" aria-controls="pg-space-view" aria-selected="true" data-suite-view="spacegroup">空间群操作与投影图</button>
+    <button class="btn" type="button" id="pg-transition-tab" role="tab" aria-controls="pg-transition-view" aria-selected="false" data-suite-view="transition">铁电相变</button>
+  </nav>
+  <section id="pg-space-view" role="tabpanel" aria-labelledby="pg-space-tab">
+  <h2>空间群对称操作演示</h2>
+  <div class="pg-subtitle text-small text-muted" data-catalog-summary>全部 230 类空间群 · 68 类极性 · 92 类中心对称 · 70 类非心非极性</div>
+  <div class="pg-fields">
+    <label class="form-label" for="pg-category">空间群类别<select class="form-select" id="pg-category"><option value="all">全部 · 230 类</option><option value="polar">极性 · 68 类</option><option value="centrosymmetric">中心对称 · 92 类</option><option value="nonpolar-acentric">非心非极性 · 70 类</option></select></label>
+    <label class="form-label" for="pg-family">按点群分组<select class="form-select" id="pg-family"></select></label>
+    <label class="form-label" for="pg-group">空间群<select class="form-select" id="pg-group"></select></label>
+  </div>
+  <div class="pg-meta text-small"><span data-meta="true"></span><span data-polar="true"></span></div>
+  <div class="pg-op-fields">
+    <label class="form-label" for="pg-operation">选择代表操作<select class="form-select" id="pg-operation"></select></label>
+    <label class="form-label" for="pg-view">观察方向<select class="form-select" id="pg-view"><option value="3d">立体</option><option value="a">沿 a 轴</option><option value="b">沿 b 轴</option><option value="c">沿 c 轴</option></select></label>
+  </div>
+  <div class="pg-modes">
+    <div class="viz-row" role="group" aria-label="演示模式"><button class="btn" type="button" data-mode="operation" aria-pressed="true">操作过程</button><button class="btn" type="button" data-mode="orbit" aria-pressed="false">等价位置总览</button><label class="form-check"><input type="checkbox" class="form-check-input" id="pg-repeat"><span>连续执行两次</span></label><label class="form-check"><input type="checkbox" class="form-check-input" id="pg-centers" checked><span>显示反演中心</span></label></div>
+    <button class="btn btn-ghost" type="button" data-next="true">下一操作</button>
+  </div>
+  <div class="pg-demonstration">
+    <div class="pg-animation">
+      <svg class="pg-stage" role="img" aria-label="空间群对称操作动画"><title id="pg-title">空间群的对称操作</title><desc id="pg-desc">查看基元 A 的几何映射、单胞内的一般等价位置和红色反演中心。</desc><defs><filter id="pg-red-center-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="2.6"/></filter></defs><g data-scene="true"></g></svg>
+      <div class="pg-legend text-small"><span class="pg-key"><span class="pg-dot"></span><span data-seed-legend="true">A 原始基元</span></span><span class="pg-key"><span class="pg-dot image"></span><span data-image-legend="true">当前操作的映射像</span></span><span class="pg-key" data-center-legend><span class="pg-dot inversion"></span><span data-center-count></span></span><span data-count="true"></span></div>
+      <div class="pg-play-row"><button class="btn btn-primary" type="button" data-play="true">重播映射</button><label class="form-label" for="pg-phase"><span class="pg-range-header"><span>映射进度</span><output id="pg-readout" class="tabular-nums"></output></span><input class="form-range" id="pg-phase" type="range" min="0" max="1" step="0.002" value="1" aria-label="映射进度"></label></div>
+    </div>
+    <aside class="pg-diagram-panel" aria-label="空间群对称投影图" data-diagram-panel></aside>
+    <aside class="pg-explanation" aria-label="对称操作文字说明">
+      <div class="text-small text-muted" data-explanation-group></div>
+      <h3 data-explanation-title>操作说明</h3>
+      <div class="pg-formula" aria-label="当前坐标变换式"><span>(x, y, z)</span><span data-formula="true"></span></div>
+      <p data-description data-operation-description></p>
+      <ol data-steps data-operation-steps></ol>
+      <div class="pg-geometry text-small" data-geometry="true"></div>
+      <p class="pg-composition text-small" data-composition></p>
+      <div class="pg-result tabular-nums text-small" data-result="true" aria-live="polite"></div>
+      <div class="pg-inversion-status text-small" data-inversion-status></div>
+    </aside>
+  </div>
+  <div class="pg-foot text-small text-muted"><span>拖动模型改变视角</span><span>基元、晶胞为示意</span><span>中间帧为几何插值，非分子运动</span><span>绿色标记：当前操作的轴、面或旋转反演固定点</span></div>
+  <details data-all-operations="true"><summary data-table-title="true">全部代表操作</summary><table class="table table-sm"><thead><tr><th scope="col">序号</th><th scope="col">操作类型</th><th scope="col">坐标变换结果</th></tr></thead><tbody data-table="true"></tbody></table></details>
+  <details><summary>晶胞设定与来源</summary><div class="pg-source-lines text-small"><span data-setting="true"></span><span data-cell="true"></span><span>演示采用表列设定，不改写当前 CIF；No.7 使用 Pn 的 b2 设定，No.13 保留 P2/n 的 b2 设定。R 空间群采用六方 H 设定。等价位置总览按基元中心折回单胞，保持基元完整。完整群另含任意整数晶格平移。</span><span>红点表示闭合常规晶胞内的全部反演中心，边、面及顶点上的中心会在相邻晶胞重复出现；沿轴投影时不同中心可能重合。</span><span>原始数据：<a href="https://gemmi.readthedocs.io/en/stable/symmetry.html#groups-of-operations" target="_blank" rel="noopener">Gemmi 0.7.5</a>。操作集合独立核对：228 类使用 <a href="https://www.psi.ch/sites/default/files/import/lns-diffraction/Support2EN/Symmetry_Elements_of_all_Space_Groups.pdf" target="_blank" rel="noopener">PSI 空间群操作汇编</a>；No.228 使用 <a href="https://onlinelibrary.wiley.com/iucr/itc/A1b/ch2o3v0001/sgtable2o3o228/" target="_blank" rel="noopener">IUCr IT A1 一般位置表</a>并转换原点设定。No.212 原表有一行位移不满足群闭包；根据其余 23 条源操作的精确闭包核对全部 24 项，原表差异与推导依据另行保留。术语：<a href="https://www.iucr.org/who-we-are/commissions/commission-on-crystallographic-nomenclature/published-reports/symel" target="_blank" rel="noopener">IUCr 对称元素定义</a>。</span><span>极性允许方向描述对称性约束，不表示已经测得极化。</span></div></details>
+  </section>
+  <section id="pg-transition-view" role="tabpanel" aria-labelledby="pg-transition-tab" hidden>
+    <label class="form-label pg-transition-picker" for="pg-transition-species">相变类型<select class="form-select" id="pg-transition-species"><option value="222F1">222F1（4/2）· 三族二重轴消失</option><option value="mF1">mF1（2/2）· 一族镜面消失</option></select></label>
+    <div data-transition-panel data-transition-species="222F1"></div>
+    <div data-transition-panel data-transition-species="mF1" hidden></div>
+  </section>
+</div></body></html>

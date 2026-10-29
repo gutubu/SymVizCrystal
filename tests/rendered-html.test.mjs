@@ -4,12 +4,12 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
-async function render() {
+async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
   return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
+    new Request(`http://localhost${pathname}`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
@@ -27,13 +27,23 @@ test("server-renders the SymViz application shell", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
+test("server-renders the separate Multiwfn visualizer", async () => {
+  const response = await render("/multiwfn-visualizer");
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+  const html = await response.text();
+  assert.match(html, /Multiwfn 3D Visualizer/i);
+});
+
 test("ships CIF parsing and the interactive crystal viewer without starter assets", async () => {
-  const [page, parser, characterTableSource, gaussianTools, bridge, desktopMain, desktopPreload, layout, packageJson] = await Promise.all([
+  const [page, parser, characterTableSource, gaussianTools, bridge, multiwfnService, multiwfnVisualizer, desktopMain, desktopPreload, layout, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/crystal-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/character-tables.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/gaussian-tools.ts", import.meta.url), "utf8"),
     readFile(new URL("../tools/gaussian-bridge.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../desktop/multiwfn-service.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../app/multiwfn-visualizer/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../desktop/main.mjs", import.meta.url), "utf8"),
     readFile(new URL("../desktop/preload.cjs", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
@@ -123,10 +133,15 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /Structure overview/);
   assert.match(page, /Hydrogen-bond geometry filter/);
   assert.match(page, /Coordinate calculator/);
-  assert.match(page, /Quantum ESPRESSO 周期晶体计算/);
+  assert.match(page, /Quantum ESPRESSO 周期输入生成/);
   assert.match(page, /Gaussian 分子计算与 Cube 三维数据/);
   assert.match(page, /Quantum ESPRESSO input \(\.in\)/);
-  assert.match(page, /加入 QE 本地队列/);
+  assert.match(page, /QE 输入文件生成器/);
+  assert.match(page, /仅导出 · 不在本机运行/);
+  assert.match(page, /针对当前 CIF 的自动建议/);
+  assert.match(page, /平面波基组 \/ 截断能方案/);
+  assert.match(page, /下载输入集 ZIP/);
+  assert.match(page, /value="vc-md"/);
   assert.match(page, /理论方法/);
   assert.match(page, /gaussianMethodGroups/);
   assert.match(page, /gaussianBasisGroups/);
@@ -138,6 +153,14 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(page, /本机 Gaussian 16 桥接器/);
   assert.match(page, /Import Gaussian \.log \/ \.out/);
   assert.match(page, /CubeSurfaceCanvas/);
+  assert.match(page, /Multiwfn 波函数分析/);
+  assert.match(page, /Multiwfn 波函数分析工作台/);
+  assert.match(page, /打开独立三维窗口/);
+  assert.match(page, /自定义命令脚本/);
+  assert.match(page, /right-panel-resizer/);
+  assert.match(page, /symviz-right-panel-width/);
+  assert.match(page, /密度 Cube/);
+  assert.match(page, /ESP Cube/);
   assert.match(page, /正相位/);
   assert.match(page, /负相位/);
   assert.match(page, /v0\.1\.3/);
@@ -159,7 +182,7 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(parser, /_atom_site_site_symmetry_multiplicity/);
   assert.match(parser, /_atom_site\.site_symmetry_multiplicity/);
   assert.match(parser, /pointGroupFromNumber/);
-  assert.match(parser, /hillElementOrder/);
+  assert.match(parser, /conventionalElementOrder/);
   assert.match(parser, /molecularDisplayFracts/);
   assert.match(parser, /findHydrogenBonds/);
   assert.match(parser, /molecularComponentIds/);
@@ -176,11 +199,18 @@ test("ships CIF parsing and the interactive crystal viewer without starter asset
   assert.match(bridge, /127\.0\.0\.1/);
   assert.match(bridge, /x-symviz-token/);
   assert.match(bridge, /g16\.exe/);
+  assert.match(multiwfnService, /class MultiwfnDesktopService/);
+  assert.match(multiwfnService, /Multiwfn\.exe/);
+  assert.match(multiwfnService, /taskkill/);
+  assert.match(multiwfnVisualizer, /CubeSurfaceCanvas/);
+  assert.match(multiwfnVisualizer, /readMultiwfnArtifact/);
   assert.match(desktopMain, /contextIsolation: true/);
   assert.match(desktopMain, /nodeIntegration: false/);
   assert.match(desktopMain, /sandbox: true/);
   assert.match(desktopMain, /trustedSender/);
+  assert.match(desktopMain, /symviz:open-multiwfn-visualizer/);
   assert.match(desktopPreload, /contextBridge\.exposeInMainWorld\("symvizDesktop"/);
+  assert.match(desktopPreload, /openMultiwfnVisualizer/);
   assert.doesNotMatch(desktopPreload, /exposeInMainWorld\("symvizDesktop",\s*ipcRenderer\)/);
   assert.equal([...characterTableSource.matchAll(/^\s+hm: "/gm)].length, 32);
   assert.match(characterTableSource, /hm: "6\/mmm"/);

@@ -5,8 +5,11 @@ import {
   buildCubeIsosurface,
   buildGaussianInput,
   buildGaussianInputFromModel,
+  cubeIsovalueRange,
+  cubePhaseAvailability,
   defaultCubeIsovalue,
   gaussianAtomIndices,
+  inferCubeBonds,
   parseGaussianCube,
   parseGaussianOutput,
   prepareGaussianModel,
@@ -153,4 +156,44 @@ Generated for tests
   const mesh = buildCubeIsosurface(cube, 0.5, true, false);
   assert.ok(mesh.triangles.length > 0);
   assert.ok(mesh.triangles.every((triangle) => triangle.sign === 1));
+});
+
+test("parses large Cube grids without exhausting the JavaScript call stack", () => {
+  const size = 70;
+  const count = size ** 3;
+  const values = [...Array(count - 1).fill("0.001"), "100"].join(" ");
+  const cube = parseGaussianCube(`Large cube
+Generated for stack regression
+ 0 0.000000 0.000000 0.000000
+ ${size} 0.250000 0.000000 0.000000
+ ${size} 0.000000 0.250000 0.000000
+ ${size} 0.000000 0.000000 0.250000
+${values}
+`);
+  assert.equal(cube.values.length, count);
+  assert.equal(cube.minimum, 0.001);
+  assert.equal(cube.maximum, 100);
+  const range = cubeIsovalueRange(cube);
+  assert.ok(range.suggested > 0 && range.suggested < 0.1);
+  assert.ok(range.maximum < 1);
+  assert.ok(range.minimum < range.suggested);
+  assert.deepEqual(cubePhaseAvailability(cube), { positive: true, negative: false });
+});
+
+test("detects signed Cube fields while ignoring insignificant numerical noise", () => {
+  assert.deepEqual(cubePhaseAvailability({ minimum: -0.12, maximum: 0.25 }), { positive: true, negative: true });
+  assert.deepEqual(cubePhaseAvailability({ minimum: -1e-14, maximum: 91 }), { positive: true, negative: false });
+  assert.deepEqual(cubePhaseAvailability({ minimum: -2, maximum: 0 }), { positive: false, negative: true });
+});
+
+test("infers molecular bonds from Cube atom coordinates", () => {
+  const bonds = inferCubeBonds({
+    atoms: [
+      { atomicNumber: 8, charge: 8, position: [0, 0, 0] },
+      { atomicNumber: 1, charge: 1, position: [0.958, 0, 0] },
+      { atomicNumber: 1, charge: 1, position: [-0.24, 0.928, 0] },
+    ],
+  });
+  assert.deepEqual(bonds.map(({ a, b }) => [a, b]), [[0, 1], [0, 2]]);
+  assert.ok(bonds.every((bond) => bond.distance > 0.95 && bond.distance < 0.97));
 });

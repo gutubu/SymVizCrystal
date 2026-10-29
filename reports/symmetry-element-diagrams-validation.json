@@ -1,0 +1,1630 @@
+{
+  "passed": true,
+  "groupCount": 230,
+  "checks": {
+    "valid-axis-lifts": 18690,
+    "valid-plane-lifts": 2735,
+    "valid-rotoinversion-lifts": 5254
+  },
+  "elementCounts": {
+    "axes": 11997,
+    "planes": 2077,
+    "rotoinversions": 2627,
+    "inversionCenters": 3028
+  },
+  "maxResidual": 2.349860591595014e-12,
+  "catalogueSha256": "b82c76fce76578d95afbdb5e9a2b2eb0a188a3bd99500c1893acf77992086577",
+  "diagramsSha256": "fde001bf78edbca0f9a212a645c0812914560c8513eed2dd0ea93b51376f7d5f",
+  "groups": [
+    {
+      "id": 1,
+      "axes": 0,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 2,
+      "axes": 0,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 3,
+      "axes": 9,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 4,
+      "axes": 9,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 5,
+      "axes": 15,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 6,
+      "axes": 0,
+      "planes": 3,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 7,
+      "axes": 0,
+      "planes": 3,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 8,
+      "axes": 0,
+      "planes": 5,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 9,
+      "axes": 0,
+      "planes": 5,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 10,
+      "axes": 9,
+      "planes": 3,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 11,
+      "axes": 9,
+      "planes": 2,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 12,
+      "axes": 15,
+      "planes": 5,
+      "rotoinversions": 0,
+      "inversionCenters": 39
+    },
+    {
+      "id": 13,
+      "axes": 4,
+      "planes": 3,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 14,
+      "axes": 6,
+      "planes": 2,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 15,
+      "axes": 10,
+      "planes": 5,
+      "rotoinversions": 0,
+      "inversionCenters": 39
+    },
+    {
+      "id": 16,
+      "axes": 27,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 17,
+      "axes": 24,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 18,
+      "axes": 21,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 19,
+      "axes": 18,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 20,
+      "axes": 38,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 21,
+      "axes": 43,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 22,
+      "axes": 75,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 23,
+      "axes": 39,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 24,
+      "axes": 36,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 25,
+      "axes": 9,
+      "planes": 6,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 26,
+      "axes": 9,
+      "planes": 6,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 27,
+      "axes": 9,
+      "planes": 6,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 28,
+      "axes": 9,
+      "planes": 5,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 29,
+      "axes": 9,
+      "planes": 5,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 30,
+      "axes": 9,
+      "planes": 5,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 31,
+      "axes": 6,
+      "planes": 6,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 32,
+      "axes": 9,
+      "planes": 4,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 33,
+      "axes": 9,
+      "planes": 4,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 34,
+      "axes": 9,
+      "planes": 4,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 35,
+      "axes": 13,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 36,
+      "axes": 13,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 37,
+      "axes": 13,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 38,
+      "axes": 15,
+      "planes": 8,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 39,
+      "axes": 15,
+      "planes": 8,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 40,
+      "axes": 15,
+      "planes": 7,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 41,
+      "axes": 15,
+      "planes": 7,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 42,
+      "axes": 25,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 43,
+      "axes": 25,
+      "planes": 8,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 44,
+      "axes": 13,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 45,
+      "axes": 13,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 46,
+      "axes": 13,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 47,
+      "axes": 27,
+      "planes": 9,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 48,
+      "axes": 12,
+      "planes": 9,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 49,
+      "axes": 21,
+      "planes": 9,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 50,
+      "axes": 16,
+      "planes": 9,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 51,
+      "axes": 24,
+      "planes": 8,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 52,
+      "axes": 14,
+      "planes": 8,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 53,
+      "axes": 19,
+      "planes": 8,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 54,
+      "axes": 18,
+      "planes": 8,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 55,
+      "axes": 21,
+      "planes": 7,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 56,
+      "axes": 16,
+      "planes": 7,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 57,
+      "axes": 21,
+      "planes": 7,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 58,
+      "axes": 17,
+      "planes": 7,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 59,
+      "axes": 22,
+      "planes": 7,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 60,
+      "axes": 16,
+      "planes": 7,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 61,
+      "axes": 18,
+      "planes": 6,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 62,
+      "axes": 19,
+      "planes": 6,
+      "rotoinversions": 0,
+      "inversionCenters": 27
+    },
+    {
+      "id": 63,
+      "axes": 38,
+      "planes": 12,
+      "rotoinversions": 0,
+      "inversionCenters": 39
+    },
+    {
+      "id": 64,
+      "axes": 37,
+      "planes": 12,
+      "rotoinversions": 0,
+      "inversionCenters": 39
+    },
+    {
+      "id": 65,
+      "axes": 43,
+      "planes": 13,
+      "rotoinversions": 0,
+      "inversionCenters": 39
+    },
+    {
+      "id": 66,
+      "axes": 33,
+      "planes": 13,
+      "rotoinversions": 0,
+      "inversionCenters": 39
+    },
+    {
+      "id": 67,
+      "axes": 42,
+      "planes": 13,
+      "rotoinversions": 0,
+      "inversionCenters": 39
+    },
+    {
+      "id": 68,
+      "axes": 32,
+      "planes": 13,
+      "rotoinversions": 0,
+      "inversionCenters": 39
+    },
+    {
+      "id": 69,
+      "axes": 75,
+      "planes": 15,
+      "rotoinversions": 0,
+      "inversionCenters": 63
+    },
+    {
+      "id": 70,
+      "axes": 48,
+      "planes": 15,
+      "rotoinversions": 0,
+      "inversionCenters": 63
+    },
+    {
+      "id": 71,
+      "axes": 39,
+      "planes": 15,
+      "rotoinversions": 0,
+      "inversionCenters": 35
+    },
+    {
+      "id": 72,
+      "axes": 37,
+      "planes": 15,
+      "rotoinversions": 0,
+      "inversionCenters": 35
+    },
+    {
+      "id": 73,
+      "axes": 36,
+      "planes": 15,
+      "rotoinversions": 0,
+      "inversionCenters": 35
+    },
+    {
+      "id": 74,
+      "axes": 38,
+      "planes": 15,
+      "rotoinversions": 0,
+      "inversionCenters": 35
+    },
+    {
+      "id": 75,
+      "axes": 9,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 76,
+      "axes": 9,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 77,
+      "axes": 9,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 78,
+      "axes": 9,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 79,
+      "axes": 13,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 80,
+      "axes": 13,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 81,
+      "axes": 9,
+      "planes": 0,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 82,
+      "axes": 13,
+      "planes": 0,
+      "rotoinversions": 23,
+      "inversionCenters": 0
+    },
+    {
+      "id": 83,
+      "axes": 9,
+      "planes": 3,
+      "rotoinversions": 15,
+      "inversionCenters": 27
+    },
+    {
+      "id": 84,
+      "axes": 9,
+      "planes": 3,
+      "rotoinversions": 10,
+      "inversionCenters": 27
+    },
+    {
+      "id": 85,
+      "axes": 4,
+      "planes": 3,
+      "rotoinversions": 6,
+      "inversionCenters": 27
+    },
+    {
+      "id": 86,
+      "axes": 4,
+      "planes": 3,
+      "rotoinversions": 4,
+      "inversionCenters": 27
+    },
+    {
+      "id": 87,
+      "axes": 13,
+      "planes": 5,
+      "rotoinversions": 23,
+      "inversionCenters": 35
+    },
+    {
+      "id": 88,
+      "axes": 12,
+      "planes": 5,
+      "rotoinversions": 12,
+      "inversionCenters": 35
+    },
+    {
+      "id": 89,
+      "axes": 57,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 90,
+      "axes": 51,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 91,
+      "axes": 44,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 92,
+      "axes": 42,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 93,
+      "axes": 47,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 94,
+      "axes": 47,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 95,
+      "axes": 44,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 96,
+      "axes": 42,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 97,
+      "axes": 89,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 98,
+      "axes": 83,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 99,
+      "axes": 9,
+      "planes": 12,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 100,
+      "axes": 9,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 101,
+      "axes": 9,
+      "planes": 12,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 102,
+      "axes": 9,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 103,
+      "axes": 9,
+      "planes": 12,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 104,
+      "axes": 9,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 105,
+      "axes": 9,
+      "planes": 12,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 106,
+      "axes": 9,
+      "planes": 10,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 107,
+      "axes": 13,
+      "planes": 16,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 108,
+      "axes": 13,
+      "planes": 16,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 109,
+      "axes": 13,
+      "planes": 18,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 110,
+      "axes": 13,
+      "planes": 18,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 111,
+      "axes": 27,
+      "planes": 6,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 112,
+      "axes": 21,
+      "planes": 6,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 113,
+      "axes": 21,
+      "planes": 6,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 114,
+      "axes": 17,
+      "planes": 6,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 115,
+      "axes": 39,
+      "planes": 6,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 116,
+      "axes": 29,
+      "planes": 6,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 117,
+      "axes": 39,
+      "planes": 4,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 118,
+      "axes": 29,
+      "planes": 4,
+      "rotoinversions": 15,
+      "inversionCenters": 0
+    },
+    {
+      "id": 119,
+      "axes": 63,
+      "planes": 10,
+      "rotoinversions": 23,
+      "inversionCenters": 0
+    },
+    {
+      "id": 120,
+      "axes": 63,
+      "planes": 10,
+      "rotoinversions": 23,
+      "inversionCenters": 0
+    },
+    {
+      "id": 121,
+      "axes": 39,
+      "planes": 6,
+      "rotoinversions": 23,
+      "inversionCenters": 0
+    },
+    {
+      "id": 122,
+      "axes": 33,
+      "planes": 8,
+      "rotoinversions": 23,
+      "inversionCenters": 0
+    },
+    {
+      "id": 123,
+      "axes": 57,
+      "planes": 15,
+      "rotoinversions": 15,
+      "inversionCenters": 27
+    },
+    {
+      "id": 124,
+      "axes": 41,
+      "planes": 15,
+      "rotoinversions": 15,
+      "inversionCenters": 27
+    },
+    {
+      "id": 125,
+      "axes": 46,
+      "planes": 15,
+      "rotoinversions": 6,
+      "inversionCenters": 27
+    },
+    {
+      "id": 126,
+      "axes": 32,
+      "planes": 15,
+      "rotoinversions": 6,
+      "inversionCenters": 27
+    },
+    {
+      "id": 127,
+      "axes": 51,
+      "planes": 13,
+      "rotoinversions": 15,
+      "inversionCenters": 27
+    },
+    {
+      "id": 128,
+      "axes": 37,
+      "planes": 13,
+      "rotoinversions": 15,
+      "inversionCenters": 27
+    },
+    {
+      "id": 129,
+      "axes": 52,
+      "planes": 13,
+      "rotoinversions": 6,
+      "inversionCenters": 27
+    },
+    {
+      "id": 130,
+      "axes": 36,
+      "planes": 13,
+      "rotoinversions": 6,
+      "inversionCenters": 27
+    },
+    {
+      "id": 131,
+      "axes": 47,
+      "planes": 15,
+      "rotoinversions": 10,
+      "inversionCenters": 27
+    },
+    {
+      "id": 132,
+      "axes": 51,
+      "planes": 15,
+      "rotoinversions": 10,
+      "inversionCenters": 27
+    },
+    {
+      "id": 133,
+      "axes": 36,
+      "planes": 15,
+      "rotoinversions": 4,
+      "inversionCenters": 27
+    },
+    {
+      "id": 134,
+      "axes": 42,
+      "planes": 15,
+      "rotoinversions": 4,
+      "inversionCenters": 27
+    },
+    {
+      "id": 135,
+      "axes": 41,
+      "planes": 13,
+      "rotoinversions": 10,
+      "inversionCenters": 27
+    },
+    {
+      "id": 136,
+      "axes": 47,
+      "planes": 13,
+      "rotoinversions": 8,
+      "inversionCenters": 27
+    },
+    {
+      "id": 137,
+      "axes": 42,
+      "planes": 13,
+      "rotoinversions": 4,
+      "inversionCenters": 27
+    },
+    {
+      "id": 138,
+      "axes": 46,
+      "planes": 13,
+      "rotoinversions": 4,
+      "inversionCenters": 27
+    },
+    {
+      "id": 139,
+      "axes": 89,
+      "planes": 21,
+      "rotoinversions": 23,
+      "inversionCenters": 35
+    },
+    {
+      "id": 140,
+      "axes": 87,
+      "planes": 21,
+      "rotoinversions": 23,
+      "inversionCenters": 35
+    },
+    {
+      "id": 141,
+      "axes": 70,
+      "planes": 21,
+      "rotoinversions": 12,
+      "inversionCenters": 35
+    },
+    {
+      "id": 142,
+      "axes": 68,
+      "planes": 21,
+      "rotoinversions": 12,
+      "inversionCenters": 35
+    },
+    {
+      "id": 143,
+      "axes": 6,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 144,
+      "axes": 6,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 145,
+      "axes": 6,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 146,
+      "axes": 16,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 147,
+      "axes": 6,
+      "planes": 0,
+      "rotoinversions": 12,
+      "inversionCenters": 27
+    },
+    {
+      "id": 148,
+      "axes": 16,
+      "planes": 0,
+      "rotoinversions": 16,
+      "inversionCenters": 43
+    },
+    {
+      "id": 149,
+      "axes": 63,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 150,
+      "axes": 39,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 151,
+      "axes": 51,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 152,
+      "axes": 33,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 153,
+      "axes": 51,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 154,
+      "axes": 33,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 155,
+      "axes": 81,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 156,
+      "axes": 6,
+      "planes": 13,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 157,
+      "axes": 6,
+      "planes": 9,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 158,
+      "axes": 6,
+      "planes": 13,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 159,
+      "axes": 6,
+      "planes": 9,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 160,
+      "axes": 16,
+      "planes": 13,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 161,
+      "axes": 16,
+      "planes": 13,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 162,
+      "axes": 63,
+      "planes": 9,
+      "rotoinversions": 12,
+      "inversionCenters": 27
+    },
+    {
+      "id": 163,
+      "axes": 44,
+      "planes": 9,
+      "rotoinversions": 12,
+      "inversionCenters": 27
+    },
+    {
+      "id": 164,
+      "axes": 39,
+      "planes": 13,
+      "rotoinversions": 12,
+      "inversionCenters": 27
+    },
+    {
+      "id": 165,
+      "axes": 28,
+      "planes": 13,
+      "rotoinversions": 12,
+      "inversionCenters": 27
+    },
+    {
+      "id": 166,
+      "axes": 81,
+      "planes": 13,
+      "rotoinversions": 16,
+      "inversionCenters": 43
+    },
+    {
+      "id": 167,
+      "axes": 70,
+      "planes": 13,
+      "rotoinversions": 16,
+      "inversionCenters": 43
+    },
+    {
+      "id": 168,
+      "axes": 11,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 169,
+      "axes": 11,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 170,
+      "axes": 11,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 171,
+      "axes": 11,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 172,
+      "axes": 11,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 173,
+      "axes": 11,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 174,
+      "axes": 6,
+      "planes": 3,
+      "rotoinversions": 18,
+      "inversionCenters": 0
+    },
+    {
+      "id": 175,
+      "axes": 11,
+      "planes": 3,
+      "rotoinversions": 30,
+      "inversionCenters": 27
+    },
+    {
+      "id": 176,
+      "axes": 11,
+      "planes": 2,
+      "rotoinversions": 24,
+      "inversionCenters": 27
+    },
+    {
+      "id": 177,
+      "axes": 101,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 178,
+      "axes": 74,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 179,
+      "axes": 74,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 180,
+      "axes": 81,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 181,
+      "axes": 81,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 182,
+      "axes": 82,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 183,
+      "axes": 11,
+      "planes": 22,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 184,
+      "axes": 11,
+      "planes": 22,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 185,
+      "axes": 11,
+      "planes": 22,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 186,
+      "axes": 11,
+      "planes": 22,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 187,
+      "axes": 63,
+      "planes": 16,
+      "rotoinversions": 18,
+      "inversionCenters": 0
+    },
+    {
+      "id": 188,
+      "axes": 63,
+      "planes": 15,
+      "rotoinversions": 12,
+      "inversionCenters": 0
+    },
+    {
+      "id": 189,
+      "axes": 39,
+      "planes": 12,
+      "rotoinversions": 18,
+      "inversionCenters": 0
+    },
+    {
+      "id": 190,
+      "axes": 39,
+      "planes": 11,
+      "rotoinversions": 12,
+      "inversionCenters": 0
+    },
+    {
+      "id": 191,
+      "axes": 101,
+      "planes": 25,
+      "rotoinversions": 30,
+      "inversionCenters": 27
+    },
+    {
+      "id": 192,
+      "axes": 71,
+      "planes": 25,
+      "rotoinversions": 30,
+      "inversionCenters": 27
+    },
+    {
+      "id": 193,
+      "axes": 90,
+      "planes": 24,
+      "rotoinversions": 24,
+      "inversionCenters": 27
+    },
+    {
+      "id": 194,
+      "axes": 82,
+      "planes": 24,
+      "rotoinversions": 24,
+      "inversionCenters": 27
+    },
+    {
+      "id": 195,
+      "axes": 79,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 196,
+      "axes": 247,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 197,
+      "axes": 91,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 198,
+      "axes": 61,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 199,
+      "axes": 79,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 200,
+      "axes": 79,
+      "planes": 9,
+      "rotoinversions": 36,
+      "inversionCenters": 27
+    },
+    {
+      "id": 201,
+      "axes": 55,
+      "planes": 9,
+      "rotoinversions": 27,
+      "inversionCenters": 27
+    },
+    {
+      "id": 202,
+      "axes": 247,
+      "planes": 15,
+      "rotoinversions": 108,
+      "inversionCenters": 63
+    },
+    {
+      "id": 203,
+      "axes": 205,
+      "planes": 15,
+      "rotoinversions": 63,
+      "inversionCenters": 63
+    },
+    {
+      "id": 204,
+      "axes": 91,
+      "planes": 15,
+      "rotoinversions": 44,
+      "inversionCenters": 35
+    },
+    {
+      "id": 205,
+      "axes": 61,
+      "planes": 6,
+      "rotoinversions": 27,
+      "inversionCenters": 27
+    },
+    {
+      "id": 206,
+      "axes": 79,
+      "planes": 15,
+      "rotoinversions": 35,
+      "inversionCenters": 35
+    },
+    {
+      "id": 207,
+      "axes": 169,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 208,
+      "axes": 139,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 209,
+      "axes": 385,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 210,
+      "axes": 355,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 211,
+      "axes": 241,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 212,
+      "axes": 109,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 213,
+      "axes": 109,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 214,
+      "axes": 175,
+      "planes": 0,
+      "rotoinversions": 0,
+      "inversionCenters": 0
+    },
+    {
+      "id": 215,
+      "axes": 79,
+      "planes": 18,
+      "rotoinversions": 45,
+      "inversionCenters": 0
+    },
+    {
+      "id": 216,
+      "axes": 247,
+      "planes": 42,
+      "rotoinversions": 105,
+      "inversionCenters": 0
+    },
+    {
+      "id": 217,
+      "axes": 91,
+      "planes": 18,
+      "rotoinversions": 69,
+      "inversionCenters": 0
+    },
+    {
+      "id": 218,
+      "axes": 79,
+      "planes": 18,
+      "rotoinversions": 24,
+      "inversionCenters": 0
+    },
+    {
+      "id": 219,
+      "axes": 247,
+      "planes": 42,
+      "rotoinversions": 90,
+      "inversionCenters": 0
+    },
+    {
+      "id": 220,
+      "axes": 79,
+      "planes": 18,
+      "rotoinversions": 36,
+      "inversionCenters": 0
+    },
+    {
+      "id": 221,
+      "axes": 169,
+      "planes": 27,
+      "rotoinversions": 81,
+      "inversionCenters": 27
+    },
+    {
+      "id": 222,
+      "axes": 115,
+      "planes": 27,
+      "rotoinversions": 45,
+      "inversionCenters": 27
+    },
+    {
+      "id": 223,
+      "axes": 139,
+      "planes": 27,
+      "rotoinversions": 60,
+      "inversionCenters": 27
+    },
+    {
+      "id": 224,
+      "axes": 145,
+      "planes": 27,
+      "rotoinversions": 39,
+      "inversionCenters": 27
+    },
+    {
+      "id": 225,
+      "axes": 385,
+      "planes": 57,
+      "rotoinversions": 213,
+      "inversionCenters": 63
+    },
+    {
+      "id": 226,
+      "axes": 379,
+      "planes": 57,
+      "rotoinversions": 198,
+      "inversionCenters": 63
+    },
+    {
+      "id": 227,
+      "axes": 343,
+      "planes": 57,
+      "rotoinversions": 111,
+      "inversionCenters": 63
+    },
+    {
+      "id": 228,
+      "axes": 337,
+      "planes": 57,
+      "rotoinversions": 111,
+      "inversionCenters": 63
+    },
+    {
+      "id": 229,
+      "axes": 241,
+      "planes": 33,
+      "rotoinversions": 113,
+      "inversionCenters": 35
+    },
+    {
+      "id": 230,
+      "axes": 175,
+      "planes": 33,
+      "rotoinversions": 71,
+      "inversionCenters": 35
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GaussianDesktopService } from "./gaussian-service.mjs";
+import { MultiwfnDesktopService, validateMultiwfnInput } from "./multiwfn-service.mjs";
 import { QuantumEspressoDesktopService } from "./quantum-espresso-service.mjs";
 import { startRendererServer } from "./renderer-server.mjs";
 
@@ -13,15 +14,63 @@ let mainWindow = null;
 let rendererServer = null;
 let gaussianService = null;
 let quantumEspressoService = null;
+let multiwfnService = null;
 let rendererOrigin = null;
+const appWindows = new Set();
 
 function trustedSender(event) {
-  if (!mainWindow || event.sender.id !== mainWindow.webContents.id) return false;
+  if (![...appWindows].some((window) => !window.isDestroyed() && event.sender.id === window.webContents.id)) return false;
   try {
     return new URL(event.senderFrame.url).origin === rendererOrigin;
   } catch {
     return false;
   }
+}
+
+function secureWindowOptions(overrides = {}) {
+  return {
+    backgroundColor: "#ffffff",
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: join(desktopRoot, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+    },
+    ...overrides,
+  };
+}
+
+function protectWindowNavigation(window) {
+  appWindows.add(window);
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  window.webContents.on("will-navigate", (event, url) => {
+    if (new URL(url).origin !== rendererOrigin) event.preventDefault();
+  });
+  window.on("closed", () => appWindows.delete(window));
+}
+
+async function openMultiwfnVisualizer(jobId = "", artifactName = "") {
+  const params = new URLSearchParams();
+  if (jobId) params.set("job", String(jobId));
+  if (artifactName) params.set("file", String(artifactName));
+  const viewerUrl = new URL(`/multiwfn-visualizer${params.size ? `?${params}` : ""}`, rendererServer.url).href;
+  const viewer = new BrowserWindow(secureWindowOptions({
+    title: "SymViz · Multiwfn 3D Visualizer",
+    width: 1120,
+    height: 780,
+    minWidth: 760,
+    minHeight: 560,
+    show: false,
+  }));
+  protectWindowNavigation(viewer);
+  viewer.once("ready-to-show", () => viewer.show());
+  await viewer.loadURL(viewerUrl);
+  return true;
 }
 
 function desktopHandler(channel, handler) {
@@ -77,6 +126,7 @@ function registerDesktopHandlers() {
     name: String(payload?.name || "symviz-qe"),
     input: String(payload?.input || ""),
     pseudopotentials: Array.isArray(payload?.pseudopotentials) ? payload.pseudopotentials.map(String) : [],
+    study: payload?.study && typeof payload.study === "object" ? payload.study : null,
   }));
   desktopHandler("symviz:cancel-qe-job", (id) => quantumEspressoService.cancel(String(id)));
   desktopHandler("symviz:get-qe-output", (id) => quantumEspressoService.output(String(id)));
@@ -106,34 +156,60 @@ function registerDesktopHandlers() {
     await saveConfig({ qePseudoRoot: status.pseudoRoot });
     return status;
   });
+  desktopHandler("symviz:multiwfn-status", () => multiwfnService.status());
+  desktopHandler("symviz:list-multiwfn-jobs", () => multiwfnService.listJobs());
+  desktopHandler("symviz:choose-multiwfn-root", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "选择包含 Multiwfn.exe 的文件夹",
+      properties: ["openDirectory"],
+    });
+    if (result.canceled || !result.filePaths[0]) return multiwfnService.status();
+    const status = multiwfnService.setMultiwfnRoot(result.filePaths[0]);
+    await saveConfig({ multiwfnRoot: status.multiwfnRoot });
+    return status;
+  });
+  desktopHandler("symviz:choose-multiwfn-input", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "选择 Multiwfn 输入文件",
+      properties: ["openFile"],
+      filters: [
+        { name: "Wavefunction and structure files", extensions: ["chk", "fch", "fchk", "wfn", "wfx", "mwfn", "molden", "mol", "mol2", "pdb", "xyz", "gjf", "com", "log", "out", "cube", "cub"] },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const path = validateMultiwfnInput(result.filePaths[0]);
+    return { path, name: path.split(/[\\/]/).at(-1) };
+  });
+  desktopHandler("symviz:submit-multiwfn-job", (payload) => multiwfnService.submit({
+    name: String(payload?.name || "multiwfn-job"),
+    inputPath: String(payload?.inputPath || ""),
+    taskId: String(payload?.taskId || "summary"),
+    script: String(payload?.script || ""),
+  }));
+  desktopHandler("symviz:cancel-multiwfn-job", (id) => multiwfnService.cancel(String(id)));
+  desktopHandler("symviz:get-multiwfn-output", (id) => multiwfnService.output(String(id)));
+  desktopHandler("symviz:get-multiwfn-output-tail", (id, maxBytes) => multiwfnService.outputTail(String(id), Number(maxBytes)));
+  desktopHandler("symviz:read-multiwfn-artifact", (id, name) => multiwfnService.readArtifact(String(id), String(name)));
+  desktopHandler("symviz:reveal-multiwfn-job", (id) => {
+    const job = multiwfnService.getJob(String(id));
+    shell.showItemInFolder(existsSync(job.files.output) ? job.files.output : job.files.input);
+    return true;
+  });
+  desktopHandler("symviz:open-multiwfn-visualizer", (id, name) => openMultiwfnVisualizer(String(id || ""), String(name || "")));
 }
 
 async function createWindow(rendererUrl) {
   rendererOrigin = new URL(rendererUrl).origin;
-  mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow(secureWindowOptions({
     title: "SymVizCrystal",
     width: 1580,
     height: 980,
     minWidth: 1120,
     minHeight: 720,
     show: false,
-    backgroundColor: "#ffffff",
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: join(desktopRoot, "preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-    },
-  });
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
-    return { action: "deny" };
-  });
-  mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (new URL(url).origin !== rendererOrigin) event.preventDefault();
-  });
+  }));
+  protectWindowNavigation(mainWindow);
   mainWindow.once("ready-to-show", () => mainWindow?.show());
   mainWindow.on("closed", () => { mainWindow = null; });
   await mainWindow.loadURL(rendererUrl);
@@ -165,8 +241,19 @@ if (!hasSingleInstanceLock) {
       wslDistro: config.qeWslDistro || "Ubuntu",
       onUpdate: (job) => mainWindow?.webContents.send("symviz:qe-event", job),
     });
+    multiwfnService = new MultiwfnDesktopService({
+      workRoot: join(app.getPath("documents"), "SymViz Multiwfn Jobs"),
+      multiwfnRoot: config.multiwfnRoot,
+      searchRoots: [appRoot, dirname(appRoot)],
+      onUpdate: (job) => {
+        for (const window of appWindows) {
+          if (!window.isDestroyed()) window.webContents.send("symviz:multiwfn-event", job);
+        }
+      },
+    });
     await gaussianService.initialize();
     await quantumEspressoService.initialize();
+    await multiwfnService.initialize();
     const externalRenderer = process.env.SYMVIZ_RENDERER_URL;
     if (externalRenderer) {
       rendererServer = { url: externalRenderer, close: async () => {} };
@@ -176,7 +263,7 @@ if (!hasSingleInstanceLock) {
     registerDesktopHandlers();
     await createWindow(rendererServer.url);
     app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) void createWindow(rendererServer.url);
+      if (!mainWindow) void createWindow(rendererServer.url);
     });
   }).catch((error) => {
     dialog.showErrorBox("SymVizCrystal could not start", error instanceof Error ? error.stack || error.message : String(error));

@@ -1,0 +1,90 @@
+{
+  "spaceGroup": 228,
+  "sourceUrl": "https://onlinelibrary.wiley.com/iucr/itc/A1b/ch2o3v0001/sgtable2o3o228/",
+  "source": "IUCr International Tables A1, No.228, origin choice 1, general-position 192h coordinate list",
+  "accessMethod": "Publicly indexed IUCr general-position coordinate facts transcribed on 2026-10-28; direct page fetch was not available.",
+  "sourceOriginChoice": 1,
+  "targetOriginChoice": 2,
+  "coordinateMaps": [
+    "x,y,z",
+    "-x,-y+1/2,z+1/2",
+    "-x+1/2,y+1/2,-z",
+    "x+1/2,-y,-z+1/2",
+    "z,x,y",
+    "z+1/2,-x,-y+1/2",
+    "-z,-x+1/2,y+1/2",
+    "-z+1/2,x+1/2,-y",
+    "y,z,x",
+    "-y+1/2,z+1/2,-x",
+    "y+1/2,-z,-x+1/2",
+    "-y,-z+1/2,x+1/2",
+    "y+3/4,x+1/4,-z+3/4",
+    "-y+1/4,-x+1/4,-z+1/4",
+    "y+1/4,-x+3/4,z+3/4",
+    "-y+3/4,x+3/4,z+1/4",
+    "x+3/4,z+1/4,-y+3/4",
+    "-x+3/4,z+3/4,y+1/4",
+    "-x+1/4,-z+1/4,-y+1/4",
+    "x+1/4,-z+3/4,y+3/4",
+    "z+3/4,y+1/4,-x+3/4",
+    "z+1/4,-y+3/4,x+3/4",
+    "-z+3/4,y+3/4,x+1/4",
+    "-z+1/4,-y+1/4,-x+1/4",
+    "-x+3/4,-y+3/4,-z+3/4",
+    "x+3/4,y+1/4,-z+1/4",
+    "x+1/4,-y+1/4,z+3/4",
+    "-x+1/4,y+3/4,z+1/4",
+    "-z+3/4,-x+3/4,-y+3/4",
+    "-z+1/4,x+3/4,y+1/4",
+    "z+3/4,x+1/4,-y+1/4",
+    "z+1/4,-x+1/4,y+3/4",
+    "-y+3/4,-z+3/4,-x+3/4",
+    "y+1/4,-z+1/4,x+3/4",
+    "-y+1/4,z+3/4,x+1/4",
+    "y+3/4,z+1/4,-x+1/4",
+    "-y,-x+1/2,z",
+    "y+1/2,x+1/2,z+1/2",
+    "-y+1/2,x,-z",
+    "y,-x,-z+1/2",
+    "-x,-z+1/2,y",
+    "x,-z,-y+1/2",
+    "x+1/2,z+1/2,y+1/2",
+    "-x+1/2,z,-y",
+    "-z,-y+1/2,x",
+    "-z+1/2,y,-x",
+    "z,-y,-x+1/2",
+    "z+1/2,y+1/2,x+1/2"
+  ],
+  "centringTranslationsUnits1over24": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      12,
+      12
+    ],
+    [
+      12,
+      0,
+      12
+    ],
+    [
+      12,
+      12,
+      0
+    ]
+  ],
+  "originShiftUnits1over24": [
+    3,
+    3,
+    3
+  ],
+  "originTransform": "r_new = r_old + p; t_new = t_old + p - R p",
+  "referenceHall": "-F 4ud 2vw 3",
+  "origin2AffineSetSha256": "8bea29d83108cc7a47e302d9194315e5b334c6551615e03f4dc91ee0b2428205",
+  "auditScript": "reports/test-runs/2026-10-28-centrosymmetric-expansion/check-228-iucr.py",
+  "auditScriptSha256": "c3b25e1c497409071892e0fb098558d96e758a9981e534480f9284a91fe93870"
+}

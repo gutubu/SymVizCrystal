@@ -31,4 +31,20 @@ contextBridge.exposeInMainWorld("symvizDesktop", {
     ipcRenderer.on("symviz:qe-event", listener);
     return () => ipcRenderer.removeListener("symviz:qe-event", listener);
   },
+  getMultiwfnStatus: () => ipcRenderer.invoke("symviz:multiwfn-status"),
+  chooseMultiwfnRoot: () => ipcRenderer.invoke("symviz:choose-multiwfn-root"),
+  chooseMultiwfnInput: () => ipcRenderer.invoke("symviz:choose-multiwfn-input"),
+  listMultiwfnJobs: () => ipcRenderer.invoke("symviz:list-multiwfn-jobs"),
+  submitMultiwfnJob: (payload) => ipcRenderer.invoke("symviz:submit-multiwfn-job", payload),
+  cancelMultiwfnJob: (id) => ipcRenderer.invoke("symviz:cancel-multiwfn-job", id),
+  getMultiwfnOutput: (id) => ipcRenderer.invoke("symviz:get-multiwfn-output", id),
+  getMultiwfnOutputTail: (id, maxBytes) => ipcRenderer.invoke("symviz:get-multiwfn-output-tail", id, maxBytes),
+  readMultiwfnArtifact: (id, name) => ipcRenderer.invoke("symviz:read-multiwfn-artifact", id, name),
+  revealMultiwfnJob: (id) => ipcRenderer.invoke("symviz:reveal-multiwfn-job", id),
+  openMultiwfnVisualizer: (id, name) => ipcRenderer.invoke("symviz:open-multiwfn-visualizer", id, name),
+  onMultiwfnEvent: (callback) => {
+    const listener = (_event, job) => callback(job);
+    ipcRenderer.on("symviz:multiwfn-event", listener);
+    return () => ipcRenderer.removeListener("symviz:multiwfn-event", listener);
+  },
 });

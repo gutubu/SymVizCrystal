@@ -1,0 +1,3790 @@
+{
+  "version": 2,
+  "sourceUrl": "https://www.psi.ch/sites/default/files/import/lns-diffraction/Support2EN/Symmetry_Elements_of_all_Space_Groups.pdf",
+  "sourcePdfSha256": "af8822152ffa92994ea5768e077c43efa98f6905885d55d0ab81aa55c2370447",
+  "pageCount": 264,
+  "recordCount": 530,
+  "method": "Actual PSI PDF coordinate rows independently parsed. pdfConfirmed marks direct full exact-set matches. Disclosed exceptions are checked separately by primary IUCr coordinates (No.228) or independent source-row integer closure (No.212); neither exception is claimed as a direct full PSI set match.",
+  "matchedFullSets": 228,
+  "exceptions": [
+    {
+      "id": 212,
+      "hall": "P 4acd 2ab 3",
+      "exactMatches": 0
+    },
+    {
+      "id": 228,
+      "hall": "-F 4ud 2vw 3",
+      "exactMatches": 0
+    }
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "affineSetSha256": "5818b7c40864f0f8a67b437a5df0e145a0ec4ab26646816068b455ff3556358c",
+      "operationCount": 1,
+      "pdfHall": "P 1",
+      "pdfTag": "1",
+      "pages": [
+        1,
+        1
+      ],
+      "gemmiHall": "P 1",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 2,
+      "affineSetSha256": "656e37539af2ed127926db1ea066904fa74926c808fc8c05b8d8197536e29be4",
+      "operationCount": 2,
+      "pdfHall": "-P 1",
+      "pdfTag": "2",
+      "pages": [
+        1,
+        1
+      ],
+      "gemmiHall": "-P 1",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 3,
+      "affineSetSha256": "b067f14bfa9bdf1ddfb265176983b9d6c946c87b31231c3a99eaf0b8ff998571",
+      "operationCount": 2,
+      "pdfHall": "P 2y",
+      "pdfTag": "3:b",
+      "pages": [
+        1,
+        1
+      ],
+      "gemmiHall": "P 2y",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 4,
+      "affineSetSha256": "158862cc4bfae0a11e5ba9f13307ae07227b8de5a1429c2f5b0d97809fcd4041",
+      "operationCount": 2,
+      "pdfHall": "P 2yb",
+      "pdfTag": "4:b",
+      "pages": [
+        2,
+        2
+      ],
+      "gemmiHall": "P 2yb",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 5,
+      "affineSetSha256": "41423e5639d35d343b017b40e70e7fe9057b9ef3bae79c5330e4faaafc74107b",
+      "operationCount": 4,
+      "pdfHall": "C 2y",
+      "pdfTag": "5:b1",
+      "pages": [
+        3,
+        3
+      ],
+      "gemmiHall": "C 2y",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 6,
+      "affineSetSha256": "0bd72d0ee20424b6f9deb7a535bd42970e71954b42a58c2781521f59d0100489",
+      "operationCount": 2,
+      "pdfHall": "P -2y",
+      "pdfTag": "6:b",
+      "pages": [
+        5,
+        6
+      ],
+      "gemmiHall": "P -2y",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 7,
+      "affineSetSha256": "8c92c2000af8b49ccc4a0c18874b5615473820ee95ea50538c9b9ac8680f9b4b",
+      "operationCount": 2,
+      "pdfHall": "P -2yac",
+      "pdfTag": "7:b2",
+      "pages": [
+        7,
+        7
+      ],
+      "gemmiHall": "P -2yac",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 8,
+      "affineSetSha256": "14d90846c3d7a251e87a7cf213dc5f167376b8c6f0b91b49be8f6cbaa4030fce",
+      "operationCount": 4,
+      "pdfHall": "C -2y",
+      "pdfTag": "8:b1",
+      "pages": [
+        9,
+        9
+      ],
+      "gemmiHall": "C -2y",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 9,
+      "affineSetSha256": "2ac9f589a9c5821779990fa8293e1ebb29d989422879bf9524968def31c6ccfd",
+      "operationCount": 4,
+      "pdfHall": "C -2yc",
+      "pdfTag": "9:b1",
+      "pages": [
+        12,
+        12
+      ],
+      "gemmiHall": "C -2yc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 10,
+      "affineSetSha256": "d9b85418e239d259dfeaac683587ee2defb6a289bace3fb8cf786ee7c7a24903",
+      "operationCount": 4,
+      "pdfHall": "-P 2y",
+      "pdfTag": "10:b",
+      "pages": [
+        17,
+        18
+      ],
+      "gemmiHall": "-P 2y",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 11,
+      "affineSetSha256": "1a442910ba901a668f7fe1ba6d701570e70364ec1ef7c16623fa6f98a0af5900",
+      "operationCount": 4,
+      "pdfHall": "-P 2yb",
+      "pdfTag": "11:b",
+      "pages": [
+        18,
+        19
+      ],
+      "gemmiHall": "-P 2yb",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 12,
+      "affineSetSha256": "fe5ff53aa418ea34ed24005c3065c2fcb49020d86078c2b964d1136142c57fd8",
+      "operationCount": 8,
+      "pdfHall": "-C 2y",
+      "pdfTag": "12:b1",
+      "pages": [
+        19,
+        20
+      ],
+      "gemmiHall": "-C 2y",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 13,
+      "affineSetSha256": "a3b17e007d1c61ce3ed528d7ff89405e40342448286ad9013eaf71c89498eacb",
+      "operationCount": 4,
+      "pdfHall": "-P 2yac",
+      "pdfTag": "13:b2",
+      "pages": [
+        23,
+        23
+      ],
+      "gemmiHall": "-P 2yac",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 14,
+      "affineSetSha256": "5f91138db9ef5a29c26a0c4ef9bb1c0771ce0f5a085ffdb870df6ef0fc4ed51b",
+      "operationCount": 4,
+      "pdfHall": "-P 2ybc",
+      "pdfTag": "14:b1",
+      "pages": [
+        26,
+        26
+      ],
+      "gemmiHall": "-P 2ybc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 15,
+      "affineSetSha256": "e82691f5d6a1b0b1a4b255fdf0efc6151cf9deabb7bfe5f8f0b86d7709b1867a",
+      "operationCount": 8,
+      "pdfHall": "-C 2yc",
+      "pdfTag": "15:b1",
+      "pages": [
+        28,
+        29
+      ],
+      "gemmiHall": "-C 2yc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 16,
+      "affineSetSha256": "429706fcdbc6f123f00eb3facb8fd32460650c93909092d2cef2f42745e15ca2",
+      "operationCount": 4,
+      "pdfHall": "P 2 2",
+      "pdfTag": "16",
+      "pages": [
+        35,
+        36
+      ],
+      "gemmiHall": "P 2 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 17,
+      "affineSetSha256": "970fe8aaccbb9d8ed3a403d94e95c23cd1551dbbd1e7cc8fb91fb3d10faffaf9",
+      "operationCount": 4,
+      "pdfHall": "P 2c 2",
+      "pdfTag": "17",
+      "pages": [
+        36,
+        36
+      ],
+      "gemmiHall": "P 2c 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 18,
+      "affineSetSha256": "88ff78aba61824177f9b392b61a1c8ad8c27f1b5c3e615b3afcd9a435588eef4",
+      "operationCount": 4,
+      "pdfHall": "P 2 2ab",
+      "pdfTag": "18",
+      "pages": [
+        37,
+        37
+      ],
+      "gemmiHall": "P 2 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 19,
+      "affineSetSha256": "d8d2ca92fc39f2b5dc5692bab22340b1d566a2a6ac844a07db84f9ba5e666011",
+      "operationCount": 4,
+      "pdfHall": "P 2ac 2ab",
+      "pdfTag": "19",
+      "pages": [
+        38,
+        38
+      ],
+      "gemmiHall": "P 2ac 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 20,
+      "affineSetSha256": "eebb2042618b575df6b5ff8077e47b348cd012816c909b1d55314a42c542ad51",
+      "operationCount": 8,
+      "pdfHall": "C 2c 2",
+      "pdfTag": "20",
+      "pages": [
+        38,
+        38
+      ],
+      "gemmiHall": "C 2c 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 21,
+      "affineSetSha256": "9afafc2f95af49edea7e5ea53bae0eb2f6f58e2176cb47f16d31d48fb7eb4899",
+      "operationCount": 8,
+      "pdfHall": "C 2 2",
+      "pdfTag": "21",
+      "pages": [
+        39,
+        40
+      ],
+      "gemmiHall": "C 2 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 22,
+      "affineSetSha256": "e688c308ac9e467bd303386a18ac67727f08727fb5d3fc258ea9b028bfdc80d3",
+      "operationCount": 16,
+      "pdfHall": "F 2 2",
+      "pdfTag": "22",
+      "pages": [
+        40,
+        41
+      ],
+      "gemmiHall": "F 2 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 23,
+      "affineSetSha256": "806457773482c344b98d8648814e50b58a3baa205f81c69c785b3ac706f6e8fe",
+      "operationCount": 8,
+      "pdfHall": "I 2 2",
+      "pdfTag": "23",
+      "pages": [
+        41,
+        41
+      ],
+      "gemmiHall": "I 2 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 24,
+      "affineSetSha256": "5537f215bd70c3adf82e444eb1cfbeaefb172d83b12305a7f6d52f7954ff0602",
+      "operationCount": 8,
+      "pdfHall": "I 2b 2c",
+      "pdfTag": "24",
+      "pages": [
+        41,
+        42
+      ],
+      "gemmiHall": "I 2b 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 25,
+      "affineSetSha256": "a8db62c6658184d88de649b2e8169a963dd991d5c0fe70cde0eb771182794fac",
+      "operationCount": 4,
+      "pdfHall": "P 2 -2",
+      "pdfTag": "25",
+      "pages": [
+        42,
+        42
+      ],
+      "gemmiHall": "P 2 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 26,
+      "affineSetSha256": "07b16c7f7fc80e288d1d05efe89be3f490d0d374857b1690969b71e3753bb54d",
+      "operationCount": 4,
+      "pdfHall": "P 2c -2",
+      "pdfTag": "26",
+      "pages": [
+        43,
+        43
+      ],
+      "gemmiHall": "P 2c -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 27,
+      "affineSetSha256": "d4f86452e85a14c26e8ac2b87efb96b943902cfd056529b676199bc8a0d1e436",
+      "operationCount": 4,
+      "pdfHall": "P 2 -2c",
+      "pdfTag": "27",
+      "pages": [
+        45,
+        45
+      ],
+      "gemmiHall": "P 2 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 28,
+      "affineSetSha256": "eb6a09efd9b858002bf0de4e9f59b8456ce1e61e5649c04d5a425d80af5bd148",
+      "operationCount": 4,
+      "pdfHall": "P 2 -2a",
+      "pdfTag": "28",
+      "pages": [
+        46,
+        46
+      ],
+      "gemmiHall": "P 2 -2a",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 29,
+      "affineSetSha256": "4b0e175a3d77586e2c5392b144b46be03520cddcf18b1e43650ce36026fbcce8",
+      "operationCount": 4,
+      "pdfHall": "P 2c -2ac",
+      "pdfTag": "29",
+      "pages": [
+        48,
+        48
+      ],
+      "gemmiHall": "P 2c -2ac",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 30,
+      "affineSetSha256": "22fa4918303780ca8afe9b42dc809842a4708dfc3cc61a2b8e62cca3ee7f3a7b",
+      "operationCount": 4,
+      "pdfHall": "P 2 -2bc",
+      "pdfTag": "30",
+      "pages": [
+        50,
+        50
+      ],
+      "gemmiHall": "P 2 -2bc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 31,
+      "affineSetSha256": "bcc8d13be1ea5fd8954b47734561829f243b894506bda23679791014575fa3df",
+      "operationCount": 4,
+      "pdfHall": "P 2ac -2",
+      "pdfTag": "31",
+      "pages": [
+        52,
+        52
+      ],
+      "gemmiHall": "P 2ac -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 32,
+      "affineSetSha256": "5a11e2f1791c7bd6c50f2c1ad4d0c26a7a09f4370d12e676f9c3c9517f91246e",
+      "operationCount": 4,
+      "pdfHall": "P 2 -2ab",
+      "pdfTag": "32",
+      "pages": [
+        54,
+        54
+      ],
+      "gemmiHall": "P 2 -2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 33,
+      "affineSetSha256": "94d5d4e5c52a715b577c1515f2157d2068011d1c3232f4f0bd70e281216740cc",
+      "operationCount": 4,
+      "pdfHall": "P 2c -2n",
+      "pdfTag": "33",
+      "pages": [
+        55,
+        55
+      ],
+      "gemmiHall": "P 2c -2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 34,
+      "affineSetSha256": "3a633a1a071d49e28831481b165c996ca62d5a4b5cfbe2daf8c2c9eecbe7c802",
+      "operationCount": 4,
+      "pdfHall": "P 2 -2n",
+      "pdfTag": "34",
+      "pages": [
+        57,
+        57
+      ],
+      "gemmiHall": "P 2 -2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 35,
+      "affineSetSha256": "28fff013f3faae14c09946b21ed4a8bfff1ccda3fe22983c0a49673ba08cb17f",
+      "operationCount": 8,
+      "pdfHall": "C 2 -2",
+      "pdfTag": "35",
+      "pages": [
+        58,
+        58
+      ],
+      "gemmiHall": "C 2 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 36,
+      "affineSetSha256": "50196cf537900b0cc60ef7d1a62709794d4e89d7e5bc153402e44ff7763a6a41",
+      "operationCount": 8,
+      "pdfHall": "C 2c -2",
+      "pdfTag": "36",
+      "pages": [
+        59,
+        59
+      ],
+      "gemmiHall": "C 2c -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 37,
+      "affineSetSha256": "6e869a2f90f9d3355ec02b1c806570e1300c2931b5383246ff68116511cdc396",
+      "operationCount": 8,
+      "pdfHall": "C 2 -2c",
+      "pdfTag": "37",
+      "pages": [
+        61,
+        62
+      ],
+      "gemmiHall": "C 2 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 38,
+      "affineSetSha256": "eab8dcd8d596387068db35de1f7c5be5844535653f4d2a0f0dcb82db2ac01be6",
+      "operationCount": 8,
+      "pdfHall": "A 2 -2",
+      "pdfTag": "38",
+      "pages": [
+        62,
+        63
+      ],
+      "gemmiHall": "A 2 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 39,
+      "affineSetSha256": "7ad7533276d5df0edeae92372be408cc1f76517500fabe1a505fd02c14d50e89",
+      "operationCount": 8,
+      "pdfHall": "A 2 -2c",
+      "pdfTag": "39",
+      "pages": [
+        65,
+        65
+      ],
+      "gemmiHall": "A 2 -2b",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 40,
+      "affineSetSha256": "c030f9da67f019beedcca6ee4f9f64f8ae0a242d128da5e45ac157f8eee29ab3",
+      "operationCount": 8,
+      "pdfHall": "A 2 -2a",
+      "pdfTag": "40",
+      "pages": [
+        67,
+        68
+      ],
+      "gemmiHall": "A 2 -2a",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 41,
+      "affineSetSha256": "76d783702bfa305818b1256999d48288423d0d754913fb20470f6b34b2ed78f7",
+      "operationCount": 8,
+      "pdfHall": "A 2 -2ac",
+      "pdfTag": "41",
+      "pages": [
+        70,
+        70
+      ],
+      "gemmiHall": "A 2 -2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 42,
+      "affineSetSha256": "70d26dec9316010c06bd2ef976e901475cc04761fb5fbec15f0d717731a58001",
+      "operationCount": 16,
+      "pdfHall": "F 2 -2",
+      "pdfTag": "42",
+      "pages": [
+        72,
+        73
+      ],
+      "gemmiHall": "F 2 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 43,
+      "affineSetSha256": "2fbd206f9d6eb7c169149e0f27887e9d457ea1b509127d545753d9fdda26b209",
+      "operationCount": 16,
+      "pdfHall": "F 2 -2d",
+      "pdfTag": "43",
+      "pages": [
+        74,
+        74
+      ],
+      "gemmiHall": "F 2 -2d",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 44,
+      "affineSetSha256": "e014ec0feb42d8d126eecfba4df2193c05f33773df077bfe5ee157081e7be5cc",
+      "operationCount": 8,
+      "pdfHall": "I 2 -2",
+      "pdfTag": "44",
+      "pages": [
+        75,
+        76
+      ],
+      "gemmiHall": "I 2 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 45,
+      "affineSetSha256": "bd1b09242011b911ee56fbaadbd4126cec927297195087310de133d1b334f665",
+      "operationCount": 8,
+      "pdfHall": "I 2 -2c",
+      "pdfTag": "45",
+      "pages": [
+        77,
+        77
+      ],
+      "gemmiHall": "I 2 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 46,
+      "affineSetSha256": "16885393e07eed066692b1de7cdc0f6045bdfbba5e09b637a4dda8f4c831ec7b",
+      "operationCount": 8,
+      "pdfHall": "I 2 -2a",
+      "pdfTag": "46",
+      "pages": [
+        78,
+        78
+      ],
+      "gemmiHall": "I 2 -2a",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 47,
+      "affineSetSha256": "351fab9d83bf975f074bd3f755314756b0bd551957c8b3e362a542cea03cdb49",
+      "operationCount": 8,
+      "pdfHall": "-P 2 2",
+      "pdfTag": "47",
+      "pages": [
+        80,
+        81
+      ],
+      "gemmiHall": "-P 2 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 48,
+      "affineSetSha256": "a34440232a79fea769d71f1ee0e50ed5053282cbdd5cb114bee2f0fd85d12c92",
+      "operationCount": 8,
+      "pdfHall": "-P 2ab 2bc",
+      "pdfTag": "48:2",
+      "pages": [
+        81,
+        81
+      ],
+      "gemmiHall": "-P 2ab 2bc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 49,
+      "affineSetSha256": "2e4e280002faae24386c084871ca4fc208ef361a8a6bfdbebcda91083106360b",
+      "operationCount": 8,
+      "pdfHall": "-P 2 2c",
+      "pdfTag": "49",
+      "pages": [
+        81,
+        82
+      ],
+      "gemmiHall": "-P 2 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 50,
+      "affineSetSha256": "11743ae858dd971baf689b1d227325f24b43988322572cd399b51d8aaf256391",
+      "operationCount": 8,
+      "pdfHall": "-P 2ab 2b",
+      "pdfTag": "50:2",
+      "pages": [
+        83,
+        83
+      ],
+      "gemmiHall": "-P 2ab 2b",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 51,
+      "affineSetSha256": "0f6bfff7d061c6e4dd50f4c1f14739e61db389a5984a86fda123fc3b78950a7e",
+      "operationCount": 8,
+      "pdfHall": "-P 2a 2a",
+      "pdfTag": "51",
+      "pages": [
+        85,
+        85
+      ],
+      "gemmiHall": "-P 2a 2a",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 52,
+      "affineSetSha256": "06eee423392ab85cb055a7a19ea3e09c5200b9625952487eba89dca27fefeffa",
+      "operationCount": 8,
+      "pdfHall": "-P 2a 2bc",
+      "pdfTag": "52",
+      "pages": [
+        87,
+        88
+      ],
+      "gemmiHall": "-P 2a 2bc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 53,
+      "affineSetSha256": "adfc74ca4599b8a4b6843f7b6264df6aa0ff5f64ef9bbcd8cb5d4ae51f4d74c2",
+      "operationCount": 8,
+      "pdfHall": "-P 2ac 2",
+      "pdfTag": "53",
+      "pages": [
+        90,
+        90
+      ],
+      "gemmiHall": "-P 2ac 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 54,
+      "affineSetSha256": "3ec399297dde0ddc7b431bb78925fca899275e5aeb0327f81f1408f46b9a60de",
+      "operationCount": 8,
+      "pdfHall": "-P 2a 2ac",
+      "pdfTag": "54",
+      "pages": [
+        92,
+        92
+      ],
+      "gemmiHall": "-P 2a 2ac",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 55,
+      "affineSetSha256": "b4c845de08ce81593e5f85bd7b127096de42cfa6ae4bb2be917d386af5d1c316",
+      "operationCount": 8,
+      "pdfHall": "-P 2 2ab",
+      "pdfTag": "55",
+      "pages": [
+        95,
+        95
+      ],
+      "gemmiHall": "-P 2 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 56,
+      "affineSetSha256": "d130849273d7806581cc6a3c42e2450019006cace910b71b791d5485779872fb",
+      "operationCount": 8,
+      "pdfHall": "-P 2ab 2ac",
+      "pdfTag": "56",
+      "pages": [
+        96,
+        96
+      ],
+      "gemmiHall": "-P 2ab 2ac",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 57,
+      "affineSetSha256": "2d8fe08012e08a7a9c5943aa701868e9960740e6e4497feeda62b1c82e1e9747",
+      "operationCount": 8,
+      "pdfHall": "-P 2c 2b",
+      "pdfTag": "57",
+      "pages": [
+        97,
+        97
+      ],
+      "gemmiHall": "-P 2c 2b",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 58,
+      "affineSetSha256": "92c0cbedac828889cfd943aa2b6adae349d41ed395b718fad76cf73de874431b",
+      "operationCount": 8,
+      "pdfHall": "-P 2 2n",
+      "pdfTag": "58",
+      "pages": [
+        99,
+        100
+      ],
+      "gemmiHall": "-P 2 2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 59,
+      "affineSetSha256": "c594c692affb5a706afc404592c2cec58614853677ef3734d2f0169f377876b5",
+      "operationCount": 8,
+      "pdfHall": "-P 2ab 2a",
+      "pdfTag": "59:2",
+      "pages": [
+        101,
+        101
+      ],
+      "gemmiHall": "-P 2ab 2a",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 60,
+      "affineSetSha256": "b9edeb8b01cd933cd7658a30d0dbb823d3d998aabd44448a116b8d15d18055ed",
+      "operationCount": 8,
+      "pdfHall": "-P 2n 2ab",
+      "pdfTag": "60",
+      "pages": [
+        103,
+        103
+      ],
+      "gemmiHall": "-P 2n 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 61,
+      "affineSetSha256": "9e916ed3c404229fd917e57feb7035e749e896e96c20a41609d58ad071464479",
+      "operationCount": 8,
+      "pdfHall": "-P 2ac 2ab",
+      "pdfTag": "61",
+      "pages": [
+        105,
+        106
+      ],
+      "gemmiHall": "-P 2ac 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 62,
+      "affineSetSha256": "1febea3c71edcbe922cd5a00e8e6b3c60841a1d28e97895fbb51256e1f468109",
+      "operationCount": 8,
+      "pdfHall": "-P 2ac 2n",
+      "pdfTag": "62",
+      "pages": [
+        106,
+        106
+      ],
+      "gemmiHall": "-P 2ac 2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 63,
+      "affineSetSha256": "5984828a5a11bacabb3c3727c180efc85a04b5194be85c02965f578e9c6f5528",
+      "operationCount": 16,
+      "pdfHall": "-C 2c 2",
+      "pdfTag": "63",
+      "pages": [
+        108,
+        109
+      ],
+      "gemmiHall": "-C 2c 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 64,
+      "affineSetSha256": "ba99fcffa7af5d4aa2eb468f0ede83984ce1c044a9437bcc5c3396000e99ff67",
+      "operationCount": 16,
+      "pdfHall": "-C 2bc 2",
+      "pdfTag": "64",
+      "pages": [
+        112,
+        112
+      ],
+      "gemmiHall": "-C 2ac 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 65,
+      "affineSetSha256": "688a2bf0aa70f473487de1d6418a488ea2fbabb0b8843c0b155613f8e636b58b",
+      "operationCount": 16,
+      "pdfHall": "-C 2 2",
+      "pdfTag": "65",
+      "pages": [
+        115,
+        116
+      ],
+      "gemmiHall": "-C 2 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 66,
+      "affineSetSha256": "3110f77913038256d3c9fc567062c56e0e4f35c967c5faee4cafd69b90833ce5",
+      "operationCount": 16,
+      "pdfHall": "-C 2 2c",
+      "pdfTag": "66",
+      "pages": [
+        117,
+        117
+      ],
+      "gemmiHall": "-C 2 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 67,
+      "affineSetSha256": "8b63cad8ec9595473ca6ebfb169150b24192d039a9cc2ba04e3c13c48f3dcda8",
+      "operationCount": 16,
+      "pdfHall": "-C 2b 2",
+      "pdfTag": "67",
+      "pages": [
+        118,
+        119
+      ],
+      "gemmiHall": "-C 2a 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 68,
+      "affineSetSha256": "4eed590b1af5d4e57968d1354e33459683824b244e240d111008e4078a9ab681",
+      "operationCount": 16,
+      "pdfHall": "-C 2b 2bc",
+      "pdfTag": "68:2",
+      "pages": [
+        122,
+        123
+      ],
+      "gemmiHall": "-C 2a 2ac",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 69,
+      "affineSetSha256": "9ca41a618e0e972afaf52e03984ac05786e53f07dcbadf6b42e344e06c40db9c",
+      "operationCount": 32,
+      "pdfHall": "-F 2 2",
+      "pdfTag": "69",
+      "pages": [
+        128,
+        128
+      ],
+      "gemmiHall": "-F 2 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 70,
+      "affineSetSha256": "951b2f79eaf91a1194a67ca9a8e10bb7b91e04b3891f8c3c5017840776f04bc8",
+      "operationCount": 32,
+      "pdfHall": "-F 2uv 2vw",
+      "pdfTag": "70:2",
+      "pages": [
+        129,
+        130
+      ],
+      "gemmiHall": "-F 2uv 2vw",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 71,
+      "affineSetSha256": "0b28cf4d3f9cdc888c70561edc8e8ba8c6ec6b92300fc66b9561877e31aea547",
+      "operationCount": 16,
+      "pdfHall": "-I 2 2",
+      "pdfTag": "71",
+      "pages": [
+        130,
+        130
+      ],
+      "gemmiHall": "-I 2 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 72,
+      "affineSetSha256": "d440d623fef54a459332389205fddb92c950e30ef740e798fd1f3dd245a7c744",
+      "operationCount": 16,
+      "pdfHall": "-I 2 2c",
+      "pdfTag": "72",
+      "pages": [
+        130,
+        131
+      ],
+      "gemmiHall": "-I 2 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 73,
+      "affineSetSha256": "5443135799eb3f2e8e575c7d8b7ad966dc799a4c525acd39c455d0e39b7310d8",
+      "operationCount": 16,
+      "pdfHall": "-I 2b 2c",
+      "pdfTag": "73",
+      "pages": [
+        132,
+        133
+      ],
+      "gemmiHall": "-I 2b 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 74,
+      "affineSetSha256": "9e6eb3a8f0f31528e74a7d3fbae5f43bafdc7d3f0094182324dad6ff8ef62ba8",
+      "operationCount": 16,
+      "pdfHall": "-I 2b 2",
+      "pdfTag": "74",
+      "pages": [
+        133,
+        134
+      ],
+      "gemmiHall": "-I 2b 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 75,
+      "affineSetSha256": "c0b4b6a3eef58da384b5d32765bbe04c7d5e984a40997dd1126db29f05a0d403",
+      "operationCount": 4,
+      "pdfHall": "P 4",
+      "pdfTag": "75",
+      "pages": [
+        136,
+        137
+      ],
+      "gemmiHall": "P 4",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 76,
+      "affineSetSha256": "e35f10e45b4efbc75508cc7875adc7f65929ed1327dc3a02d4747930782fd38f",
+      "operationCount": 4,
+      "pdfHall": "P 4w",
+      "pdfTag": "76",
+      "pages": [
+        137,
+        137
+      ],
+      "gemmiHall": "P 4w",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 77,
+      "affineSetSha256": "001e1c2d58c1066310417cf9474ad0ea6b5da2b7219dd554006bbb0ea50a16ae",
+      "operationCount": 4,
+      "pdfHall": "P 4c",
+      "pdfTag": "77",
+      "pages": [
+        137,
+        137
+      ],
+      "gemmiHall": "P 4c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 78,
+      "affineSetSha256": "94bea9c1ed09f043c58de6367239c086cce94cfdcec06e47ce58502fca2b84fb",
+      "operationCount": 4,
+      "pdfHall": "P 4cw",
+      "pdfTag": "78",
+      "pages": [
+        137,
+        138
+      ],
+      "gemmiHall": "P 4cw",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 79,
+      "affineSetSha256": "658da84334b48685c2e22f24233c1b13d74a92e2f094875b232f5f17e825bd4d",
+      "operationCount": 8,
+      "pdfHall": "I 4",
+      "pdfTag": "79",
+      "pages": [
+        138,
+        138
+      ],
+      "gemmiHall": "I 4",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 80,
+      "affineSetSha256": "73a8ae2bc5c36ccdebab04a3040303f4cde95ff5b0bca0d051bba54484ea5368",
+      "operationCount": 8,
+      "pdfHall": "I 4bw",
+      "pdfTag": "80",
+      "pages": [
+        138,
+        138
+      ],
+      "gemmiHall": "I 4bw",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 81,
+      "affineSetSha256": "17088476b6575b0cf5381d6d9958391c4bab95b853fa77f2898b10c9681fc2cc",
+      "operationCount": 4,
+      "pdfHall": "P -4",
+      "pdfTag": "81",
+      "pages": [
+        138,
+        139
+      ],
+      "gemmiHall": "P -4",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 82,
+      "affineSetSha256": "b3f037a537f4b3c1d8036e5225bf539cb1f977d93394d3630405025c00f60056",
+      "operationCount": 8,
+      "pdfHall": "I -4",
+      "pdfTag": "82",
+      "pages": [
+        139,
+        139
+      ],
+      "gemmiHall": "I -4",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 83,
+      "affineSetSha256": "b72cc1773075a2425aed5948880e96c3e6384bfc7fc529cf375ce8562f089565",
+      "operationCount": 8,
+      "pdfHall": "-P 4",
+      "pdfTag": "83",
+      "pages": [
+        139,
+        139
+      ],
+      "gemmiHall": "-P 4",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 84,
+      "affineSetSha256": "6262d00df5bd8769652b41f86deab40edb6a4d44b6da21e07af47d06f3846fc2",
+      "operationCount": 8,
+      "pdfHall": "-P 4c",
+      "pdfTag": "84",
+      "pages": [
+        139,
+        140
+      ],
+      "gemmiHall": "-P 4c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 85,
+      "affineSetSha256": "15b66743cc8b5dc0b3b41a25079223ad20025bd8a6288a1a4a02694af5369687",
+      "operationCount": 8,
+      "pdfHall": "-P 4a",
+      "pdfTag": "85:2",
+      "pages": [
+        140,
+        140
+      ],
+      "gemmiHall": "-P 4a",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 86,
+      "affineSetSha256": "5cb37fa0ecbf6e8ebd6f31c8c532ad028d4a6fd4593ad26e613e330c1fedcaaa",
+      "operationCount": 8,
+      "pdfHall": "-P 4bc",
+      "pdfTag": "86:2",
+      "pages": [
+        141,
+        141
+      ],
+      "gemmiHall": "-P 4bc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 87,
+      "affineSetSha256": "4e022b3829b5c759fd527bd0ebe276bfb2577d4bfe153cca181f03a3e4783a00",
+      "operationCount": 16,
+      "pdfHall": "-I 4",
+      "pdfTag": "87",
+      "pages": [
+        141,
+        142
+      ],
+      "gemmiHall": "-I 4",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 88,
+      "affineSetSha256": "03c86ca5c526710d0967b1303dbee344b24062bcef8c781f26a6ee64c01f19c2",
+      "operationCount": 16,
+      "pdfHall": "-I 4ad",
+      "pdfTag": "88:2",
+      "pages": [
+        142,
+        143
+      ],
+      "gemmiHall": "-I 4ad",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 89,
+      "affineSetSha256": "b4d82fb08e0339bc643e3b1964e208a29471cbea453a9b59169bdb79e6e24c37",
+      "operationCount": 8,
+      "pdfHall": "P 4 2",
+      "pdfTag": "89",
+      "pages": [
+        143,
+        143
+      ],
+      "gemmiHall": "P 4 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 90,
+      "affineSetSha256": "cd0a9194b0ed874cf3e8f609a3ae9599c731eefd48f037bd5bb24f9d55e952b4",
+      "operationCount": 8,
+      "pdfHall": "P 4ab 2ab",
+      "pdfTag": "90",
+      "pages": [
+        143,
+        143
+      ],
+      "gemmiHall": "P 4ab 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 91,
+      "affineSetSha256": "532312d14fec40bd926eed28b5f8aacd594ba4f14fbb901ac6de80e9299cbefd",
+      "operationCount": 8,
+      "pdfHall": "P 4w 2c",
+      "pdfTag": "91",
+      "pages": [
+        143,
+        144
+      ],
+      "gemmiHall": "P 4w 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 92,
+      "affineSetSha256": "bd5229b38344e6034abd0c1b5d42d27a9d82a20d2bee857bfc50e7527d132c0d",
+      "operationCount": 8,
+      "pdfHall": "P 4abw 2nw",
+      "pdfTag": "92",
+      "pages": [
+        144,
+        144
+      ],
+      "gemmiHall": "P 4abw 2nw",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 93,
+      "affineSetSha256": "114953b6b0f937c643f257fd5f097fbb71f0a654e6ddd814f97180765c961463",
+      "operationCount": 8,
+      "pdfHall": "P 4c 2",
+      "pdfTag": "93",
+      "pages": [
+        144,
+        145
+      ],
+      "gemmiHall": "P 4c 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 94,
+      "affineSetSha256": "fd10b54303b39d9eb1e07d9a019b94b4e5c3bc2e951a092022d214248f560420",
+      "operationCount": 8,
+      "pdfHall": "P 4n 2n",
+      "pdfTag": "94",
+      "pages": [
+        145,
+        145
+      ],
+      "gemmiHall": "P 4n 2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 95,
+      "affineSetSha256": "0729aa2d68636762df4411772c6ce3723e002ee06aee6526933804a983824c80",
+      "operationCount": 8,
+      "pdfHall": "P 4cw 2c",
+      "pdfTag": "95",
+      "pages": [
+        145,
+        145
+      ],
+      "gemmiHall": "P 4cw 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 96,
+      "affineSetSha256": "3c0e0d5e2546b3cfe76549ef0988b649b2e3643ca0ad74629469e051a564cd2a",
+      "operationCount": 8,
+      "pdfHall": "P 4nw 2abw",
+      "pdfTag": "96",
+      "pages": [
+        145,
+        146
+      ],
+      "gemmiHall": "P 4nw 2abw",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 97,
+      "affineSetSha256": "0095f7eeb7f628db55d5b20661503c6dbfe134d84cf286d54833f2d4fadd69a9",
+      "operationCount": 16,
+      "pdfHall": "I 4 2",
+      "pdfTag": "97",
+      "pages": [
+        146,
+        146
+      ],
+      "gemmiHall": "I 4 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 98,
+      "affineSetSha256": "917e41a2ea9ca7078591e09935dd5865676cfb822d9d0c1aa615d6a7d17f87b4",
+      "operationCount": 16,
+      "pdfHall": "I 4bw 2bw",
+      "pdfTag": "98",
+      "pages": [
+        146,
+        147
+      ],
+      "gemmiHall": "I 4bw 2bw",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 99,
+      "affineSetSha256": "4187099a64f4bba00b6ed8d3e6a6956e89a5502a5fc8da5aa7ca3a89d5108618",
+      "operationCount": 8,
+      "pdfHall": "P 4 -2",
+      "pdfTag": "99",
+      "pages": [
+        147,
+        147
+      ],
+      "gemmiHall": "P 4 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 100,
+      "affineSetSha256": "5210dfb23da5b602c39c345d4e3f47c38f90aa7bdebcc3cab6c9d3a87e5bb8e4",
+      "operationCount": 8,
+      "pdfHall": "P 4 -2ab",
+      "pdfTag": "100",
+      "pages": [
+        147,
+        148
+      ],
+      "gemmiHall": "P 4 -2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 101,
+      "affineSetSha256": "93caf99e8456bdf4e1f8095556189c458e080d539a30964ae9cc8920e93dbde2",
+      "operationCount": 8,
+      "pdfHall": "P 4c -2c",
+      "pdfTag": "101",
+      "pages": [
+        148,
+        148
+      ],
+      "gemmiHall": "P 4c -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 102,
+      "affineSetSha256": "5c5b094f31df0ac01d95ddd90c09f1a71cd7c83aefa5653ae622ce43f09853f5",
+      "operationCount": 8,
+      "pdfHall": "P 4n -2n",
+      "pdfTag": "102",
+      "pages": [
+        148,
+        148
+      ],
+      "gemmiHall": "P 4n -2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 103,
+      "affineSetSha256": "37e8b0b549a0871885a24d7bc1f21dac6e303ab34db693c16eb715a7331d25fe",
+      "operationCount": 8,
+      "pdfHall": "P 4 -2c",
+      "pdfTag": "103",
+      "pages": [
+        148,
+        149
+      ],
+      "gemmiHall": "P 4 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 104,
+      "affineSetSha256": "cc07365f421d1b4ae9f99247a9415aee9eae2f09c5dece7fb3fb5154ba783355",
+      "operationCount": 8,
+      "pdfHall": "P 4 -2n",
+      "pdfTag": "104",
+      "pages": [
+        149,
+        149
+      ],
+      "gemmiHall": "P 4 -2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 105,
+      "affineSetSha256": "5ff5008e68ba746512efa2de7b379195d55a20184d1f74cc30bfd706936690f1",
+      "operationCount": 8,
+      "pdfHall": "P 4c -2",
+      "pdfTag": "105",
+      "pages": [
+        149,
+        150
+      ],
+      "gemmiHall": "P 4c -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 106,
+      "affineSetSha256": "7388f7cd0147e707af3aaf768e50b0502fb2003b8b4b94b2917eb8a1921d0f83",
+      "operationCount": 8,
+      "pdfHall": "P 4c -2ab",
+      "pdfTag": "106",
+      "pages": [
+        150,
+        150
+      ],
+      "gemmiHall": "P 4c -2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 107,
+      "affineSetSha256": "f0fdc3dc7b761d231cf36c0a06b1d1bdbc46a2b66c247de162c172df63bf93f4",
+      "operationCount": 16,
+      "pdfHall": "I 4 -2",
+      "pdfTag": "107",
+      "pages": [
+        150,
+        151
+      ],
+      "gemmiHall": "I 4 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 108,
+      "affineSetSha256": "40d832a483bfcf5b6ec26070f8fb70dadab7890468ccc40a4bb3cb3df58cfb19",
+      "operationCount": 16,
+      "pdfHall": "I 4 -2c",
+      "pdfTag": "108",
+      "pages": [
+        151,
+        151
+      ],
+      "gemmiHall": "I 4 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 109,
+      "affineSetSha256": "7d482ab9fc8d6f866c52b1691e82f26c397728dbfa4a9189b745fc7faeaded6a",
+      "operationCount": 16,
+      "pdfHall": "I 4bw -2",
+      "pdfTag": "109",
+      "pages": [
+        151,
+        152
+      ],
+      "gemmiHall": "I 4bw -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 110,
+      "affineSetSha256": "471abb810a34111c92fc4fde812b5f75ffd8f9c15e09585f8da6dd7509847083",
+      "operationCount": 16,
+      "pdfHall": "I 4bw -2c",
+      "pdfTag": "110",
+      "pages": [
+        152,
+        152
+      ],
+      "gemmiHall": "I 4bw -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 111,
+      "affineSetSha256": "d1183fee8ac17d33b40756b94045fd7dd23d8f9a87078d3bb4efab85e792d84a",
+      "operationCount": 8,
+      "pdfHall": "P -4 2",
+      "pdfTag": "111",
+      "pages": [
+        152,
+        153
+      ],
+      "gemmiHall": "P -4 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 112,
+      "affineSetSha256": "cf60a88d70732c5d132b7290a002051fe880533c1f66a9c0a7fbe75ed2ecce49",
+      "operationCount": 8,
+      "pdfHall": "P -4 2c",
+      "pdfTag": "112",
+      "pages": [
+        153,
+        153
+      ],
+      "gemmiHall": "P -4 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 113,
+      "affineSetSha256": "13afce5a94fc3089d3cca28a6d089c7b8c1b379e2079f90153053d9daa08962c",
+      "operationCount": 8,
+      "pdfHall": "P -4 2ab",
+      "pdfTag": "113",
+      "pages": [
+        153,
+        153
+      ],
+      "gemmiHall": "P -4 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 114,
+      "affineSetSha256": "147abcbad76ab05adb164a5b673f67cfe93b625959e093ae57f43e1566ca7b45",
+      "operationCount": 8,
+      "pdfHall": "P -4 2n",
+      "pdfTag": "114",
+      "pages": [
+        153,
+        154
+      ],
+      "gemmiHall": "P -4 2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 115,
+      "affineSetSha256": "17ce98746e1c63eab4e160927b086862e7593b1088f1bd242de443858be10147",
+      "operationCount": 8,
+      "pdfHall": "P -4 -2",
+      "pdfTag": "115",
+      "pages": [
+        154,
+        154
+      ],
+      "gemmiHall": "P -4 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 116,
+      "affineSetSha256": "0e921011c0c8fb1edd32d6fb14753475426111db137182b9594d10fccb40ce67",
+      "operationCount": 8,
+      "pdfHall": "P -4 -2c",
+      "pdfTag": "116",
+      "pages": [
+        154,
+        154
+      ],
+      "gemmiHall": "P -4 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 117,
+      "affineSetSha256": "acda2ae15e8f374d05b42f5ed428fb4b1b545f940f0ad9c14609fd7d1c8c57c3",
+      "operationCount": 8,
+      "pdfHall": "P -4 -2ab",
+      "pdfTag": "117",
+      "pages": [
+        154,
+        155
+      ],
+      "gemmiHall": "P -4 -2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 118,
+      "affineSetSha256": "8e99ec1bd30ae7fd6ea9cb3cacdbbfedfc083dd4fc4c2cd06843d0e2c340259f",
+      "operationCount": 8,
+      "pdfHall": "P -4 -2n",
+      "pdfTag": "118",
+      "pages": [
+        155,
+        155
+      ],
+      "gemmiHall": "P -4 -2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 119,
+      "affineSetSha256": "8ca13ba11094cfbb7cb7bdbcfd5f483fc2d47a5c1890bf5776fc467700f05091",
+      "operationCount": 16,
+      "pdfHall": "I -4 -2",
+      "pdfTag": "119",
+      "pages": [
+        155,
+        156
+      ],
+      "gemmiHall": "I -4 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 120,
+      "affineSetSha256": "e4fe23466c2a6aa47fb67b18e3b91d133816dc9b008d8312782b971005746e30",
+      "operationCount": 16,
+      "pdfHall": "I -4 -2c",
+      "pdfTag": "120",
+      "pages": [
+        156,
+        156
+      ],
+      "gemmiHall": "I -4 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 121,
+      "affineSetSha256": "074f3dadc5599bd47748d836bfd69298ebbdb56b8c2385999cc9b009de10722a",
+      "operationCount": 16,
+      "pdfHall": "I -4 2",
+      "pdfTag": "121",
+      "pages": [
+        156,
+        157
+      ],
+      "gemmiHall": "I -4 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 122,
+      "affineSetSha256": "b5e2b5ebe3fa273869385313ae5ad5fe156ecd95cde8bc60af006c99dfcdb9d0",
+      "operationCount": 16,
+      "pdfHall": "I -4 2bw",
+      "pdfTag": "122",
+      "pages": [
+        157,
+        157
+      ],
+      "gemmiHall": "I -4 2bw",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 123,
+      "affineSetSha256": "ad16081502b7a0eb1b219351b021d6cfe465ed64187e6fcd5ce88cda52cc8b82",
+      "operationCount": 16,
+      "pdfHall": "-P 4 2",
+      "pdfTag": "123",
+      "pages": [
+        157,
+        158
+      ],
+      "gemmiHall": "-P 4 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 124,
+      "affineSetSha256": "37d27f0fc5cdd5df6d982a7513fb727b7af0d2dadcd6356dd693166f296a0f7b",
+      "operationCount": 16,
+      "pdfHall": "-P 4 2c",
+      "pdfTag": "124",
+      "pages": [
+        158,
+        158
+      ],
+      "gemmiHall": "-P 4 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 125,
+      "affineSetSha256": "fd5058854ad4d8b4c9759ede3bc6d4aa21f3bdf3af73ff19a33317c6d40dbc2a",
+      "operationCount": 16,
+      "pdfHall": "-P 4a 2b",
+      "pdfTag": "125:2",
+      "pages": [
+        159,
+        159
+      ],
+      "gemmiHall": "-P 4a 2b",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 126,
+      "affineSetSha256": "55a34a759659956f2113b760934373569584b40a8f9bdeaac4ad0038ddebaf9d",
+      "operationCount": 16,
+      "pdfHall": "-P 4a 2bc",
+      "pdfTag": "126:2",
+      "pages": [
+        160,
+        160
+      ],
+      "gemmiHall": "-P 4a 2bc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 127,
+      "affineSetSha256": "07e12c80f2b0dc83400a7c6e530476f052932eaab1c0e7f2742595532902aad6",
+      "operationCount": 16,
+      "pdfHall": "-P 4 2ab",
+      "pdfTag": "127",
+      "pages": [
+        160,
+        161
+      ],
+      "gemmiHall": "-P 4 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 128,
+      "affineSetSha256": "c7f0b821af299fa40e6cc96f5a70c77fa90e85a4fc38a3bd95633c59565aec13",
+      "operationCount": 16,
+      "pdfHall": "-P 4 2n",
+      "pdfTag": "128",
+      "pages": [
+        161,
+        161
+      ],
+      "gemmiHall": "-P 4 2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 129,
+      "affineSetSha256": "15eefce569b556c99402e742872b154863d956b6e0f1d731bb9f3e711afa2651",
+      "operationCount": 16,
+      "pdfHall": "-P 4a 2a",
+      "pdfTag": "129:2",
+      "pages": [
+        162,
+        162
+      ],
+      "gemmiHall": "-P 4a 2a",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 130,
+      "affineSetSha256": "553941fa1f45639506790d66d04defa92a5879560183591e9d6db45291d15502",
+      "operationCount": 16,
+      "pdfHall": "-P 4a 2ac",
+      "pdfTag": "130:2",
+      "pages": [
+        163,
+        163
+      ],
+      "gemmiHall": "-P 4a 2ac",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 131,
+      "affineSetSha256": "7ef095129998c74343db143921af6624890f4de665184d4e14802b89f7d30616",
+      "operationCount": 16,
+      "pdfHall": "-P 4c 2",
+      "pdfTag": "131",
+      "pages": [
+        163,
+        164
+      ],
+      "gemmiHall": "-P 4c 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 132,
+      "affineSetSha256": "a682018abf7efff6d58e45dc9960286a6b12a5fa133ee284723708b1a6df475b",
+      "operationCount": 16,
+      "pdfHall": "-P 4c 2c",
+      "pdfTag": "132",
+      "pages": [
+        164,
+        165
+      ],
+      "gemmiHall": "-P 4c 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 133,
+      "affineSetSha256": "1d323fb3d9e99b1358751df0929804ee177e4ff7e6bedf182fbaf518d7d39cf3",
+      "operationCount": 16,
+      "pdfHall": "-P 4ac 2b",
+      "pdfTag": "133:2",
+      "pages": [
+        165,
+        166
+      ],
+      "gemmiHall": "-P 4ac 2b",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 134,
+      "affineSetSha256": "9dc2724cd5dedc54efa3e39359a0b2e8a1f1405171bacce8590db64f01e42ba8",
+      "operationCount": 16,
+      "pdfHall": "-P 4ac 2bc",
+      "pdfTag": "134:2",
+      "pages": [
+        166,
+        166
+      ],
+      "gemmiHall": "-P 4ac 2bc",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 135,
+      "affineSetSha256": "91f50260f3d73455f4d29be011c1580c2986032f83ff3971b9354681e0bb39cd",
+      "operationCount": 16,
+      "pdfHall": "-P 4c 2ab",
+      "pdfTag": "135",
+      "pages": [
+        167,
+        167
+      ],
+      "gemmiHall": "-P 4c 2ab",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 136,
+      "affineSetSha256": "f105e8165dd9601c2662816abd736d2f6593e21b0b2a667d0350e7f0bdd7348c",
+      "operationCount": 16,
+      "pdfHall": "-P 4n 2n",
+      "pdfTag": "136",
+      "pages": [
+        167,
+        168
+      ],
+      "gemmiHall": "-P 4n 2n",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 137,
+      "affineSetSha256": "6871e9f82e8ac6f9f0c72abc8b629be5a81ed6d36c054ba8b42a4271acb8e21e",
+      "operationCount": 16,
+      "pdfHall": "-P 4ac 2a",
+      "pdfTag": "137:2",
+      "pages": [
+        168,
+        169
+      ],
+      "gemmiHall": "-P 4ac 2a",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 138,
+      "affineSetSha256": "fa486518dc748aa228fc537e3cb2dac96a7082e652422c65d75bd02c236bf3fb",
+      "operationCount": 16,
+      "pdfHall": "-P 4ac 2ac",
+      "pdfTag": "138:2",
+      "pages": [
+        169,
+        170
+      ],
+      "gemmiHall": "-P 4ac 2ac",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 139,
+      "affineSetSha256": "21d8ecbe291fb3b3f6e0f27e61fba02946ba095533c0df55eeb9a9b3f65bcbd9",
+      "operationCount": 32,
+      "pdfHall": "-I 4 2",
+      "pdfTag": "139",
+      "pages": [
+        170,
+        170
+      ],
+      "gemmiHall": "-I 4 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 140,
+      "affineSetSha256": "ab546052027834099886dd569c2621cbd0127673313c8116845ff757f8d57889",
+      "operationCount": 32,
+      "pdfHall": "-I 4 2c",
+      "pdfTag": "140",
+      "pages": [
+        170,
+        171
+      ],
+      "gemmiHall": "-I 4 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 141,
+      "affineSetSha256": "70d5d21aaa2f50ecea490e97a27bc56ef21c2c1d567e311ba261c547dddd15ca",
+      "operationCount": 32,
+      "pdfHall": "-I 4bd 2",
+      "pdfTag": "141:2",
+      "pages": [
+        172,
+        173
+      ],
+      "gemmiHall": "-I 4bd 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 142,
+      "affineSetSha256": "0d6ee64dc81b241726edc4e53188e3e1129fc0a77a6ca70a3331ef05a33f4dc4",
+      "operationCount": 32,
+      "pdfHall": "-I 4bd 2c",
+      "pdfTag": "142:2",
+      "pages": [
+        173,
+        174
+      ],
+      "gemmiHall": "-I 4bd 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 143,
+      "affineSetSha256": "e38d5d4199e3ea9a8d5cb81e1f5c01f0eeed1a3d4791f35c4fd947aed795eb03",
+      "operationCount": 3,
+      "pdfHall": "P 3",
+      "pdfTag": "143",
+      "pages": [
+        174,
+        174
+      ],
+      "gemmiHall": "P 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 144,
+      "affineSetSha256": "9b4d792246648cde4fc7084735d7bb69a36f1dc86ed8e95235ddb29026c44168",
+      "operationCount": 3,
+      "pdfHall": "P 31",
+      "pdfTag": "144",
+      "pages": [
+        174,
+        175
+      ],
+      "gemmiHall": "P 31",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 145,
+      "affineSetSha256": "1363f62a33ee3a657b947219b81c361aaf6e567ca9fb9d9c5384567f34139281",
+      "operationCount": 3,
+      "pdfHall": "P 32",
+      "pdfTag": "145",
+      "pages": [
+        175,
+        175
+      ],
+      "gemmiHall": "P 32",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 146,
+      "affineSetSha256": "8810363c76b4fd8861c1c24062c29b7d90a1b61fb8e46a449fc102052d77283d",
+      "operationCount": 9,
+      "pdfHall": "R 3",
+      "pdfTag": "146:H",
+      "pages": [
+        175,
+        176
+      ],
+      "gemmiHall": "R 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 147,
+      "affineSetSha256": "ddfd0f1f708a61f9974c187ccd379bbecf5a2a94a19e26ec79f4a716b23124cf",
+      "operationCount": 6,
+      "pdfHall": "-P 3",
+      "pdfTag": "147",
+      "pages": [
+        176,
+        176
+      ],
+      "gemmiHall": "-P 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 148,
+      "affineSetSha256": "b3b470bea633717ed034eae8559570e77876f9bbb32b6680d02eebf8226ede44",
+      "operationCount": 18,
+      "pdfHall": "-R 3",
+      "pdfTag": "148:H",
+      "pages": [
+        176,
+        177
+      ],
+      "gemmiHall": "-R 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 149,
+      "affineSetSha256": "5cf0e51b8266b417278c95d8e1751e624f9f9f80447582cd3edbef8bc92e8417",
+      "operationCount": 6,
+      "pdfHall": "P 3 2",
+      "pdfTag": "149",
+      "pages": [
+        178,
+        178
+      ],
+      "gemmiHall": "P 3 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 150,
+      "affineSetSha256": "2d3e33b1671ef254599bd56753bd60ad4c95d250d095d3eb624c3210f862db40",
+      "operationCount": 6,
+      "pdfHall": "P 3 2\"",
+      "pdfTag": "150",
+      "pages": [
+        178,
+        178
+      ],
+      "gemmiHall": "P 3 2\"",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 151,
+      "affineSetSha256": "8bd819f4ded9ae0b6a77419e3d4a00d2bf0b85d37c26c629a635004a3268a5c8",
+      "operationCount": 6,
+      "pdfHall": "P 31 2c (0,0,1)",
+      "pdfTag": "151",
+      "pages": [
+        178,
+        179
+      ],
+      "gemmiHall": "P 31 2 (0 0 4)",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 152,
+      "affineSetSha256": "b729f9276ec4c2db9597741df48d4b2745670d59ad7a2bc6efd6242ea3ca9f4a",
+      "operationCount": 6,
+      "pdfHall": "P 31 2\"",
+      "pdfTag": "152",
+      "pages": [
+        179,
+        179
+      ],
+      "gemmiHall": "P 31 2\"",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 153,
+      "affineSetSha256": "97d81b0bf350f915a962bde7f426260fa03639d4424f72b0e10a6b5e55cedfe9",
+      "operationCount": 6,
+      "pdfHall": "P 32 2c (0,0,-1)",
+      "pdfTag": "153",
+      "pages": [
+        179,
+        179
+      ],
+      "gemmiHall": "P 32 2 (0 0 2)",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 154,
+      "affineSetSha256": "68154033206ed9c392c5ca81adf4de7c41aed2a029c44f0edb79dd02e4a48972",
+      "operationCount": 6,
+      "pdfHall": "P 32 2\"",
+      "pdfTag": "154",
+      "pages": [
+        179,
+        180
+      ],
+      "gemmiHall": "P 32 2\"",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 155,
+      "affineSetSha256": "334b20d54a49e18b9620af31400abab59db65a45fd3f3b0e6535b946acb64283",
+      "operationCount": 18,
+      "pdfHall": "R 3 2\"",
+      "pdfTag": "155:H",
+      "pages": [
+        180,
+        181
+      ],
+      "gemmiHall": "R 3 2\"",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 156,
+      "affineSetSha256": "261587d1a178ea7b52eebe785f11ea25ffca4fe2433a844b16da3b0fe17bc72b",
+      "operationCount": 6,
+      "pdfHall": "P 3 -2\"",
+      "pdfTag": "156",
+      "pages": [
+        181,
+        181
+      ],
+      "gemmiHall": "P 3 -2\"",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 157,
+      "affineSetSha256": "f6b1cd4402261852973216d08fdfedc37344ed6784e4ae913d38395431cfd95f",
+      "operationCount": 6,
+      "pdfHall": "P 3 -2",
+      "pdfTag": "157",
+      "pages": [
+        181,
+        182
+      ],
+      "gemmiHall": "P 3 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 158,
+      "affineSetSha256": "6256a87082c840efc002efa053a80be9c7a25cf51e64490699733091fe0201d4",
+      "operationCount": 6,
+      "pdfHall": "P 3 -2\"c",
+      "pdfTag": "158",
+      "pages": [
+        182,
+        182
+      ],
+      "gemmiHall": "P 3 -2\"c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 159,
+      "affineSetSha256": "5e26ba85488775c57fd8687114087b899b17bbc3e0072278e424e9c9ba149fe0",
+      "operationCount": 6,
+      "pdfHall": "P 3 -2c",
+      "pdfTag": "159",
+      "pages": [
+        182,
+        182
+      ],
+      "gemmiHall": "P 3 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 160,
+      "affineSetSha256": "c124d99f40945a3281f645448e9e13da8a37864693e028ae8e5378f5a11b28d3",
+      "operationCount": 18,
+      "pdfHall": "R 3 -2\"",
+      "pdfTag": "160:H",
+      "pages": [
+        182,
+        183
+      ],
+      "gemmiHall": "R 3 -2\"",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 161,
+      "affineSetSha256": "38abd67ffb3e97781eeea8e387d76a12ff843386705be144b1d7d1a77a3d043c",
+      "operationCount": 18,
+      "pdfHall": "R 3 -2\"c",
+      "pdfTag": "161:H",
+      "pages": [
+        184,
+        185
+      ],
+      "gemmiHall": "R 3 -2\"c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 162,
+      "affineSetSha256": "810c7fe52eae71983aa18e44a6e763d2d566ca9680a8dff0a0ad19a01975e447",
+      "operationCount": 12,
+      "pdfHall": "-P 3 2",
+      "pdfTag": "162",
+      "pages": [
+        185,
+        186
+      ],
+      "gemmiHall": "-P 3 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 163,
+      "affineSetSha256": "1715c6e8e1d126eca9423c02d211cb587823ac95e3f8ce57d0db3a093a47a91a",
+      "operationCount": 12,
+      "pdfHall": "-P 3 2c",
+      "pdfTag": "163",
+      "pages": [
+        186,
+        186
+      ],
+      "gemmiHall": "-P 3 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 164,
+      "affineSetSha256": "21472b41d442aea232a70d5ba7c473187b600332f345929556061114921eb0ca",
+      "operationCount": 12,
+      "pdfHall": "-P 3 2\"",
+      "pdfTag": "164",
+      "pages": [
+        186,
+        187
+      ],
+      "gemmiHall": "-P 3 2\"",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 165,
+      "affineSetSha256": "2a4675e7e73ff767eac21210ddafbf474f8b5b1d201c85124e64a419b40f201a",
+      "operationCount": 12,
+      "pdfHall": "-P 3 2\"c",
+      "pdfTag": "165",
+      "pages": [
+        187,
+        187
+      ],
+      "gemmiHall": "-P 3 2\"c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 166,
+      "affineSetSha256": "4a5ebc71d731b8ed5bc1ecdf1f1e0d5e401c87bfe0fc5097fcf5957790483970",
+      "operationCount": 36,
+      "pdfHall": "-R 3 2\"",
+      "pdfTag": "166:H",
+      "pages": [
+        187,
+        189
+      ],
+      "gemmiHall": "-R 3 2\"",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 167,
+      "affineSetSha256": "f039c1ca99ea566d2a2e826a111751ad0218a69ff22512fa13e337cb325c761e",
+      "operationCount": 36,
+      "pdfHall": "-R 3 2\"c",
+      "pdfTag": "167:H",
+      "pages": [
+        189,
+        191
+      ],
+      "gemmiHall": "-R 3 2\"c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 168,
+      "affineSetSha256": "b30f59ece215ff173035e597d42d7096a4dc0d7ac52556d3c36bbc0e76ff5d76",
+      "operationCount": 6,
+      "pdfHall": "P 6",
+      "pdfTag": "168",
+      "pages": [
+        191,
+        192
+      ],
+      "gemmiHall": "P 6",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 169,
+      "affineSetSha256": "14dfa4a0217571731dcfdde08b2e25eb665faa6ba3a49220fde5174c146f330d",
+      "operationCount": 6,
+      "pdfHall": "P 61",
+      "pdfTag": "169",
+      "pages": [
+        192,
+        192
+      ],
+      "gemmiHall": "P 61",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 170,
+      "affineSetSha256": "b9b91c87eb7f2403c36c3a081c3bdc7eaa5e2a0c5391869abf1e680f9dd414bd",
+      "operationCount": 6,
+      "pdfHall": "P 65",
+      "pdfTag": "170",
+      "pages": [
+        192,
+        192
+      ],
+      "gemmiHall": "P 65",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 171,
+      "affineSetSha256": "9e61833663aa3d0dd53343d2904450da1b7ba3a57258cce4a6660daeda3c50a7",
+      "operationCount": 6,
+      "pdfHall": "P 62",
+      "pdfTag": "171",
+      "pages": [
+        192,
+        193
+      ],
+      "gemmiHall": "P 62",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 172,
+      "affineSetSha256": "1e9ba9387c28241603a77329a3af98553a1f5e0d586c04e91a40e80bc24b7d11",
+      "operationCount": 6,
+      "pdfHall": "P 64",
+      "pdfTag": "172",
+      "pages": [
+        193,
+        193
+      ],
+      "gemmiHall": "P 64",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 173,
+      "affineSetSha256": "c143845c362d0e36da3fd7ccdae0488e05b46d87949248311a066ca2746b220a",
+      "operationCount": 6,
+      "pdfHall": "P 6c",
+      "pdfTag": "173",
+      "pages": [
+        193,
+        193
+      ],
+      "gemmiHall": "P 6c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 174,
+      "affineSetSha256": "bc8b29fe4893f879135024904c5c5e1ec3de5b0ee99acb0f43b3eed3228efae7",
+      "operationCount": 6,
+      "pdfHall": "P -6",
+      "pdfTag": "174",
+      "pages": [
+        193,
+        194
+      ],
+      "gemmiHall": "P -6",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 175,
+      "affineSetSha256": "9b356d1bb4f1b4ff3b5fe1f4083ed78ddddb0aeb5ad62d67ec08bb8f001899a7",
+      "operationCount": 12,
+      "pdfHall": "-P 6",
+      "pdfTag": "175",
+      "pages": [
+        194,
+        194
+      ],
+      "gemmiHall": "-P 6",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 176,
+      "affineSetSha256": "0ba81541044a79791bcac832eec6179bce4b304dad8d8eec46b80fc44b3755b1",
+      "operationCount": 12,
+      "pdfHall": "-P 6c",
+      "pdfTag": "176",
+      "pages": [
+        194,
+        194
+      ],
+      "gemmiHall": "-P 6c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 177,
+      "affineSetSha256": "2e4bb2296339b43c89ef8c819b1d785c7886599c2a5c79ca9d190ad102badb82",
+      "operationCount": 12,
+      "pdfHall": "P 6 2",
+      "pdfTag": "177",
+      "pages": [
+        195,
+        195
+      ],
+      "gemmiHall": "P 6 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 178,
+      "affineSetSha256": "7b0e3e9ddbf9d66a2a9d5af229a3a8eb2819d5b9d11088128593a4eb23754016",
+      "operationCount": 12,
+      "pdfHall": "P 61 2 (0,0,-1)",
+      "pdfTag": "178",
+      "pages": [
+        195,
+        195
+      ],
+      "gemmiHall": "P 61 2 (0 0 5)",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 179,
+      "affineSetSha256": "3ed52243c5125bf825d4ea355130e6769dafb05b9362c41e2a33b67f015c2dcd",
+      "operationCount": 12,
+      "pdfHall": "P 65 2 (0,0,1)",
+      "pdfTag": "179",
+      "pages": [
+        195,
+        196
+      ],
+      "gemmiHall": "P 65 2 (0 0 1)",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 180,
+      "affineSetSha256": "a04c11f07dc982832e97b3aced566ff9cf55386089b61edb18a08bbb4ec6ec9b",
+      "operationCount": 12,
+      "pdfHall": "P 62 2c (0,0,1)",
+      "pdfTag": "180",
+      "pages": [
+        196,
+        196
+      ],
+      "gemmiHall": "P 62 2 (0 0 4)",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 181,
+      "affineSetSha256": "0672888f84be4f13102acae5617e10ced84e8501691cf428c574010df44e793a",
+      "operationCount": 12,
+      "pdfHall": "P 64 2c (0,0,-1)",
+      "pdfTag": "181",
+      "pages": [
+        196,
+        197
+      ],
+      "gemmiHall": "P 64 2 (0 0 2)",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 182,
+      "affineSetSha256": "07d63f5e26169d19ded8e41d32bd821778f222d5136987290f35e6d6fff26ea3",
+      "operationCount": 12,
+      "pdfHall": "P 6c 2c",
+      "pdfTag": "182",
+      "pages": [
+        197,
+        197
+      ],
+      "gemmiHall": "P 6c 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 183,
+      "affineSetSha256": "eda1c03f5053ae1ec7c66e3e46f8cd01bd5c4c10352fa3c6d0af760a678ee82b",
+      "operationCount": 12,
+      "pdfHall": "P 6 -2",
+      "pdfTag": "183",
+      "pages": [
+        197,
+        198
+      ],
+      "gemmiHall": "P 6 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 184,
+      "affineSetSha256": "a6b55cd851021159e8557a881b623896fb6e05d0aee9a73ed2a2277d43dc69b6",
+      "operationCount": 12,
+      "pdfHall": "P 6 -2c",
+      "pdfTag": "184",
+      "pages": [
+        198,
+        198
+      ],
+      "gemmiHall": "P 6 -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 185,
+      "affineSetSha256": "992fa587500aa0ec837a8c0b12e4b6f9e43732ed918471ab328caeb41ef3c8f4",
+      "operationCount": 12,
+      "pdfHall": "P 6c -2",
+      "pdfTag": "185",
+      "pages": [
+        198,
+        199
+      ],
+      "gemmiHall": "P 6c -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 186,
+      "affineSetSha256": "319a419a495ba60a634ce9aa133d41f87b99c41d86038c226710887493f7138b",
+      "operationCount": 12,
+      "pdfHall": "P 6c -2c",
+      "pdfTag": "186",
+      "pages": [
+        199,
+        199
+      ],
+      "gemmiHall": "P 6c -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 187,
+      "affineSetSha256": "57cbbeca99f014a085848ee4b86e88214c7c6aa92f8f03085f9149addbbf4568",
+      "operationCount": 12,
+      "pdfHall": "P -6 2",
+      "pdfTag": "187",
+      "pages": [
+        199,
+        200
+      ],
+      "gemmiHall": "P -6 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 188,
+      "affineSetSha256": "68014d717fc877b644e0191af1441e58b02ca8f3aa02e78255b85c232cb4de74",
+      "operationCount": 12,
+      "pdfHall": "P -6c 2",
+      "pdfTag": "188",
+      "pages": [
+        200,
+        200
+      ],
+      "gemmiHall": "P -6c 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 189,
+      "affineSetSha256": "0be85db98c570adb1d7a818eadf14947e71c66d9d3b8038562e0342dbd013b6f",
+      "operationCount": 12,
+      "pdfHall": "P -6 -2",
+      "pdfTag": "189",
+      "pages": [
+        200,
+        201
+      ],
+      "gemmiHall": "P -6 -2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 190,
+      "affineSetSha256": "824ddb02a6289cf0dab2addc44efe5813bddbc720b77080fd5ab379441b069ea",
+      "operationCount": 12,
+      "pdfHall": "P -6c -2c",
+      "pdfTag": "190",
+      "pages": [
+        201,
+        201
+      ],
+      "gemmiHall": "P -6c -2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 191,
+      "affineSetSha256": "ae2ed786d73333987bb64befe7dd02909f4e56c89f2539d5a03c157440139e8c",
+      "operationCount": 24,
+      "pdfHall": "-P 6 2",
+      "pdfTag": "191",
+      "pages": [
+        201,
+        202
+      ],
+      "gemmiHall": "-P 6 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 192,
+      "affineSetSha256": "502d0282acd2df57eeb28494ec8759476e8c24b014ff52fe5c05bcd4640bf7a4",
+      "operationCount": 24,
+      "pdfHall": "-P 6 2c",
+      "pdfTag": "192",
+      "pages": [
+        202,
+        202
+      ],
+      "gemmiHall": "-P 6 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 193,
+      "affineSetSha256": "a214a96df6b1ec20f7f36f31b3b1c7e69debb15596b7cf1540462323291f77c8",
+      "operationCount": 24,
+      "pdfHall": "-P 6c 2",
+      "pdfTag": "193",
+      "pages": [
+        202,
+        203
+      ],
+      "gemmiHall": "-P 6c 2",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 194,
+      "affineSetSha256": "6d1e759f06cb4011e0ab62ce8692d8255756659958c7d703e2ccd2d28353ada9",
+      "operationCount": 24,
+      "pdfHall": "-P 6c 2c",
+      "pdfTag": "194",
+      "pages": [
+        203,
+        204
+      ],
+      "gemmiHall": "-P 6c 2c",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 195,
+      "affineSetSha256": "35931665e8b74f1e3069232c354ffe0e7b141800ef7de1b306712aa8495ea646",
+      "operationCount": 12,
+      "pdfHall": "P 2 2 3",
+      "pdfTag": "195",
+      "pages": [
+        204,
+        204
+      ],
+      "gemmiHall": "P 2 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 196,
+      "affineSetSha256": "8ee41b7931541a835aaaba9d26ab789d4fa5fc5cd71942fc73ef705be9f11eea",
+      "operationCount": 48,
+      "pdfHall": "F 2 2 3",
+      "pdfTag": "196",
+      "pages": [
+        204,
+        205
+      ],
+      "gemmiHall": "F 2 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 197,
+      "affineSetSha256": "ba580156f868e0991806d261a0c620b5424428d942a6c75e62d32dc34dc2b617",
+      "operationCount": 24,
+      "pdfHall": "I 2 2 3",
+      "pdfTag": "197",
+      "pages": [
+        205,
+        206
+      ],
+      "gemmiHall": "I 2 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 198,
+      "affineSetSha256": "db6588ca85b3a72fbd46ea243e52040d2d828da8ebea1d613b4edb2fe7ad5d0d",
+      "operationCount": 12,
+      "pdfHall": "P 2ac 2ab 3",
+      "pdfTag": "198",
+      "pages": [
+        206,
+        207
+      ],
+      "gemmiHall": "P 2ac 2ab 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 199,
+      "affineSetSha256": "4bf5d2c3a1a0d87468738d5051ca656b98258b8a2f08cc4b7e16c9a3250e6b58",
+      "operationCount": 24,
+      "pdfHall": "I 2b 2c 3",
+      "pdfTag": "199",
+      "pages": [
+        207,
+        207
+      ],
+      "gemmiHall": "I 2b 2c 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 200,
+      "affineSetSha256": "638b4744a15348e03e64721b3d59dcfb847b397f92e7eeffbfe90cdf887c29a6",
+      "operationCount": 24,
+      "pdfHall": "-P 2 2 3",
+      "pdfTag": "200",
+      "pages": [
+        207,
+        208
+      ],
+      "gemmiHall": "-P 2 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 201,
+      "affineSetSha256": "7b6ee8d485e3b4c676e32fa7b6622484e6d5e4462411a4a90e694392e9c0dcd5",
+      "operationCount": 24,
+      "pdfHall": "-P 2ab 2bc 3",
+      "pdfTag": "201:2",
+      "pages": [
+        208,
+        209
+      ],
+      "gemmiHall": "-P 2ab 2bc 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 202,
+      "affineSetSha256": "3b11019a12cdb7dd43c7e02fdf3164b3c5bd0c8482161c72ec3acced5b5be8d4",
+      "operationCount": 96,
+      "pdfHall": "-F 2 2 3",
+      "pdfTag": "202",
+      "pages": [
+        209,
+        211
+      ],
+      "gemmiHall": "-F 2 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 203,
+      "affineSetSha256": "c595c8051fe0132affc0986ae3c87d400306ff36cc008b7f0eeb6ac1ed01d6f9",
+      "operationCount": 96,
+      "pdfHall": "-F 2uv 2vw 3",
+      "pdfTag": "203:2",
+      "pages": [
+        212,
+        214
+      ],
+      "gemmiHall": "-F 2uv 2vw 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 204,
+      "affineSetSha256": "68bf1b1df6913a0733be0e75b3918d8a55ca790fdd6dc7258baf74e7027f3af4",
+      "operationCount": 48,
+      "pdfHall": "-I 2 2 3",
+      "pdfTag": "204",
+      "pages": [
+        214,
+        216
+      ],
+      "gemmiHall": "-I 2 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 205,
+      "affineSetSha256": "ff5b44707cb86e2c8960eb552145319ca3b9645190a8335a07aa12ba9ae90fca",
+      "operationCount": 24,
+      "pdfHall": "-P 2ac 2ab 3",
+      "pdfTag": "205",
+      "pages": [
+        216,
+        216
+      ],
+      "gemmiHall": "-P 2ac 2ab 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 206,
+      "affineSetSha256": "8ebbd0277a5477ff0b6bb46be30357c0d4d44ed1346d2105c7c2cea83d6aa33c",
+      "operationCount": 48,
+      "pdfHall": "-I 2b 2c 3",
+      "pdfTag": "206",
+      "pages": [
+        216,
+        217
+      ],
+      "gemmiHall": "-I 2b 2c 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 207,
+      "affineSetSha256": "673530d48fd4b5c4b32545137f02a7ae022c3fe5a84e692eb55d08f328e6bcdd",
+      "operationCount": 24,
+      "pdfHall": "P 4 2 3",
+      "pdfTag": "207",
+      "pages": [
+        217,
+        218
+      ],
+      "gemmiHall": "P 4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 208,
+      "affineSetSha256": "f0ad03f66550796ff5dde7bd8d4286879699c4f476bb63dafc07081a6c51d5df",
+      "operationCount": 24,
+      "pdfHall": "P 4n 2 3",
+      "pdfTag": "208",
+      "pages": [
+        218,
+        219
+      ],
+      "gemmiHall": "P 4n 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 209,
+      "affineSetSha256": "a4e7fd16f110385b8dc2542cc450fb5594661e0eaf7bf796f56fb6932b994f57",
+      "operationCount": 96,
+      "pdfHall": "F 4 2 3",
+      "pdfTag": "209",
+      "pages": [
+        219,
+        221
+      ],
+      "gemmiHall": "F 4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 210,
+      "affineSetSha256": "1e9ed20d0cfc24c58cda376f477140d1bda778aa030f42c031a15db9db9468c6",
+      "operationCount": 96,
+      "pdfHall": "F 4d 2 3",
+      "pdfTag": "210",
+      "pages": [
+        221,
+        223
+      ],
+      "gemmiHall": "F 4d 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 211,
+      "affineSetSha256": "86f402aef21c168df9c81c391f396f66cb4c334486b55b05a6085066bb15120d",
+      "operationCount": 48,
+      "pdfHall": "I 4 2 3",
+      "pdfTag": "211",
+      "pages": [
+        223,
+        224
+      ],
+      "gemmiHall": "I 4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 212,
+      "operationCount": 24,
+      "affineSetSha256": "dd931303df2c62457ff75890914a9bbb832f3fcc1e6f4e92ca41de714790c36b",
+      "gemmiHall": "P 4acd 2ab 3",
+      "pdfConfirmed": false,
+      "primaryFullSetConfirmed": false,
+      "sourceClosureConfirmed": true,
+      "alternateSourceClosure": {
+        "passed": true,
+        "method": "The 23 other printed PSI coordinate rows generate one 24-element affine group using independent exact integer matrix closure modulo lattice translations. The printed row 16 fails membership. This is a disclosed source-closure reconstruction, not a direct match of all 24 printed rows.",
+        "sourceUrl": "https://www.psi.ch/sites/default/files/import/lns-diffraction/Support2EN/Symmetry_Elements_of_all_Space_Groups.pdf",
+        "pages": [
+          224,
+          225
+        ],
+        "sourcePdfSha256": "af8822152ffa92994ea5768e077c43efa98f6905885d55d0ab81aa55c2370447",
+        "sourceFile": "tools\\symmetry-212-psi-source.json",
+        "sourceFileSha256": "7fefd3d95df1752df5dbbe069fbabb0897c49db5f058b1f5cc63c4e6ed8079b5",
+        "printedCoordinateCount": 24,
+        "trustedSourceRows": 23,
+        "reconstructedOperationCount": 24,
+        "rawPrintedSetIsClosed": false,
+        "excludedSourceRow1Based": 16,
+        "excludedPrintedMap": "+x+1/4,+z+3/4,-y+1/4",
+        "derivedMissingMaps": [
+          "x+1/4,z+3/4,-y+3/4"
+        ],
+        "sourceOnlyMultiplicationWitnesses": [
+          {
+            "leftSourceRow1Based": 2,
+            "rightSourceRow1Based": 13,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 3,
+            "rightSourceRow1Based": 12,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 4,
+            "rightSourceRow1Based": 17,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 5,
+            "rightSourceRow1Based": 14,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 6,
+            "rightSourceRow1Based": 4,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 7,
+            "rightSourceRow1Based": 5,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 8,
+            "rightSourceRow1Based": 15,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 9,
+            "rightSourceRow1Based": 7,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 10,
+            "rightSourceRow1Based": 22,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 11,
+            "rightSourceRow1Based": 10,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 12,
+            "rightSourceRow1Based": 3,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 13,
+            "rightSourceRow1Based": 19,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 14,
+            "rightSourceRow1Based": 9,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 15,
+            "rightSourceRow1Based": 20,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 17,
+            "rightSourceRow1Based": 24,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 18,
+            "rightSourceRow1Based": 2,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 19,
+            "rightSourceRow1Based": 23,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 20,
+            "rightSourceRow1Based": 18,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 21,
+            "rightSourceRow1Based": 6,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 22,
+            "rightSourceRow1Based": 21,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 23,
+            "rightSourceRow1Based": 8,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          },
+          {
+            "leftSourceRow1Based": 24,
+            "rightSourceRow1Based": 11,
+            "composition": "left after right",
+            "result": [
+              [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                -1,
+                0
+              ],
+              [
+                6,
+                18,
+                18
+              ]
+            ]
+          }
+        ],
+        "targetAffineSetSha256": "dd931303df2c62457ff75890914a9bbb832f3fcc1e6f4e92ca41de714790c36b",
+        "hallPrimarySourceUrl": "https://www.iucr.org/__data/iucr/cif/dictionaries/cif_sym_1.0.1.dic.pdf",
+        "hallPrimaryValue": "212:P 4acd 2ab 3",
+        "hallPrimaryAccessMethod": "Official IUCr symCIF dictionary public indexed Hall listing, accessed 2026-10-28; no general positions were obtained from IUCr for this group."
+      },
+      "note": "PSI No.212 row 16 is not closed with the other 23 rows. Independent exact integer closure of those 23 source rows reconstructs all 24 catalogue operations and gives the corrected map with explicit source-row multiplication witnesses. This is a source-closure reconstruction, not a direct full printed-set match."
+    },
+    {
+      "id": 213,
+      "affineSetSha256": "7247f70fa7348fecf776758cf9f1550599af6b4a639b184974e42761087e41ae",
+      "operationCount": 24,
+      "pdfHall": "P 4bd 2ab 3",
+      "pdfTag": "213",
+      "pages": [
+        225,
+        225
+      ],
+      "gemmiHall": "P 4bd 2ab 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 214,
+      "affineSetSha256": "d22a9a66f2f4fe6b044a44c2a62b6ab957d6c27f31be97c320e4ecaec634ba14",
+      "operationCount": 48,
+      "pdfHall": "I 4bd 2c 3",
+      "pdfTag": "214",
+      "pages": [
+        226,
+        227
+      ],
+      "gemmiHall": "I 4bd 2c 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 215,
+      "affineSetSha256": "bbbee5ef0ca75baaec17a5c01dabb1d05eed8f75f238e7a2d3ae82af8cf99309",
+      "operationCount": 24,
+      "pdfHall": "P -4 2 3",
+      "pdfTag": "215",
+      "pages": [
+        227,
+        227
+      ],
+      "gemmiHall": "P -4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 216,
+      "affineSetSha256": "c70ff3355d089a90798802bb18030d94690342587254991bc633f7c81518ed5d",
+      "operationCount": 96,
+      "pdfHall": "F -4 2 3",
+      "pdfTag": "216",
+      "pages": [
+        227,
+        229
+      ],
+      "gemmiHall": "F -4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 217,
+      "affineSetSha256": "5fedff6257751ca3ba4b364254db550083fce8dafc4f0255ea5d1c43e10ecedf",
+      "operationCount": 48,
+      "pdfHall": "I -4 2 3",
+      "pdfTag": "217",
+      "pages": [
+        229,
+        231
+      ],
+      "gemmiHall": "I -4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 218,
+      "affineSetSha256": "888bea52d1cbda98f285b39fc9ac555cd90ff5f3a70be6999af61bad5f0daf91",
+      "operationCount": 24,
+      "pdfHall": "P -4n 2 3",
+      "pdfTag": "218",
+      "pages": [
+        231,
+        231
+      ],
+      "gemmiHall": "P -4n 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 219,
+      "affineSetSha256": "d111164c9fb0946f9768201b00fd9055c0cd32a40935c7e2cf19b6e6e2a67df5",
+      "operationCount": 96,
+      "pdfHall": "F -4c 2 3",
+      "pdfTag": "219",
+      "pages": [
+        231,
+        233
+      ],
+      "gemmiHall": "F -4a 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 220,
+      "affineSetSha256": "d5d5916c3828112b4b8bc3cdd2dffda9ab0f7e6d8900aaa27fb6c02d114304a2",
+      "operationCount": 48,
+      "pdfHall": "I -4bd 2c 3",
+      "pdfTag": "220",
+      "pages": [
+        233,
+        234
+      ],
+      "gemmiHall": "I -4bd 2c 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 221,
+      "affineSetSha256": "4cdfb97d1a40d8a86e32b871765835adda36f9f79f90841f60597b48d4e83c58",
+      "operationCount": 48,
+      "pdfHall": "-P 4 2 3",
+      "pdfTag": "221",
+      "pages": [
+        234,
+        236
+      ],
+      "gemmiHall": "-P 4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 222,
+      "affineSetSha256": "a902bdc2d0653330e8baad45d6b88343966d2b2903a7d32f2492e9874abaa4d4",
+      "operationCount": 48,
+      "pdfHall": "-P 4a 2bc 3",
+      "pdfTag": "222:2",
+      "pages": [
+        236,
+        237
+      ],
+      "gemmiHall": "-P 4a 2bc 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 223,
+      "affineSetSha256": "7bf521623a00c11d6853909a4cdadba1b450f20b6244b8a9b2ea3f3b3c871db2",
+      "operationCount": 48,
+      "pdfHall": "-P 4n 2 3",
+      "pdfTag": "223",
+      "pages": [
+        237,
+        239
+      ],
+      "gemmiHall": "-P 4n 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 224,
+      "affineSetSha256": "09b37e9e4d019ab9393589a1d6b0f11c1088cdc35edd3720d81804fd9706dd95",
+      "operationCount": 48,
+      "pdfHall": "-P 4bc 2bc 3",
+      "pdfTag": "224:2",
+      "pages": [
+        239,
+        241
+      ],
+      "gemmiHall": "-P 4bc 2bc 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 225,
+      "affineSetSha256": "0604faf8e1c0530e6e77eff6b3c9a71a695fa3d1f57e28cfa4bfca1d57ece166",
+      "operationCount": 192,
+      "pdfHall": "-F 4 2 3",
+      "pdfTag": "225",
+      "pages": [
+        241,
+        244
+      ],
+      "gemmiHall": "-F 4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 226,
+      "affineSetSha256": "11236830d79838ad16a317bd25ab91ad255b9dff398ac988962bf9b308d99dfc",
+      "operationCount": 192,
+      "pdfHall": "-F 4c 2 3",
+      "pdfTag": "226",
+      "pages": [
+        244,
+        248
+      ],
+      "gemmiHall": "-F 4a 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_exact_full_set_equivalent_hall"
+    },
+    {
+      "id": 227,
+      "affineSetSha256": "a44bbd8756df358e54c0d1d8d82b5e078f9d9aee285ae1415fa03f0391702293",
+      "operationCount": 192,
+      "pdfHall": "-F 4vw 2vw 3",
+      "pdfTag": "227:2",
+      "pages": [
+        250,
+        254
+      ],
+      "gemmiHall": "-F 4vw 2vw 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 228,
+      "operationCount": 192,
+      "affineSetSha256": "8bea29d83108cc7a47e302d9194315e5b334c6551615e03f4dc91ee0b2428205",
+      "gemmiHall": "-F 4ud 2vw 3",
+      "pdfConfirmed": false,
+      "primaryFullSetConfirmed": true,
+      "sourceClosureConfirmed": false,
+      "alternatePrimarySource": {
+        "passed": true,
+        "sourceUrl": "https://onlinelibrary.wiley.com/iucr/itc/A1b/ch2o3v0001/sgtable2o3o228/",
+        "accessMethod": "Publicly indexed IUCr general-position coordinate facts transcribed on 2026-10-28; direct page fetch was not available.",
+        "sourceOriginChoice": 1,
+        "targetOriginChoice": 2,
+        "coordinateMapCount": 48,
+        "centringCount": 4,
+        "operationCount": 192,
+        "originShiftUnits1over24": [
+          3,
+          3,
+          3
+        ],
+        "originTransform": "r_new = r_old + p; t_new = t_old + p - R p",
+        "sourceFile": "tools\\symmetry-228-iucr-source.json",
+        "sourceFileSha256": "14e3e3e3bce9ba18849fbe50b86a663ece77a24365e56a71d0af1bb13f1650d3",
+        "auditScript": "reports/test-runs/2026-10-28-centrosymmetric-expansion/check-228-iucr.py",
+        "auditScriptSha256": "c3b25e1c497409071892e0fb098558d96e758a9981e534480f9284a91fe93870",
+        "sourceAffineSetSha256": "d30fe46ce241bf1bf1de93fd723c876c7447168749e98b64d6a3081421017df7",
+        "targetAffineSetSha256": "8bea29d83108cc7a47e302d9194315e5b334c6551615e03f4dc91ee0b2428205"
+      },
+      "note": "No identical complete PSI coordinate set found for this reference setting; the saved IUCr No.228 origin-1 general-position list, expanded by F centring and transformed by p=(1/8,1/8,1/8), independently matches all 192 reference-origin-2 operations."
+    },
+    {
+      "id": 229,
+      "affineSetSha256": "aef9996df64636a0ba980abdb3f20596d5288592a8f379f5745cc6b56cf58548",
+      "operationCount": 96,
+      "pdfHall": "-I 4 2 3",
+      "pdfTag": "229",
+      "pages": [
+        260,
+        262
+      ],
+      "gemmiHall": "-I 4 2 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    },
+    {
+      "id": 230,
+      "affineSetSha256": "c7d6c7588be603a913a711b3e2275928d6b0efd99800157ec1ea8fcaf773efdd",
+      "operationCount": 96,
+      "pdfHall": "-I 4bd 2c 3",
+      "pdfTag": "230",
+      "pages": [
+        262,
+        264
+      ],
+      "gemmiHall": "-I 4bd 2c 3",
+      "pdfConfirmed": true,
+      "matchingMethod": "number_and_hall_and_exact_full_set"
+    }
+  ]
+}

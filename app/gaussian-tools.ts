@@ -97,6 +97,12 @@ export type CubeData = {
   rms: number;
 };
 
+export type CubeBond = {
+  a: number;
+  b: number;
+  distance: number;
+};
+
 export type CubeTriangle = {
   a: Vec3;
   b: Vec3;
@@ -472,10 +478,21 @@ export function parseGaussianCube(text: string): CubeData {
   const values = lines.slice(dataStart).join(" ").trim().split(/\s+/).filter(Boolean).map(finiteNumber);
   if (values.length < expected) throw new Error(`Cube grid contains ${values.length} values; ${expected} are required.`);
   const gridValues = values.slice(0, expected);
-  const minimum = Math.min(...gridValues);
-  const maximum = Math.max(...gridValues);
-  const mean = gridValues.reduce((sum, value) => sum + value, 0) / gridValues.length;
-  const rms = Math.sqrt(gridValues.reduce((sum, value) => sum + value * value, 0) / gridValues.length);
+  // Cube grids routinely contain hundreds of thousands or millions of values.
+  // Passing them to Math.min/Math.max with spread syntax exceeds the JavaScript
+  // argument stack in Electron, so collect all statistics in one bounded scan.
+  let minimum = Infinity;
+  let maximum = -Infinity;
+  let sum = 0;
+  let sumSquares = 0;
+  for (const value of gridValues) {
+    if (value < minimum) minimum = value;
+    if (value > maximum) maximum = value;
+    sum += value;
+    sumSquares += value * value;
+  }
+  const mean = sum / gridValues.length;
+  const rms = Math.sqrt(sumSquares / gridValues.length);
   return {
     comments: [lines[0] ?? "", lines[1] ?? ""],
     origin,
@@ -494,7 +511,66 @@ export function parseGaussianCube(text: string): CubeData {
 
 export function defaultCubeIsovalue(cube: CubeData) {
   const maximumAbsolute = Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum), 1e-8);
-  return Math.max(cube.rms * 0.8, maximumAbsolute * 0.08);
+  // Nuclear cusps can be orders of magnitude larger than the chemically useful
+  // part of a density or potential grid.  Basing the initial contour on the
+  // absolute maximum therefore hides almost the entire surface.  RMS keeps the
+  // default tied to the bulk of the sampled field while remaining scale-aware.
+  return Math.max(1e-8, Math.min(maximumAbsolute * 0.2, cube.rms * 0.08));
+}
+
+export function cubeIsovalueRange(cube: CubeData) {
+  const suggested = defaultCubeIsovalue(cube);
+  const maximumAbsolute = Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum), 1e-8);
+  const maximum = Math.max(
+    suggested * 1.01,
+    Math.min(maximumAbsolute * 0.8, Math.max(suggested * 20, cube.rms * 2)),
+  );
+  const minimum = Math.max(1e-8, Math.min(suggested / 50, maximum / 1000));
+  return {
+    minimum,
+    maximum,
+    step: Math.max(1e-8, suggested / 100),
+    suggested,
+  };
+}
+
+export function cubePhaseAvailability(cube: Pick<CubeData, "minimum" | "maximum">) {
+  const scale = Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum), 1e-12);
+  const tolerance = Math.max(1e-12, scale * 1e-10);
+  return {
+    positive: cube.maximum > tolerance,
+    negative: cube.minimum < -tolerance,
+  };
+}
+
+// Cordero-style single-bond covalent radii in angstrom.  Cube atom positions
+// are normalized to angstrom by parseGaussianCube, so the same cutoff works
+// for both Bohr- and angstrom-authored files.
+const CUBE_COVALENT_RADII = [
+  0,
+  0.31, 0.28,
+  1.28, 0.96, 0.84, 0.76, 0.71, 0.66, 0.57, 0.58,
+  1.66, 1.41, 1.21, 1.11, 1.07, 1.05, 1.02, 1.06,
+  2.03, 1.76, 1.70, 1.60, 1.53, 1.39, 1.39, 1.32, 1.26, 1.24, 1.32, 1.22, 1.22, 1.20, 1.19, 1.20, 1.20, 1.16,
+  2.20, 1.95, 1.90, 1.75, 1.64, 1.54, 1.47, 1.46, 1.42, 1.39, 1.45, 1.44, 1.42, 1.39, 1.39, 1.38, 1.39, 1.40,
+  2.44, 2.15, 2.07, 2.04, 2.03, 2.01, 1.99, 1.98, 1.98, 1.96, 1.94, 1.92, 1.92, 1.89, 1.90, 1.87, 1.87,
+  1.75, 1.70, 1.62, 1.51, 1.44, 1.41, 1.36, 1.36, 1.32, 1.45, 1.46, 1.48, 1.40, 1.50, 1.50,
+  2.60, 2.21, 2.15, 2.06, 2.00, 1.96, 1.90, 1.87, 1.80, 1.69,
+] as const;
+
+export function inferCubeBonds(cube: Pick<CubeData, "atoms">, tolerance = 1.22): CubeBond[] {
+  const bonds: CubeBond[] = [];
+  for (let a = 0; a < cube.atoms.length; a += 1) {
+    const radiusA = CUBE_COVALENT_RADII[cube.atoms[a].atomicNumber] ?? 1.25;
+    for (let b = a + 1; b < cube.atoms.length; b += 1) {
+      const radiusB = CUBE_COVALENT_RADII[cube.atoms[b].atomicNumber] ?? 1.25;
+      const distance = euclideanDistance(cube.atoms[a].position, cube.atoms[b].position);
+      if (distance > 0.35 && distance <= (radiusA + radiusB) * tolerance) {
+        bonds.push({ a, b, distance });
+      }
+    }
+  }
+  return bonds;
 }
 
 function add(a: Vec3, b: Vec3): Vec3 {

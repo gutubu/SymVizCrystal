@@ -3,6 +3,56 @@ import test from "node:test";
 
 const { parseStructureFile } = await import("../app/crystal-data.ts");
 
+test("uses conventional formula order instead of CIF or Hill ordering", () => {
+  const structure = parseStructureFile(`data_quartz
+_chemical_formula_sum 'O2 Si'
+_cell_length_a 4.913
+_cell_length_b 4.913
+_cell_length_c 5.405
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 120
+_space_group_name_H-M_alt 'P 1'
+loop_
+_space_group_symop_operation_xyz
+'x,y,z'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+Si1 Si 0 0 0
+O1 O 0.25 0.25 0.25
+`, "quartz.cif");
+  assert.equal(structure.formula, "SiO₂");
+
+  const organic = parseStructureFile(`data_organic
+_chemical_formula_sum 'O3 H15 N C20'
+_cell_length_a 10
+_cell_length_b 10
+_cell_length_c 10
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_space_group_name_H-M_alt 'P 1'
+loop_
+_space_group_symop_operation_xyz
+'x,y,z'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+C1 C 0 0 0
+H1 H 0.1 0 0
+N1 N 0.2 0 0
+O1 O 0.3 0 0
+`, "organic.cif");
+  assert.equal(organic.formula, "C₂₀H₁₅NO₃");
+});
+
 test("loads XYZ coordinates and infers molecular bonds", () => {
   const structure = parseStructureFile(`3
 water

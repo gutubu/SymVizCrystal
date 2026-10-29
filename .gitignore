@@ -47,3 +47,16 @@ next-env.d.ts
 /gaussian-jobs/
 /CRASH
 /input_tmp.in
+
+# local third-party scientific executables (detected at runtime, not bundled)
+/Multiwfn*_bin_Win64/
+
+# Python caches and local verification artifacts
+__pycache__/
+*.py[cod]
+/reports/test-runs/
+/reports/olex2/
+
+# Offline International Tables extracts are not application assets
+/public/symmetry-demo/international-tables/
+/reports/international-table-diagrams-validation.json

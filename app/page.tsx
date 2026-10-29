@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import {
   DEFAULT_CIF,
   type AtomInstance,
@@ -16,7 +16,7 @@ import {
   findHydrogenBonds,
   formatFractional,
   fractToCart,
-  hillElementOrder,
+  conventionalElementOrder,
   latticeVectors,
   molecularComponentIds,
   molecularDisplayFracts,
@@ -44,19 +44,33 @@ import {
   type GaussianWorkflow,
   buildCubeIsosurface,
   buildGaussianInputFromModel,
+  cubeIsovalueRange,
+  cubePhaseAvailability,
   defaultCubeIsovalue,
   gaussianAtomIndices,
+  inferCubeBonds,
   parseGaussianCube,
   parseGaussianOutput,
   prepareGaussianModel,
 } from "./gaussian-tools";
 import {
+  type QuantumEspressoBasisPreset,
   type QuantumEspressoInputOptions,
   type QuantumEspressoOutputSummary,
+  buildQuantumEspressoCutoffSeries,
   buildQuantumEspressoInput,
+  convergenceDeltaMevPerAtom,
   parseQuantumEspressoOutput,
+  quantumEspressoBasisCatalog,
+  quantumEspressoCutoffsForPreset,
+  quantumEspressoMethodCatalog,
+  recommendQuantumEspressoSettings,
+  recommendedConvergenceIndex,
+  suggestQuantumEspressoKPointMeshes,
   suggestQuantumEspressoPseudopotentials,
 } from "./quantum-espresso-tools";
+import { createTextZip, type TextArchiveFile } from "./zip-tools";
+import SymmetryDemoWorkspace from "./symmetry-demo-workspace";
 
 type DisplaySettings = {
   atoms: boolean;
@@ -83,14 +97,16 @@ type AxisAppearance = { lineWidth: number; length: number; font: AxisFont; fontS
 type AppearanceMenu = { kind: "element"; element: string; x: number; y: number } | { kind: "axis"; x: number; y: number };
 type RightTab = "operations" | "characters" | "atoms" | "wyckoff" | "disorder" | "hydrogen" | "calculator"
   | "geometry" | "cellTools" | "electrostatics" | "diffraction" | "density" | "gaussian";
-type UtilityTarget = Extract<RightTab, "operations" | "geometry" | "cellTools" | "electrostatics" | "diffraction" | "density" | "gaussian">;
+type UtilityTarget = Extract<RightTab, "operations" | "characters" | "geometry" | "cellTools" | "electrostatics" | "diffraction" | "density" | "gaussian">;
 type LeftTab = "model" | "style" | "inspect";
 type HydrogenPreset = "strict" | "steiner" | "broad";
 type HydrogenBondAppearance = { color: string; lineWidth: number };
 type SupercellSettings = { a: number; b: number; c: number };
 type ZClippingSettings = { back: number; fade: number };
 type DisorderSelections = Record<string, string>;
-type QuantumSubview = "qe" | "input" | "queue" | "results" | "cube";
+type QuantumSubview = "qe" | "input" | "queue" | "results" | "multiwfn" | "cube";
+type QeConvergenceMode = "k-point" | "cutoff";
+type QeCutoffRange = { startRy: number; endRy: number; stepRy: number; densityMultiplier: number };
 type GaussianJobStatus = "ready" | "queued" | "running" | "completed" | "failed" | "cancelled";
 type GaussianJob = {
   id: string;
@@ -114,9 +130,12 @@ type QuantumEspressoJob = {
   name: string;
   status: SymVizDesktopJobStatus;
   createdAt: string;
+  error?: string;
   output?: string;
   summary?: QuantumEspressoOutputSummary;
+  study?: SymVizQeConvergenceStudy | null;
 };
+type MultiwfnInputSelection = { path: string; name: string };
 type DisplayAtomInstance = {
   atom: AtomInstance;
   index: number;
@@ -203,6 +222,48 @@ const gaussianBasisGroups = [
 const gaussianMethodValues = new Set<string>(gaussianMethodGroups.flatMap((group) => [...group.options]));
 const gaussianBasisValues = new Set<string>(gaussianBasisGroups.flatMap((group) => [...group.options]));
 const customGaussianOption = "__custom__";
+const multiwfnPresetDescriptions = {
+  summary: {
+    zh: "读取波函数与结构信息，显示电子数、能量、基函数、分子式和点群后退出。",
+    en: "Read the wavefunction and structure, report electrons, energy, basis functions, formula and point group, then exit.",
+  },
+  aim: {
+    zh: "按随附版本的官方批处理序列执行 AIM 拓扑、临界点和键径分析。",
+    en: "Run the AIM topology, critical-point and bond-path workflow from the bundled version's official batch sequence.",
+  },
+  "esp-extrema": {
+    zh: "在三维网格上计算静电势极小值和极大值。",
+    en: "Evaluate electrostatic-potential minima and maxima on a three-dimensional grid.",
+  },
+  resp: {
+    zh: "使用官方脚本序列计算 RESP 原子电荷并导出 .chg；RESP 本身不生成 Cube。",
+    en: "Calculate RESP atomic charges with the official scripted sequence and export .chg; RESP itself does not create a Cube file.",
+  },
+  "frontier-orbitals": {
+    zh: "从 WFN 或格式化检查点文件读取前线轨道编号与能量，并给出 HOMO–LUMO 能隙；不会把缺失的虚轨道当作 LUMO。",
+    en: "Read frontier-orbital indices and energies from WFN or formatted-checkpoint data and report the HOMO-LUMO gap without inventing missing virtual orbitals.",
+  },
+  "homo-cube": {
+    zh: "自动识别 HOMO 编号，计算带正负相位的轨道波函数网格并导出 HOMO.cub。",
+    en: "Detect the HOMO index and export its signed orbital-wavefunction grid as HOMO.cub.",
+  },
+  "lumo-cube": {
+    zh: "自动识别 LUMO 编号并导出 LUMO.cub；若 WFN 仅含占据轨道，任务会被阻止并提示改用 FCHK。",
+    en: "Detect the LUMO and export LUMO.cub; occupied-only WFN files are blocked with guidance to use FCHK.",
+  },
+  "density-cube": {
+    zh: "在中等质量三维网格上计算电子密度并导出 density.cub，可直接在独立窗口观察。",
+    en: "Calculate electron density on a medium-quality 3D grid and export density.cub for the separate visualizer.",
+  },
+  "esp-cube": {
+    zh: "在中等质量三维网格上计算总静电势并导出 totesp.cub，可直接在独立窗口观察。",
+    en: "Calculate total electrostatic potential on a medium-quality 3D grid and export totesp.cub for the separate visualizer.",
+  },
+  custom: {
+    zh: "逐行发送菜单回答，可覆盖 Multiwfn 的完整交互功能；结束时通常需要输入 q。",
+    en: "Send one menu response per line to access the full interactive feature set; usually finish with q.",
+  },
+} as const;
 
 function supercellText(value: SupercellSettings) {
   const format = (extent: number) => Number.isInteger(extent) ? String(extent) : extent.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
@@ -370,6 +431,29 @@ function gaussianJobStatusText(status: GaussianJobStatus, language: Language) {
     cancelled: ["已取消", "Cancelled"],
   };
   return labels[status][language === "en-US" ? 1 : 0];
+}
+
+function quantumEspressoErrorText(error: string, language: Language) {
+  if (language === "en-US") return error;
+  if (/previous WSL launcher returned before executing/i.test(error) || /pw\.x did not start/i.test(error)) {
+    return "pw.x 未能启动：WSL 启动器在执行 Quantum ESPRESSO 命令前已经退出。";
+  }
+  if (/Could not start pw\.x:/i.test(error)) return error.replace(/Could not start pw\.x:/i, "无法启动 pw.x：");
+  if (/pw\.x stopped before JOB DONE/i.test(error)) return "pw.x 在出现 JOB DONE 前停止；请查看输出末尾的 QE 信息。";
+  if (/Could not stop the WSL pw\.x process:/i.test(error)) return error.replace(/Could not stop the WSL pw\.x process:/i, "无法停止 WSL 中的 pw.x 进程：");
+  return error;
+}
+
+function qeMeshKey(mesh: readonly number[]) {
+  return mesh.map((value) => Math.max(1, Math.round(Number(value) || 1))).join("×");
+}
+
+function qeStudyParameterLabel(study: SymVizQeConvergenceStudy) {
+  if (study.kind === "k-point" && study.kPoints) return qeMeshKey(study.kPoints);
+  if (study.kind === "cutoff" && study.ecutwfcRy !== null) {
+    return `${Number(study.ecutwfcRy.toFixed(3))} / ${study.ecutrhoRy === null ? "—" : Number(study.ecutrhoRy.toFixed(3))} Ry`;
+  }
+  return study.label || "—";
 }
 
 function IrrepLabel({ value }: { value: string }) {
@@ -630,7 +714,7 @@ function CrystalCanvas({
   const legendElements = useMemo(() => {
     const counts = new Map<string, number>();
     structure.atoms.forEach((atom) => counts.set(atom.element, (counts.get(atom.element) ?? 0) + 1));
-    return [...counts.entries()].sort(([a], [b]) => hillElementOrder(a, b, counts.has("C")));
+    return [...counts.entries()].sort(([a], [b]) => conventionalElementOrder(a, b, counts.has("C")));
   }, [structure]);
 
   const redraw = useCallback(() => setViewVersion((version) => version + 1), []);
@@ -1643,12 +1727,16 @@ function CubeSurfaceCanvas({
   isovalue,
   showPositive,
   showNegative,
+  showBonds = true,
+  smoothSurface = true,
   language,
 }: {
   cube: CubeData;
   isovalue: number;
   showPositive: boolean;
   showNegative: boolean;
+  showBonds?: boolean;
+  smoothSurface?: boolean;
   language: Language;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1656,9 +1744,16 @@ function CubeSurfaceCanvas({
   const drag = useRef({ active: false, x: 0, y: 0 });
   const zoom = useRef(1);
   const mesh = useMemo(
-    () => buildCubeIsosurface(cube, Math.max(1e-8, Math.abs(isovalue)), showPositive, showNegative),
-    [cube, isovalue, showPositive, showNegative],
+    () => buildCubeIsosurface(
+      cube,
+      Math.max(1e-8, Math.abs(isovalue)),
+      showPositive,
+      showNegative,
+      smoothSurface ? 1_200_000 : 45_000,
+    ),
+    [cube, isovalue, showPositive, showNegative, smoothSurface],
   );
+  const bonds = useMemo(() => inferCubeBonds(cube), [cube]);
   const bounds = useMemo(() => {
     const points = [
       ...cube.atoms.map((atom) => atom.position),
@@ -1672,11 +1767,14 @@ function CubeSurfaceCanvas({
       maximum[axis] = Math.max(maximum[axis], value);
     }));
     const center = minimum.map((value, axis) => (value + maximum[axis]) / 2) as Vec3;
-    const radius = Math.max(1e-6, ...points.map((point) => Math.hypot(
-      point[0] - center[0],
-      point[1] - center[1],
-      point[2] - center[2],
-    )));
+    let radius = 1e-6;
+    for (const point of points) {
+      radius = Math.max(radius, Math.hypot(
+        point[0] - center[0],
+        point[1] - center[1],
+        point[2] - center[2],
+      ));
+    }
     return { center, radius };
   }, [cube, mesh]);
 
@@ -1720,12 +1818,39 @@ function CubeSurfaceCanvas({
       context.lineTo(triangle.b.x, triangle.b.y);
       context.lineTo(triangle.c.x, triangle.c.y);
       context.closePath();
-      context.fillStyle = triangle.sign > 0 ? "rgba(42, 111, 176, .38)" : "rgba(217, 82, 66, .34)";
+      const surfaceColor = triangle.sign > 0 ? "rgba(42, 111, 176, .38)" : "rgba(217, 82, 66, .34)";
+      context.fillStyle = surfaceColor;
       context.strokeStyle = triangle.sign > 0 ? "rgba(34, 90, 145, .42)" : "rgba(169, 58, 47, .38)";
       context.lineWidth = 0.45;
       context.fill();
-      context.stroke();
+      if (!smoothSurface) context.stroke();
     });
+    if (showBonds) {
+      context.lineCap = "round";
+      bonds.map((bond) => {
+        const a = project(cube.atoms[bond.a].position);
+        const b = project(cube.atoms[bond.b].position);
+        return { bond, a, b, depth: (a.depth + b.depth) / 2 };
+      }).sort((a, b) => a.depth - b.depth).forEach(({ bond, a, b }) => {
+        context.beginPath();
+        context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
+        context.strokeStyle = "rgba(255, 255, 255, .9)";
+        context.lineWidth = 5.2;
+        context.stroke();
+        const gradient = context.createLinearGradient(a.x, a.y, b.x, b.y);
+        gradient.addColorStop(0, cubeAtomColor(cube.atoms[bond.a].atomicNumber));
+        gradient.addColorStop(0.48, cubeAtomColor(cube.atoms[bond.a].atomicNumber));
+        gradient.addColorStop(0.52, cubeAtomColor(cube.atoms[bond.b].atomicNumber));
+        gradient.addColorStop(1, cubeAtomColor(cube.atoms[bond.b].atomicNumber));
+        context.beginPath();
+        context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
+        context.strokeStyle = gradient;
+        context.lineWidth = 3.2;
+        context.stroke();
+      });
+    }
     cube.atoms
       .map((atom) => ({ atom, projection: project(atom.position) }))
       .sort((a, b) => a.projection.depth - b.projection.depth)
@@ -1743,12 +1868,12 @@ function CubeSurfaceCanvas({
     context.font = "12px Segoe UI, sans-serif";
     context.fillText(
       language === "en-US"
-        ? `Drag to rotate · wheel to zoom · ${mesh.triangles.length.toLocaleString()} triangles`
-        : `拖拽旋转 · 滚轮缩放 · ${mesh.triangles.length.toLocaleString()} 个三角面`,
+        ? `Drag to rotate · wheel to zoom · ${showBonds ? `${bonds.length} inferred bonds · ` : ""}${mesh.triangles.length.toLocaleString()} triangles`
+        : `拖拽旋转 · 滚轮缩放 · ${showBonds ? `${bonds.length} 条推断键 · ` : ""}${mesh.triangles.length.toLocaleString()} 个三角面`,
       12,
       height - 12,
     );
-  }, [bounds, cube, language, mesh]);
+  }, [bonds, bounds, cube, language, mesh, showBonds, smoothSurface]);
 
   useEffect(() => {
     redraw();
@@ -1789,6 +1914,8 @@ function CubeSurfaceCanvas({
     <div className="cube-legend">
       {showPositive && <span><i className="positive" />+{Math.abs(isovalue).toExponential(2)}</span>}
       {showNegative && <span><i className="negative" />−{Math.abs(isovalue).toExponential(2)}</span>}
+      {showBonds && <small>{language === "en-US" ? `${bonds.length} inferred bonds` : `${bonds.length} 条推断键`}</small>}
+      {smoothSurface && <small>{language === "en-US" ? "smooth full-grid surface" : "平滑完整网格"}</small>}
       {mesh.stride > 1 && <small>{language === "en-US" ? `preview stride ${mesh.stride}` : `预览步长 ${mesh.stride}`}</small>}
     </div>
   </div>;
@@ -1805,6 +1932,8 @@ export default function Home() {
   const [selectedAtomIndex, setSelectedAtomIndex] = useState(0);
   const [selectedOperationId, setSelectedOperationId] = useState(1);
   const [rightTab, setRightTab] = useState<RightTab>("operations");
+  const [workspaceMode, setWorkspaceMode] = useState<"crystal" | "symmetry-demo">("crystal");
+  const [symmetryDemoOpened, setSymmetryDemoOpened] = useState(false);
   const [leftTab, setLeftTab] = useState<LeftTab>("model");
   const [characterPointGroup, setCharacterPointGroup] = useState(() => structure.pointGroup);
   const [operationFilter, setOperationFilter] = useState("all");
@@ -1827,6 +1956,8 @@ export default function Home() {
   }));
   const [hydrogenPreset, setHydrogenPreset] = useState<HydrogenPreset | "custom">("steiner");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [rightPanelWidth, setRightPanelWidth] = useState(356);
+  const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [utilitiesMenuOpen, setUtilitiesMenuOpen] = useState(false);
   const [geometryIndices, setGeometryIndices] = useState<[number, number, number, number]>([0, 1, 2, 3]);
@@ -1839,28 +1970,38 @@ export default function Home() {
   const [quantumSubview, setQuantumSubview] = useState<QuantumSubview>("qe");
   const [qeOptions, setQeOptions] = useState<QuantumEspressoInputOptions>(() => {
     const elements = [...new Set(structure.atoms.map((atom) => atom.element))];
+    const recommendation = recommendQuantumEspressoSettings(structure);
     return {
       title: `${structure.name} — SymViz periodic DFT`,
       prefix: structure.name.replace(/[^A-Za-z0-9_.-]+/g, "-") || "symviz-qe",
-      calculation: "relax",
-      inputDft: "PBE",
-      dispersion: "d3-bj",
-      occupations: "fixed",
-      smearing: "gaussian",
-      degaussRy: 0.01,
-      ecutwfcRy: 60,
-      ecutrhoRy: 480,
-      kPoints: [2, 2, 2],
-      kPointShift: [0, 0, 0],
+      calculation: recommendation.calculation,
+      inputDft: recommendation.inputDft,
+      dispersion: recommendation.dispersion,
+      occupations: recommendation.occupations,
+      smearing: recommendation.smearing,
+      degaussRy: recommendation.degaussRy,
+      ecutwfcRy: recommendation.ecutwfcRy,
+      ecutrhoRy: recommendation.ecutrhoRy,
+      kPoints: recommendation.kPoints,
+      kPointShift: recommendation.kPointShift,
       convThr: 1e-8,
       forceConvThr: 1e-4,
       pressureConvThr: 0.5,
+      mdSteps: 100,
+      mdTimeStepAu: 20,
+      temperatureK: 300,
       pseudopotentials: suggestQuantumEspressoPseudopotentials(elements, []),
     };
   });
+  const [qeBasisPreset, setQeBasisPreset] = useState<QuantumEspressoBasisPreset>(() => recommendQuantumEspressoSettings(structure).basisPreset);
   const [qeStatus, setQeStatus] = useState<SymVizQeStatus | null>(null);
   const [qeJobs, setQeJobs] = useState<QuantumEspressoJob[]>([]);
   const [selectedQeJobId, setSelectedQeJobId] = useState<string | null>(null);
+  const [qeConvergenceMode, setQeConvergenceMode] = useState<QeConvergenceMode>("k-point");
+  const [qeSelectedKMeshes, setQeSelectedKMeshes] = useState<string[]>(() => suggestQuantumEspressoKPointMeshes(structure.cell, 6).map((candidate) => qeMeshKey(candidate.kPoints)));
+  const [qeCutoffRange, setQeCutoffRange] = useState<QeCutoffRange>({ startRy: 30, endRy: 80, stepRy: 10, densityMultiplier: 8 });
+  const [qeConvergenceTolerance, setQeConvergenceTolerance] = useState(1);
+  const [selectedQeStudyId, setSelectedQeStudyId] = useState<string | null>(null);
   const [liveQeOutput, setLiveQeOutput] = useState<SymVizDesktopOutputSnapshot & { jobId: string | null }>({ text: "", size: 0, truncated: false, updatedAt: null, jobId: null });
   const [followQeOutput, setFollowQeOutput] = useState(true);
   const [gaussianScope, setGaussianScope] = useState<GaussianScope>("selected-molecule");
@@ -1894,6 +2035,18 @@ export default function Home() {
   const [cubeIsovalue, setCubeIsovalue] = useState(0.02);
   const [cubePositive, setCubePositive] = useState(true);
   const [cubeNegative, setCubeNegative] = useState(true);
+  const [cubeBonds, setCubeBonds] = useState(true);
+  const [cubeSmoothSurface, setCubeSmoothSurface] = useState(true);
+  const [multiwfnStatus, setMultiwfnStatus] = useState<SymVizMultiwfnStatus | null>(null);
+  const [multiwfnInput, setMultiwfnInput] = useState<MultiwfnInputSelection | null>(null);
+  const [multiwfnTaskId, setMultiwfnTaskId] = useState("summary");
+  const [multiwfnJobName, setMultiwfnJobName] = useState("Multiwfn-analysis");
+  const [multiwfnScript, setMultiwfnScript] = useState("q\n");
+  const [multiwfnJobs, setMultiwfnJobs] = useState<SymVizMultiwfnJob[]>([]);
+  const [selectedMultiwfnJobId, setSelectedMultiwfnJobId] = useState<string | null>(null);
+  const [selectedMultiwfnOutput, setSelectedMultiwfnOutput] = useState("");
+  const [liveMultiwfnOutput, setLiveMultiwfnOutput] = useState<SymVizDesktopOutputSnapshot & { jobId: string | null }>({ text: "", size: 0, truncated: false, updatedAt: null, jobId: null });
+  const [followMultiwfnOutput, setFollowMultiwfnOutput] = useState(true);
   const [appearanceMenu, setAppearanceMenu] = useState<AppearanceMenu | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const gaussianOutputRef = useRef<HTMLInputElement>(null);
@@ -1904,6 +2057,7 @@ export default function Home() {
   const appearanceMenuRef = useRef<HTMLDivElement>(null);
   const liveGaussianOutputRef = useRef<HTMLPreElement>(null);
   const liveQeOutputRef = useRef<HTMLPreElement>(null);
+  const liveMultiwfnOutputRef = useRef<HTMLPreElement>(null);
   const english = language === "en-US";
   const text = (zh: string, en: string) => english ? en : zh;
   const desktopMode = desktopStatus !== null;
@@ -1911,9 +2065,28 @@ export default function Home() {
   const gaussianBasisIsCustom = !gaussianBasisValues.has(gaussianOptions.basis);
   const gaussianPreoptimizationMethodIsCustom = !gaussianMethodValues.has(gaussianOptions.preoptimizationMethod ?? "B3LYP");
   const gaussianPreoptimizationBasisIsCustom = !gaussianBasisValues.has(gaussianOptions.preoptimizationBasis ?? "6-31G(d)");
+  const multiwfnTemplateLabel = (id: string, fallback: string) => {
+    const labels: Record<string, string> = {
+      summary: text("波函数与结构摘要", fallback),
+      aim: text("AIM 拓扑与临界点", fallback),
+      "esp-extrema": text("静电势网格极值", fallback),
+      resp: text("RESP 原子电荷（仅 .chg）", fallback),
+      "frontier-orbitals": text("HOMO–LUMO 能级", fallback),
+      "homo-cube": text("HOMO 轨道 Cube", fallback),
+      "lumo-cube": text("LUMO 轨道 Cube", fallback),
+      "density-cube": text("电子密度 Cube", fallback),
+      "esp-cube": text("静电势 Cube", fallback),
+      custom: text("自定义命令脚本", fallback),
+    };
+    return labels[id] ?? fallback;
+  };
 
   useEffect(() => {
     const stored = window.localStorage.getItem("symviz-language");
+    const storedRightPanelWidth = Number(window.localStorage.getItem("symviz-right-panel-width"));
+    if (Number.isFinite(storedRightPanelWidth) && storedRightPanelWidth >= 320) {
+      setRightPanelWidth(Math.min(900, storedRightPanelWidth));
+    }
     if (stored !== "en-US" && stored !== "zh-CN") return;
     const frame = window.requestAnimationFrame(() => {
       setLanguage(stored);
@@ -1945,8 +2118,10 @@ export default function Home() {
             name: job.name,
             status: job.status,
             createdAt: job.submittedAt,
+            error: job.error || undefined,
             output: output || (existingIndex >= 0 ? next[existingIndex].output : undefined),
             summary: summary || (existingIndex >= 0 ? next[existingIndex].summary : undefined),
+            study: job.study || (existingIndex >= 0 ? next[existingIndex].study : null),
           };
           if (existingIndex >= 0) next[existingIndex] = value;
           else next.push(value);
@@ -2033,6 +2208,34 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    let disposed = false;
+    const mergeJobs = (jobs: SymVizMultiwfnJob[]) => {
+      if (disposed) return;
+      setMultiwfnJobs((current) => {
+        const next = [...current];
+        jobs.forEach((job) => {
+          const index = next.findIndex((candidate) => candidate.id === job.id);
+          if (index >= 0) next[index] = job;
+          else next.push(job);
+        });
+        return next.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+      });
+    };
+    void Promise.all([desktop.getMultiwfnStatus(), desktop.listMultiwfnJobs()]).then(([status, jobs]) => {
+      if (disposed) return;
+      setMultiwfnStatus(status);
+      mergeJobs(jobs);
+    });
+    const unsubscribe = desktop.onMultiwfnEvent((job) => mergeJobs([job]));
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, []);
+
   function changeLanguage(nextLanguage: Language) {
     setLanguage(nextLanguage);
     setNotice("");
@@ -2040,7 +2243,43 @@ export default function Home() {
     document.documentElement.lang = nextLanguage;
   }
 
+  function rightPanelWidthAt(clientX: number) {
+    const leftWidth = sidebarCollapsed ? 44 : window.innerWidth <= 1230 ? 250 : 286;
+    const maximumWidth = Math.max(320, Math.min(900, window.innerWidth - leftWidth - 560));
+    return Math.max(320, Math.min(maximumWidth, window.innerWidth - clientX));
+  }
+
+  function resizeRightPanel(clientX: number) {
+    if (window.innerWidth <= 1030) return;
+    setRightPanelWidth(rightPanelWidthAt(clientX));
+  }
+
+  function beginRightPanelResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (window.innerWidth <= 1030) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setRightPanelResizing(true);
+    resizeRightPanel(event.clientX);
+  }
+
+  function finishRightPanelResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!rightPanelResizing) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    const nextWidth = rightPanelWidthAt(event.clientX);
+    setRightPanelWidth(nextWidth);
+    setRightPanelResizing(false);
+    window.localStorage.setItem("symviz-right-panel-width", String(nextWidth));
+  }
+
+  function resizeRightPanelByKeyboard(delta: number) {
+    const next = Math.max(320, Math.min(900, rightPanelWidth + delta));
+    setRightPanelWidth(next);
+    window.localStorage.setItem("symviz-right-panel-width", String(next));
+  }
+
   const selectedAtom = structure.atoms[Math.min(selectedAtomIndex, structure.atoms.length - 1)];
+  const activeCubeIsovalueRange = useMemo(() => cube ? cubeIsovalueRange(cube) : null, [cube]);
+  const activeCubePhases = useMemo(() => cube ? cubePhaseAvailability(cube) : null, [cube]);
   const selectedOperation = structure.operations.find((operation) => operation.id === selectedOperationId) ?? structure.operations[0];
   const selectedCharacterTable = useMemo(() => characterTableForPointGroup(characterPointGroup), [characterPointGroup]);
   const wyckoffSites = useMemo(() => {
@@ -2089,7 +2328,7 @@ export default function Home() {
   const composition = useMemo(() => {
     const counts = new Map<string, number>();
     structure.atoms.forEach((atom) => counts.set(atom.element, (counts.get(atom.element) ?? 0) + 1));
-    return [...counts.entries()].sort(([a], [b]) => hillElementOrder(a, b, counts.has("C")));
+    return [...counts.entries()].sort(([a], [b]) => conventionalElementOrder(a, b, counts.has("C")));
   }, [structure]);
   const validGeometryIndices = useMemo(
     () => geometryIndices.map((index) => Math.min(index, Math.max(0, structure.atoms.length - 1))) as [number, number, number, number],
@@ -2136,6 +2375,12 @@ export default function Home() {
     () => buildQuantumEspressoInput(structure, qeOptions),
     [structure, qeOptions],
   );
+  const qeRecommendation = useMemo(
+    () => recommendQuantumEspressoSettings(structure),
+    [structure],
+  );
+  const selectedQeMethodInfo = quantumEspressoMethodCatalog.find((method) => method.id === qeOptions.inputDft) ?? quantumEspressoMethodCatalog[0];
+  const selectedQeBasisInfo = quantumEspressoBasisCatalog.find((basis) => basis.id === qeBasisPreset) ?? quantumEspressoBasisCatalog.at(-1)!;
   const availableQePseudoNames = useMemo(
     () => new Set((qeStatus?.pseudopotentials ?? []).map((file) => file.toLocaleLowerCase())),
     [qeStatus?.pseudopotentials],
@@ -2143,6 +2388,93 @@ export default function Home() {
   const unavailableQePseudopotentials = qeStatus?.pseudoRoot
     ? qePreparedInput.requiredPseudopotentials.filter((file) => !availableQePseudoNames.has(file.toLocaleLowerCase()))
     : qePreparedInput.requiredPseudopotentials;
+  const qeKPointCandidates = useMemo(
+    () => suggestQuantumEspressoKPointMeshes(structure.cell, 6),
+    [structure.cell.a, structure.cell.b, structure.cell.c, structure.cell.alpha, structure.cell.beta, structure.cell.gamma],
+  );
+  const qeCutoffCandidates = useMemo(
+    () => buildQuantumEspressoCutoffSeries(
+      qeCutoffRange.startRy,
+      qeCutoffRange.endRy,
+      qeCutoffRange.stepRy,
+      qeCutoffRange.densityMultiplier,
+    ),
+    [qeCutoffRange],
+  );
+  const qeConvergenceInputFiles = useMemo<TextArchiveFile[]>(() => {
+    const prefix = (qeOptions.prefix || "symviz-qe").replace(/[^A-Za-z0-9_.-]+/g, "-");
+    const plans = qeConvergenceMode === "k-point"
+      ? qeKPointCandidates
+        .filter((candidate) => qeSelectedKMeshes.includes(qeMeshKey(candidate.kPoints)))
+        .map((candidate) => ({ suffix: `k-${qeMeshKey(candidate.kPoints)}`, options: { kPoints: candidate.kPoints } }))
+      : qeCutoffCandidates.map((candidate) => ({ suffix: `ecut-${candidate.ecutwfcRy}-${candidate.ecutrhoRy}`, options: candidate }));
+    const inputs = plans.map((plan) => {
+      const jobPrefix = `${prefix}-${plan.suffix}`;
+      const prepared = buildQuantumEspressoInput(structure, {
+        ...qeOptions,
+        ...plan.options,
+        calculation: "scf",
+        title: `${qeOptions.title} · ${plan.suffix}`,
+        prefix: jobPrefix,
+      });
+      return { name: `${jobPrefix}.in`, contents: prepared.input };
+    });
+    const readme = [
+      english ? "SymViz Quantum ESPRESSO convergence input set" : "SymViz Quantum ESPRESSO 收敛测试输入集",
+      "",
+      english ? "Run each .in file independently with the same pseudopotential files." : "请使用完全相同的赝势文件分别运行每个 .in 文件。",
+      english ? "Compare total energy per atom, forces, and stress; do not select a parameter from energy alone." : "请同时比较每原子总能量、力与应力，不要只依据能量选择参数。",
+      english ? "Recommended order: converge cutoffs first, then regenerate and converge k-points." : "推荐顺序：先收敛截断能，再用选定截断能重新生成并收敛 k 点。",
+      "",
+      ...inputs.map((file, index) => `${index + 1}. ${file.name}`),
+    ].join("\n");
+    return [{ name: "README.txt", contents: readme }, ...inputs];
+  }, [english, qeConvergenceMode, qeCutoffCandidates, qeKPointCandidates, qeOptions, qeSelectedKMeshes, structure]);
+  const qeQueueBusy = qeJobs.some((job) => job.status === "queued" || job.status === "running");
+  const qeConvergenceStudies = useMemo(() => {
+    const groups = new Map<string, { id: string; kind: QeConvergenceMode; label: string; createdAt: string; jobs: QuantumEspressoJob[] }>();
+    for (const job of qeJobs) {
+      if (!job.study) continue;
+      const existing = groups.get(job.study.id) ?? {
+        id: job.study.id,
+        kind: job.study.kind,
+        label: job.study.label,
+        createdAt: job.createdAt,
+        jobs: [],
+      };
+      existing.jobs.push(job);
+      if (job.createdAt < existing.createdAt) existing.createdAt = job.createdAt;
+      groups.set(job.study.id, existing);
+    }
+    return [...groups.values()]
+      .map((study) => ({
+        ...study,
+        jobs: study.jobs.sort((left, right) => (left.study?.sequenceIndex ?? 0) - (right.study?.sequenceIndex ?? 0)),
+      }))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }, [qeJobs]);
+  const selectedQeStudy = qeConvergenceStudies.find((study) => study.id === selectedQeStudyId) ?? qeConvergenceStudies[0] ?? null;
+  const selectedQeStudyAnalysis = useMemo(() => {
+    if (!selectedQeStudy) return null;
+    const referenceJob = selectedQeStudy.jobs.at(-1) ?? null;
+    const referenceEnergy = referenceJob?.status === "completed" ? referenceJob.summary?.totalEnergyEv ?? null : null;
+    const rows = selectedQeStudy.jobs.map((job) => ({
+      job,
+      deltaMevPerAtom: convergenceDeltaMevPerAtom(job.summary?.totalEnergyEv, referenceEnergy, job.study?.atomCount ?? 0),
+    }));
+    const expectedCount = selectedQeStudy.jobs[0]?.study?.sequenceTotal ?? selectedQeStudy.jobs.length;
+    const complete = rows.length === expectedCount && rows.every(({ job }) => job.status === "completed" && job.summary?.totalEnergyEv !== null && job.summary?.totalEnergyEv !== undefined);
+    const recommendedIndex = complete
+      ? recommendedConvergenceIndex(rows.map((row) => row.deltaMevPerAtom), qeConvergenceTolerance)
+      : -1;
+    return { rows, complete, recommendedIndex, referenceJob };
+  }, [selectedQeStudy, qeConvergenceTolerance]);
+  useEffect(() => {
+    setQeSelectedKMeshes(qeKPointCandidates.map((candidate) => qeMeshKey(candidate.kPoints)));
+  }, [qeKPointCandidates]);
+  const recommendedQeStudyJob = selectedQeStudyAnalysis && selectedQeStudyAnalysis.recommendedIndex >= 0
+    ? selectedQeStudyAnalysis.rows[selectedQeStudyAnalysis.recommendedIndex]?.job ?? null
+    : null;
   const selectedQeJob = qeJobs.find((job) => job.id === selectedQeJobId) ?? qeJobs[0] ?? null;
   const runningQeJob = qeJobs.find((job) => job.status === "running") ?? null;
   const liveQeRemoteId = runningQeJob?.remoteId ?? null;
@@ -2156,6 +2488,11 @@ export default function Home() {
   const liveGaussianRemoteId = liveGaussianJob?.remoteId ?? null;
   const visibleLiveGaussianOutput = liveGaussianOutput.jobId === liveGaussianRemoteId
     ? liveGaussianOutput
+    : { text: "", size: 0, truncated: false, updatedAt: null };
+  const selectedMultiwfnJob = multiwfnJobs.find((job) => job.id === selectedMultiwfnJobId) ?? multiwfnJobs[0] ?? null;
+  const runningMultiwfnJob = multiwfnJobs.find((job) => job.status === "running") ?? null;
+  const visibleLiveMultiwfnOutput = liveMultiwfnOutput.jobId === runningMultiwfnJob?.id
+    ? liveMultiwfnOutput
     : { text: "", size: 0, truncated: false, updatedAt: null };
   const visibleGaussianJobs = useMemo(() => {
     const newerNames = new Set<string>();
@@ -2218,6 +2555,32 @@ export default function Home() {
     if (!followQeOutput || !liveQeOutputRef.current) return;
     liveQeOutputRef.current.scrollTop = liveQeOutputRef.current.scrollHeight;
   }, [followQeOutput, visibleLiveQeOutput.text]);
+
+  useEffect(() => {
+    const desktop = window.symvizDesktop;
+    if (!desktop || !runningMultiwfnJob) return;
+    let disposed = false;
+    let timer = 0;
+    const pollOutput = async () => {
+      try {
+        const snapshot = await desktop.getMultiwfnOutputTail(runningMultiwfnJob.id, 300_000);
+        if (!disposed) setLiveMultiwfnOutput({ ...snapshot, jobId: runningMultiwfnJob.id });
+      } catch {
+        // Multiwfn may not have created its output file yet; retry quietly.
+      }
+      if (!disposed) timer = window.setTimeout(pollOutput, 800);
+    };
+    void pollOutput();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, [runningMultiwfnJob?.id]);
+
+  useEffect(() => {
+    if (!followMultiwfnOutput || !liveMultiwfnOutputRef.current) return;
+    liveMultiwfnOutputRef.current.scrollTop = liveMultiwfnOutputRef.current.scrollHeight;
+  }, [followMultiwfnOutput, visibleLiveMultiwfnOutput.text]);
 
   const hydrogenBonds = useMemo(
     () => findHydrogenBonds(structure, hydrogenBondCriteria),
@@ -2311,6 +2674,7 @@ export default function Home() {
     try {
       const text = await file.text();
       const next = parseStructureFile(text, file.name);
+      setWorkspaceMode("crystal");
       setStructure(next);
       setFileName(file.name);
       setSelectedAtomIndex(0);
@@ -2335,10 +2699,22 @@ export default function Home() {
       }));
       const qeElements = [...new Set(next.atoms.map((atom) => atom.element))];
       const qePseudos = suggestQuantumEspressoPseudopotentials(qeElements, qeStatus?.pseudopotentials ?? []);
+      const qeNextRecommendation = recommendQuantumEspressoSettings(next);
+      setQeBasisPreset(qeNextRecommendation.basisPreset);
       setQeOptions((current) => ({
         ...current,
         title: `${next.name} — SymViz periodic DFT`,
         prefix: next.name.replace(/[^A-Za-z0-9_.-]+/g, "-") || "symviz-qe",
+        calculation: qeNextRecommendation.calculation,
+        inputDft: qeNextRecommendation.inputDft,
+        dispersion: qeNextRecommendation.dispersion,
+        occupations: qeNextRecommendation.occupations,
+        smearing: qeNextRecommendation.smearing,
+        degaussRy: qeNextRecommendation.degaussRy,
+        ecutwfcRy: qeNextRecommendation.ecutwfcRy,
+        ecutrhoRy: qeNextRecommendation.ecutrhoRy,
+        kPoints: qeNextRecommendation.kPoints,
+        kPointShift: qeNextRecommendation.kPointShift,
         pseudopotentials: qePseudos,
       }));
       setCube(null);
@@ -2362,9 +2738,19 @@ export default function Home() {
   }
 
   function openUtility(target: UtilityTarget, mode?: DensityMode) {
+    setWorkspaceMode("crystal");
     setUtilitiesMenuOpen(false);
     setRightTab(target);
     if (mode) setDensityMode(mode);
+  }
+
+  function openSymmetryDemo() {
+    setFileMenuOpen(false);
+    setUtilitiesMenuOpen(false);
+    setContextMenu(null);
+    setAppearanceMenu(null);
+    setSymmetryDemoOpened(true);
+    setWorkspaceMode("symmetry-demo");
   }
 
   function downloadTextFile(name: string, contents: string, type = "text/plain;charset=utf-8") {
@@ -2375,6 +2761,48 @@ export default function Home() {
     anchor.download = name;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  function downloadTextArchive(name: string, files: TextArchiveFile[]) {
+    const bytes = createTextZip(files);
+    const blob = new Blob([bytes as BlobPart], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = name;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function applyQuantumEspressoBasisPreset(preset: QuantumEspressoBasisPreset) {
+    setQeBasisPreset(preset);
+    if (preset === "custom") return;
+    const cutoffs = quantumEspressoCutoffsForPreset(qePreparedInput.diagnostics.elements, preset);
+    setQeOptions((current) => ({ ...current, ...cutoffs }));
+  }
+
+  function applyQuantumEspressoRecommendation() {
+    setQeBasisPreset(qeRecommendation.basisPreset);
+    setQeOptions((current) => ({
+      ...current,
+      calculation: qeRecommendation.calculation,
+      inputDft: qeRecommendation.inputDft,
+      dispersion: qeRecommendation.dispersion,
+      occupations: qeRecommendation.occupations,
+      smearing: qeRecommendation.smearing,
+      degaussRy: qeRecommendation.degaussRy,
+      ecutwfcRy: qeRecommendation.ecutwfcRy,
+      ecutrhoRy: qeRecommendation.ecutrhoRy,
+      kPoints: qeRecommendation.kPoints,
+      kPointShift: qeRecommendation.kPointShift,
+    }));
+    setQeCutoffRange({
+      startRy: Math.max(20, Math.round(qeRecommendation.ecutwfcRy * 0.7 / 5) * 5),
+      endRy: Math.round(qeRecommendation.ecutwfcRy * 1.4 / 5) * 5,
+      stepRy: 10,
+      densityMultiplier: Math.max(4, Math.round(qeRecommendation.ecutrhoRy / qeRecommendation.ecutwfcRy)),
+    });
+    setNotice(text("已采用针对当前 CIF 的 QE 输入建议；正式计算前仍需做收敛测试", "Applied CIF-aware QE input recommendations; convergence tests are still required for production work"));
   }
 
   async function chooseQuantumEspressoRoot() {
@@ -2416,8 +2844,10 @@ export default function Home() {
           name: job.name,
           status: job.status,
           createdAt: job.submittedAt,
+          error: job.error || undefined,
           output: output || undefined,
           summary: output ? parseQuantumEspressoOutput(output) : undefined,
+          study: job.study,
         } satisfies QuantumEspressoJob;
       }));
       setQeJobs(refreshed);
@@ -2451,6 +2881,7 @@ export default function Home() {
         name: submitted.name,
         status: submitted.status,
         createdAt: submitted.submittedAt,
+        error: submitted.error || undefined,
       };
       setQeJobs((current) => [job, ...current.filter((candidate) => candidate.remoteId !== job.remoteId)]);
       setSelectedQeJobId(job.id);
@@ -2460,18 +2891,244 @@ export default function Home() {
     }
   }
 
+  async function submitQuantumEspressoConvergenceStudy(kind: QeConvergenceMode) {
+    const desktop = window.symvizDesktop;
+    const issues = [...qePreparedInput.diagnostics.blockingIssues];
+    if (unavailableQePseudopotentials.length) issues.push(`UPF: ${unavailableQePseudopotentials.join(", ")}`);
+    if (issues.length) {
+      setNotice(text(`收敛测试已阻止：${issues.join("；")}`, `Convergence study blocked: ${issues.join("; ")}`));
+      return;
+    }
+    if (!desktop || !qeStatus?.available) {
+      setNotice(text("尚未检测到 pw.exe / pw.x，无法运行收敛测试", "pw.exe / pw.x is not connected; the convergence study cannot run"));
+      return;
+    }
+    if (qeQueueBusy) {
+      setNotice(text("请等待当前 QE 队列完成或取消后再创建收敛测试", "Finish or cancel the current QE queue before creating a convergence study"));
+      return;
+    }
+
+    const kPointPlans = qeKPointCandidates.filter((candidate) => qeSelectedKMeshes.includes(qeMeshKey(candidate.kPoints)));
+    const planCount = kind === "k-point" ? kPointPlans.length : qeCutoffCandidates.length;
+    if (planCount < 2) {
+      setNotice(text("收敛测试至少需要两个参数点", "A convergence study needs at least two parameter points"));
+      return;
+    }
+    if (planCount > 12) {
+      setNotice(text("单次收敛测试最多允许 12 个参数点", "A convergence study is limited to 12 parameter points"));
+      return;
+    }
+
+    const studyId = `qe-${kind}-${window.crypto?.randomUUID?.() ?? Date.now()}`;
+    const shortId = studyId.replace(/[^A-Za-z0-9]/g, "").slice(-8);
+    const studyLabel = kind === "k-point"
+      ? text(`${structure.name} · k 点收敛`, `${structure.name} · k-point convergence`)
+      : text(`${structure.name} · 截断能收敛`, `${structure.name} · cutoff convergence`);
+    const plans = kind === "k-point"
+      ? kPointPlans.map((candidate) => ({
+        kPoints: candidate.kPoints,
+        ecutwfcRy: qeOptions.ecutwfcRy,
+        ecutrhoRy: qeOptions.ecutrhoRy,
+        suffix: `k-${candidate.kPoints.join("x")}`,
+      }))
+      : qeCutoffCandidates.map((candidate) => ({
+        kPoints: qeOptions.kPoints,
+        ecutwfcRy: candidate.ecutwfcRy,
+        ecutrhoRy: candidate.ecutrhoRy,
+        suffix: `cut-${Number(candidate.ecutwfcRy.toFixed(3))}`,
+      }));
+
+    const submittedJobs: QuantumEspressoJob[] = [];
+    try {
+      for (let index = 0; index < plans.length; index += 1) {
+        const plan = plans[index];
+        const study: SymVizQeConvergenceStudy = {
+          id: studyId,
+          kind,
+          label: studyLabel,
+          sequenceIndex: index,
+          sequenceTotal: plans.length,
+          atomCount: qePreparedInput.diagnostics.atomCount,
+          kPoints: plan.kPoints,
+          ecutwfcRy: plan.ecutwfcRy,
+          ecutrhoRy: plan.ecutrhoRy,
+        };
+        const candidateOptions: QuantumEspressoInputOptions = {
+          ...qeOptions,
+          calculation: "scf",
+          title: `${studyLabel} · ${kind === "k-point" ? qeMeshKey(plan.kPoints) : `${plan.ecutwfcRy}/${plan.ecutrhoRy} Ry`}`,
+          prefix: `${qeOptions.prefix}-${shortId}-${plan.suffix}`,
+          kPoints: plan.kPoints,
+          ecutwfcRy: plan.ecutwfcRy,
+          ecutrhoRy: plan.ecutrhoRy,
+        };
+        const prepared = buildQuantumEspressoInput(structure, candidateOptions);
+        if (prepared.diagnostics.blockingIssues.length) throw new Error(prepared.diagnostics.blockingIssues.join("; "));
+        const submitted = await desktop.submitQeJob({
+          name: candidateOptions.prefix,
+          input: prepared.input,
+          pseudopotentials: prepared.requiredPseudopotentials,
+          study,
+        });
+        submittedJobs.push({
+          id: `qe-${submitted.id}`,
+          remoteId: submitted.id,
+          name: submitted.name,
+          status: submitted.status,
+          createdAt: submitted.submittedAt,
+          error: submitted.error || undefined,
+          study: submitted.study || study,
+        });
+      }
+      setQeJobs((current) => [
+        ...submittedJobs,
+        ...current.filter((candidate) => !submittedJobs.some((submitted) => submitted.remoteId === candidate.remoteId)),
+      ].sort((left, right) => right.createdAt.localeCompare(left.createdAt)));
+      setSelectedQeStudyId(studyId);
+      if (submittedJobs[0]) setSelectedQeJobId(submittedJobs[0].id);
+      setNotice(text(`已加入 ${plans.length} 个 SCF 参数点；QE 将串行运行`, `${plans.length} SCF parameter points queued; QE will run them serially`));
+    } catch (error) {
+      if (submittedJobs.length) {
+        setQeJobs((current) => [...submittedJobs, ...current.filter((candidate) => !submittedJobs.some((submitted) => submitted.remoteId === candidate.remoteId))]);
+        setSelectedQeStudyId(studyId);
+      }
+      const message = error instanceof Error ? error.message : text("无法创建收敛测试", "Could not create the convergence study");
+      setNotice(submittedJobs.length
+        ? text(`已加入 ${submittedJobs.length}/${plans.length} 个任务，随后失败：${message}`, `${submittedJobs.length}/${plans.length} tasks were queued before failure: ${message}`)
+        : message);
+    }
+  }
+
+  function applyQuantumEspressoConvergenceRecommendation(job: QuantumEspressoJob) {
+    if (!job.study) return;
+    if (job.study.kind === "k-point" && job.study.kPoints) {
+      setQeOptions((current) => ({ ...current, kPoints: job.study?.kPoints ?? current.kPoints }));
+      setNotice(text(`已采用推荐 k 点网格 ${qeMeshKey(job.study.kPoints)}`, `Recommended k-point mesh ${qeMeshKey(job.study.kPoints)} applied`));
+      return;
+    }
+    if (job.study.kind === "cutoff" && job.study.ecutwfcRy !== null && job.study.ecutrhoRy !== null) {
+      setQeOptions((current) => ({ ...current, ecutwfcRy: job.study?.ecutwfcRy ?? current.ecutwfcRy, ecutrhoRy: job.study?.ecutrhoRy ?? current.ecutrhoRy }));
+      setNotice(text(`已采用推荐截断能 ${job.study.ecutwfcRy}/${job.study.ecutrhoRy} Ry`, `Recommended cutoffs ${job.study.ecutwfcRy}/${job.study.ecutrhoRy} Ry applied`));
+    }
+  }
+
   async function cancelQuantumEspressoJob(job: QuantumEspressoJob) {
     const desktop = window.symvizDesktop;
     if (!desktop) return;
     try {
       const cancelled = await desktop.cancelQeJob(job.remoteId);
       setQeJobs((current) => current.map((candidate) => candidate.remoteId === job.remoteId
-        ? { ...candidate, status: cancelled.status }
+        ? { ...candidate, status: cancelled.status, error: cancelled.error || undefined }
         : candidate));
       setNotice(text("Quantum ESPRESSO 任务已取消", "Quantum ESPRESSO job cancelled"));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : text("无法取消 QE 任务", "Could not cancel the QE job"));
     }
+  }
+
+  async function chooseMultiwfnRoot() {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    try {
+      setMultiwfnStatus(await desktop.chooseMultiwfnRoot());
+      setNotice(text("Multiwfn 安装目录已连接", "Multiwfn installation connected"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法连接 Multiwfn", "Could not connect Multiwfn"));
+    }
+  }
+
+  async function chooseMultiwfnInput() {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    try {
+      const selected = await desktop.chooseMultiwfnInput();
+      if (!selected) return;
+      setMultiwfnInput(selected);
+      setMultiwfnJobName(selected.name.replace(/\.[^.]+$/, "") || "Multiwfn-analysis");
+      setNotice(text(`已选择 ${selected.name}`, `Selected ${selected.name}`));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法选择输入文件", "Could not select the input file"));
+    }
+  }
+
+  async function refreshMultiwfnJobs() {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    try {
+      const [status, jobs] = await Promise.all([desktop.getMultiwfnStatus(), desktop.listMultiwfnJobs()]);
+      setMultiwfnStatus(status);
+      setMultiwfnJobs(jobs);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法刷新 Multiwfn", "Could not refresh Multiwfn"));
+    }
+  }
+
+  async function submitMultiwfnJob() {
+    const desktop = window.symvizDesktop;
+    if (!desktop || !multiwfnInput) {
+      setNotice(text("请先选择 Multiwfn 输入文件", "Choose a Multiwfn input file first"));
+      return;
+    }
+    try {
+      const job = await desktop.submitMultiwfnJob({
+        name: multiwfnJobName,
+        inputPath: multiwfnInput.path,
+        taskId: multiwfnTaskId,
+        script: multiwfnScript,
+      });
+      setMultiwfnJobs((current) => [job, ...current.filter((candidate) => candidate.id !== job.id)]);
+      setSelectedMultiwfnJobId(job.id);
+      setSelectedMultiwfnOutput("");
+      setNotice(text("Multiwfn 任务已加入本地队列", "Multiwfn job added to the local queue"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法启动 Multiwfn 任务", "Could not start the Multiwfn job"));
+    }
+  }
+
+  async function submitMultiwfnCubeFromJob(job: SymVizMultiwfnJob, taskId: "density-cube" | "esp-cube" | "homo-cube" | "lumo-cube") {
+    const desktop = window.symvizDesktop;
+    const inputPath = job.files.input;
+    if (!desktop || typeof inputPath !== "string" || !inputPath) return;
+    try {
+      const suffix = {
+        "density-cube": "density",
+        "esp-cube": "ESP",
+        "homo-cube": "HOMO",
+        "lumo-cube": "LUMO",
+      }[taskId];
+      const derived = await desktop.submitMultiwfnJob({
+        name: `${job.name}-${suffix}-cube`,
+        inputPath,
+        taskId,
+        script: "",
+      });
+      setMultiwfnJobs((current) => [derived, ...current.filter((candidate) => candidate.id !== derived.id)]);
+      setSelectedMultiwfnJobId(derived.id);
+      setSelectedMultiwfnOutput("");
+      setNotice(text(`${suffix} Cube 任务已加入队列`, `${suffix} Cube job added to the queue`));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法生成 Cube", "Could not generate the Cube file"));
+    }
+  }
+
+  async function cancelMultiwfnJob(job: SymVizMultiwfnJob) {
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    try {
+      const cancelled = await desktop.cancelMultiwfnJob(job.id);
+      setMultiwfnJobs((current) => current.map((candidate) => candidate.id === cancelled.id ? cancelled : candidate));
+      setNotice(text("Multiwfn 任务已取消", "Multiwfn job cancelled"));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : text("无法取消 Multiwfn 任务", "Could not cancel the Multiwfn job"));
+    }
+  }
+
+  async function selectMultiwfnJob(job: SymVizMultiwfnJob) {
+    setSelectedMultiwfnJobId(job.id);
+    const desktop = window.symvizDesktop;
+    if (!desktop) return;
+    const output = await desktop.getMultiwfnOutput(job.id).catch(() => "");
+    setSelectedMultiwfnOutput(output);
   }
 
   function createGaussianJob() {
@@ -2532,6 +3189,9 @@ export default function Home() {
       setCube(nextCube);
       setCubeFileName(file.name);
       setCubeIsovalue(defaultCubeIsovalue(nextCube));
+      const phases = cubePhaseAvailability(nextCube);
+      setCubePositive(phases.positive);
+      setCubeNegative(phases.negative);
       setQuantumSubview("cube");
       setRightTab("gaussian");
       setNotice(text(`已载入 ${file.name} 的三维网格`, `Loaded the 3D grid from ${file.name}`));
@@ -2731,6 +3391,9 @@ export default function Home() {
         setCube(nextCube);
         setCubeFileName(result.fileName);
         setCubeIsovalue(defaultCubeIsovalue(nextCube));
+        const phases = cubePhaseAvailability(nextCube);
+        setCubePositive(phases.positive);
+        setCubeNegative(phases.negative);
         setQuantumSubview("cube");
         setNotice(text("Cube 已生成并载入三维查看器", "Cube generated and loaded in the 3D viewer"));
       } catch (error) {
@@ -2765,6 +3428,9 @@ export default function Home() {
       setCube(nextCube);
       setCubeFileName(result.fileName || `${job.name}-${cubeProperty}.cube`);
       setCubeIsovalue(defaultCubeIsovalue(nextCube));
+      const phases = cubePhaseAvailability(nextCube);
+      setCubePositive(phases.positive);
+      setCubeNegative(phases.negative);
       setQuantumSubview("cube");
       setNotice(text("Cube 已生成并载入三维查看器", "Cube generated and loaded in the 3D viewer"));
     } catch (error) {
@@ -2903,7 +3569,8 @@ export default function Home() {
 
   return (
     <main
-      className={["app-shell", dragActive ? "dragging" : "", sidebarCollapsed ? "sidebar-collapsed" : ""].filter(Boolean).join(" ")}
+      className={["app-shell", dragActive ? "dragging" : "", sidebarCollapsed ? "sidebar-collapsed" : "", rightPanelResizing ? "right-panel-resizing" : "", workspaceMode === "symmetry-demo" ? "symmetry-demo-active" : ""].filter(Boolean).join(" ")}
+      style={{ "--right-panel-width": `${rightPanelWidth}px` } as CSSProperties}
       onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }}
       onDragOver={(event) => event.preventDefault()}
       onDragLeave={(event) => { if (event.currentTarget === event.target) setDragActive(false); }}
@@ -2978,17 +3645,18 @@ export default function Home() {
               <div className="desktop-menu-formats">CIF · SDF · MOL · XYZ · MOL2 · PDB</div>
             </div>
           </div>
-          <button type="button" className={leftTab === "model" ? "active" : ""} onClick={() => setLeftTab("model")}>{text("结构", "Structure")}</button>
-          <button type="button" className={leftTab === "style" ? "active" : ""} onClick={() => setLeftTab("style")}>{text("样式", "Style")}</button>
-          <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>{text("对称性", "Symmetry")}</button>
-          <button type="button" className={rightTab === "hydrogen" || rightTab === "disorder" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>{text("分析", "Analysis")}</button>
+          <button type="button" className={workspaceMode === "crystal" && leftTab === "model" ? "active" : ""} onClick={() => { setWorkspaceMode("crystal"); setLeftTab("model"); }}>{text("结构", "Structure")}</button>
+          <button type="button" className={workspaceMode === "crystal" && leftTab === "style" ? "active" : ""} onClick={() => { setWorkspaceMode("crystal"); setLeftTab("style"); }}>{text("样式", "Style")}</button>
+          <button type="button" className={workspaceMode === "crystal" && rightTab === "operations" ? "active" : ""} onClick={() => { setWorkspaceMode("crystal"); setRightTab("operations"); }}>{text("对称性", "Symmetry")}</button>
+          <button type="button" className={workspaceMode === "symmetry-demo" ? "active" : ""} aria-pressed={workspaceMode === "symmetry-demo"} onClick={openSymmetryDemo}>{text("空间群演示", "Space-group demos")}</button>
+          <button type="button" className={workspaceMode === "crystal" && (rightTab === "hydrogen" || rightTab === "disorder") ? "active" : ""} onClick={() => { setWorkspaceMode("crystal"); setRightTab("hydrogen"); }}>{text("分析", "Analysis")}</button>
           <div className="menubar-menu" ref={utilitiesMenuRef}>
             <button
               type="button"
               className={[
                 "menu-trigger",
                 utilitiesMenuOpen ? "active" : "",
-                ["calculator", "geometry", "cellTools", "electrostatics", "diffraction", "density", "gaussian"].includes(rightTab) ? "active" : "",
+                ["calculator", "characters", "geometry", "cellTools", "electrostatics", "diffraction", "density", "gaussian"].includes(rightTab) ? "active" : "",
               ].filter(Boolean).join(" ")}
               aria-haspopup="menu"
               aria-expanded={utilitiesMenuOpen}
@@ -3003,6 +3671,8 @@ export default function Home() {
               {text("工具", "Utilities")}<span aria-hidden="true">▾</span>
             </button>
             <div className="desktop-menu-popup utilities-menu-popup" role="menu" hidden={!utilitiesMenuOpen}>
+              <div className="desktop-menu-section-label">{text("结构与晶体学", "Structure & crystallography")}</div>
+              <button type="button" role="menuitem" onClick={openSymmetryDemo}><span>2₁</span><b>{text("空间群对称操作演示…", "Space-group symmetry demonstrations…")}</b></button>
               <button type="button" role="menuitem" onClick={() => openUtility("operations")}><span>≡</span><b>{text("等价位置…", "Equivalent Positions…")}</b></button>
               <button type="button" role="menuitem" onClick={() => openUtility("geometry")}><span>∠</span><b>{text("几何参数…", "Geometrical Parameters…")}</b></button>
               <div className="desktop-menu-divider" />
@@ -3010,6 +3680,7 @@ export default function Home() {
               <button type="button" role="menuitem" onClick={() => openUtility("cellTools")}><span>N</span><b>{text("Niggli 约化晶胞", "Niggli-Reduced Cell")}</b></button>
               <button type="button" role="menuitem" onClick={() => openUtility("electrostatics")}><span>±</span><b>{text("位点电势与 Madelung 能…", "Site Potentials and Madelung Energy…")}</b></button>
               <div className="desktop-menu-divider" />
+              <div className="desktop-menu-section-label">{text("衍射与密度", "Diffraction & density")}</div>
               <button type="button" role="menuitem" onClick={() => openUtility("diffraction")}><span>⌁</span><b>{text("粉末衍射图…", "Powder Diffraction Pattern…")}</b></button>
               <button type="button" role="menuitem" onClick={() => openUtility("diffraction")}><span>F</span><b>{text("结构因子…", "Structure Factors…")}</b></button>
               <button type="button" role="menuitem" onClick={() => openUtility("density", "electron")}><span>Σ</span><b>{text("傅里叶合成…", "Fourier Synthesis…")}</b></button>
@@ -3021,13 +3692,16 @@ export default function Home() {
               <button type="button" role="menuitem" onClick={() => openUtility("density")}><span>▦</span><b>{text("二维数据显示…", "2D Data Display…")}</b></button>
               <button type="button" role="menuitem" onClick={() => openUtility("density")}><span>⌇</span><b>{text("线剖面…", "Line Profile…")}</b></button>
               <div className="desktop-menu-divider" />
-              <button type="button" role="menuitem" onClick={() => { openUtility("gaussian"); setQuantumSubview("qe"); }}><span>Q</span><b>{text("Quantum ESPRESSO 周期计算…", "Quantum ESPRESSO Periodic DFT…")}</b></button>
+              <div className="desktop-menu-section-label">{text("计算化学", "Computational chemistry")}</div>
               <button type="button" role="menuitem" onClick={() => { openUtility("gaussian"); setQuantumSubview("input"); }}><span>G</span><b>{text("Gaussian 分子计算…", "Gaussian Molecular Calculation…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => { openUtility("gaussian"); setQuantumSubview("qe"); }}><span>Q</span><b>{text("Quantum ESPRESSO 周期计算…", "Quantum ESPRESSO Periodic DFT…")}</b></button>
+              <button type="button" role="menuitem" onClick={() => { openUtility("gaussian"); setQuantumSubview("multiwfn"); }}><span>M</span><b>{text("Multiwfn 波函数分析…", "Multiwfn Wavefunction Analysis…")}</b></button>
               <button type="button" role="menuitem" onClick={() => { openUtility("gaussian"); setQuantumSubview("cube"); }}><span>◈</span><b>{text("Cube 三维等值面…", "Cube Isosurfaces…")}</b></button>
+              <div className="desktop-menu-divider" />
+              <div className="desktop-menu-section-label">{text("参考资料", "Reference")}</div>
+              <button type="button" role="menuitem" onClick={() => openUtility("characters")}><span>χ</span><b>{text("三十二点群特征标表…", "32 Point-group Character Tables…")}</b></button>
             </div>
           </div>
-          <button type="button" className={rightTab === "gaussian" ? "active" : ""} onClick={() => { setRightTab("gaussian"); setQuantumSubview("qe"); }}>{text("量化", "Quantum")}</button>
-          <button type="button" className={rightTab === "characters" ? "active" : ""} onClick={() => setRightTab("characters")}>{text("点群表", "Point-group tables")}</button>
         </nav>
 
         <div className="desktop-toolbar" role="toolbar" aria-label={text("常用工具", "Common tools")}>
@@ -3056,6 +3730,15 @@ export default function Home() {
         </div>
       </header>
 
+      {symmetryDemoOpened && <SymmetryDemoWorkspace
+        visible={workspaceMode === "symmetry-demo"}
+        currentSpaceGroupNumber={structure.spaceGroupNumber}
+        currentSpaceGroupName={structure.spaceGroup}
+        language={language}
+        onBack={() => setWorkspaceMode("crystal")}
+        onOpenFile={() => inputRef.current?.click()}
+      />}
+
       <aside className="left-panel panel-scroll" data-active-tab={leftTab}>
         <div className="drawer-control">
           <button
@@ -3083,7 +3766,7 @@ export default function Home() {
         <section className="side-section" data-left-section="model">
           <div className="section-heading"><span>{text("结构概览", "Structure overview")}</span><small>ASYMMETRIC UNIT</small></div>
           <div className="formula-card">
-            <div><span>{text("化学式 · 常规 / Hill 顺序", "Formula · conventional / Hill order")}</span><strong>{structure.formula}</strong></div>
+            <div><span>{text("化学式 · 常用书写顺序", "Formula · conventional order")}</span><strong>{structure.formula}</strong></div>
             <div className="composition-dots">
               {composition.map(([element, count]) => <span key={element} style={{ "--element-color": currentElementColor(element) } as React.CSSProperties}><i />{element}<small>{count}</small></span>)}
             </div>
@@ -3224,7 +3907,7 @@ export default function Home() {
 
       <section className="workspace">
         <div className="workspace-toolbar">
-          <div className="mode-tabs"><button type="button" className="active">{text("三维晶体视图", "3D crystal view")}</button><button type="button" onClick={() => setRightTab("operations")}>{text("对称检查器", "Symmetry inspector")}</button></div>
+          <div className="mode-tabs"><button type="button" className="active">{text("三维晶体视图", "3D crystal view")}</button><button type="button" onClick={() => setRightTab("operations")}>{text("对称检查器", "Symmetry inspector")}</button><button type="button" onClick={openSymmetryDemo}>{text("空间群演示", "Space-group demos")}</button></div>
           <div className="workspace-stats"><span><i />{displayedAtomCount} {text("显示原子", "displayed atoms")}</span><span>{structure.bonds.length} {text("键", "bonds")} · {hydrogenBonds.length} {text("氢键类型", "H-bond types")}</span>{structure.disorder.explicit && <span>{text("无序组装", "disorder assemblies")} {structure.disorder.assemblies.length}</span>}<span>{supercellText(supercell)} · {display.completeMolecules ? text("完整分子", "complete molecules") : text("晶胞截断", "cell-clipped")}</span></div>
         </div>
         <CrystalCanvas
@@ -3307,6 +3990,28 @@ export default function Home() {
       </section>
 
       <aside className="right-panel">
+        <div
+          className="right-panel-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={text("调整右侧面板宽度", "Resize the right panel")}
+          aria-valuemin={320}
+          aria-valuemax={900}
+          aria-valuenow={Math.round(rightPanelWidth)}
+          tabIndex={0}
+          title={text("拖动以调整右侧面板宽度；双击恢复默认宽度", "Drag to resize the right panel; double-click to reset")}
+          onPointerDown={beginRightPanelResize}
+          onPointerMove={(event) => { if (rightPanelResizing) resizeRightPanel(event.clientX); }}
+          onPointerUp={finishRightPanelResize}
+          onPointerCancel={finishRightPanelResize}
+          onDoubleClick={() => { setRightPanelWidth(356); window.localStorage.setItem("symviz-right-panel-width", "356"); }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft") { event.preventDefault(); resizeRightPanelByKeyboard(24); }
+            if (event.key === "ArrowRight") { event.preventDefault(); resizeRightPanelByKeyboard(-24); }
+            if (event.key === "Home") { event.preventDefault(); setRightPanelWidth(320); window.localStorage.setItem("symviz-right-panel-width", "320"); }
+            if (event.key === "End") { event.preventDefault(); resizeRightPanelByKeyboard(544); }
+          }}
+        />
         <section className="group-hero">
           <div className="group-topline"><span>{text("空间群", "Space group")}</span><small>INTERNATIONAL TABLES</small></div>
           <div className="group-symbol"><strong>{prettyGroup(structure.spaceGroup)}</strong>{structure.spaceGroupNumber && <sup>#{structure.spaceGroupNumber}</sup>}</div>
@@ -3319,12 +4024,10 @@ export default function Home() {
 
         <nav className="right-tabs" aria-label={text("对称性信息", "Symmetry information")}>
           <button type="button" className={rightTab === "operations" ? "active" : ""} onClick={() => setRightTab("operations")}>{text("对称操作", "Operations")}</button>
-          <button type="button" className={rightTab === "characters" ? "active" : ""} onClick={() => setRightTab("characters")}>{text("特征标表", "Character tables")}</button>
           <button type="button" className={rightTab === "atoms" ? "active" : ""} onClick={() => setRightTab("atoms")}>{text("原子轨迹", "Atom provenance")}</button>
           <button type="button" className={rightTab === "wyckoff" ? "active" : ""} onClick={() => setRightTab("wyckoff")}>Wyckoff</button>
           <button type="button" className={rightTab === "disorder" ? "active" : ""} onClick={() => setRightTab("disorder")}>{text("无序", "Disorder")}</button>
           <button type="button" className={rightTab === "hydrogen" ? "active" : ""} onClick={() => setRightTab("hydrogen")}>{text("氢键", "H bonds")}</button>
-          <button type="button" className={rightTab === "gaussian" ? "active" : ""} onClick={() => { setRightTab("gaussian"); setQuantumSubview("qe"); }}>{text("量化", "Quantum")}</button>
           <button
             type="button"
             className={["calculator", "geometry", "cellTools", "electrostatics", "diffraction", "density"].includes(rightTab) ? "active" : ""}
@@ -3862,11 +4565,15 @@ export default function Home() {
         {rightTab === "gaussian" && <div className="right-content panel-scroll utility-panel gaussian-panel">
           <div className="utility-intro quantum-intro">
             <span>{quantumSubview === "qe"
-              ? text("Quantum ESPRESSO 周期晶体计算", "Quantum ESPRESSO periodic crystal calculations")
-              : text("Gaussian 分子计算与 Cube 三维数据", "Gaussian molecular calculations and 3D Cube data")}</span>
+              ? text("Quantum ESPRESSO 周期输入生成", "Quantum ESPRESSO periodic input generation")
+              : quantumSubview === "multiwfn"
+                ? text("Multiwfn 波函数分析工作台", "Multiwfn wavefunction analysis workbench")
+                : text("Gaussian 分子计算与 Cube 三维数据", "Gaussian molecular calculations and 3D Cube data")}</span>
             <p>{quantumSubview === "qe"
-              ? text("从完整周期晶胞生成平面波 DFT 输入；结构、赝势、输入和输出均保留在本机。", "Generate plane-wave DFT input from the complete periodic cell; structures, pseudopotentials, inputs, and outputs remain local.")
-              : text("结构准备、任务队列、输出解析和等值面显示均在本机完成；网页不会把计算文件上传至云端。", "Structure preparation, job queuing, output parsing, and isosurface display stay on this computer; the web app does not upload calculation files to the cloud.")}</p>
+              ? text("分析完整周期晶胞并生成可移交到工作站或超算的 pw.x 输入；SymViz 不再在本机启动 QE。", "Analyze the complete periodic cell and generate portable pw.x inputs for a workstation or cluster; SymViz no longer launches QE locally.")
+              : quantumSubview === "multiwfn"
+                ? text("桌面版直接调用当前文件夹中的 Multiwfn；输入、实时输出和生成文件只保存在本机任务目录。", "The desktop app calls Multiwfn from the current project folder; inputs, live output, and generated files remain in the local job folder.")
+                : text("结构准备、任务队列、输出解析和等值面显示均在本机完成；网页不会把计算文件上传至云端。", "Structure preparation, job queuing, output parsing, and isosurface display stay on this computer; the web app does not upload calculation files to the cloud.")}</p>
           </div>
           <nav className="quantum-switch" aria-label={text("量化计算工作区", "Quantum workspace")}>
             {([
@@ -3874,6 +4581,7 @@ export default function Home() {
               ["input", text("Gaussian 输入", "Gaussian input")],
               ["queue", text("Gaussian 队列", "Gaussian queue")],
               ["results", text("Gaussian 结果", "Gaussian results")],
+              ["multiwfn", "Multiwfn"],
               ["cube", "Cube"],
             ] as Array<[QuantumSubview, string]>).map(([value, label]) => <button
               type="button"
@@ -3884,6 +4592,84 @@ export default function Home() {
           </nav>
 
           {quantumSubview === "qe" && <>
+            <section className="utility-section qe-export-only-card">
+              <div className="utility-section-head"><span>{text("QE 输入文件生成器", "QE input-file generator")}</span><small>{text("仅导出 · 不在本机运行", "Export only · no local execution")}</small></div>
+              <p>{text("SymViz 只分析 CIF 并生成 pw.x 输入，不会启动 WSL 或 QE。输入文件可复制到工作站、服务器或超算运行。", "SymViz analyzes the CIF and generates pw.x inputs only; it does not launch WSL or QE. Move the files to a workstation, server, or cluster to run them.")}</p>
+              <div className="gaussian-actions"><button type="button" onClick={() => void chooseQuantumEspressoPseudoRoot()} disabled={!desktopMode}>{text("可选：匹配本地 UPF 文件名…", "Optional: match local UPF filenames…")}</button></div>
+            </section>
+
+            <section className="utility-section qe-auto-recommendation">
+              <div className="utility-section-head"><span>{text("针对当前 CIF 的自动建议", "Automatic recommendation for this CIF")}</span><small>{qeRecommendation.confidence === "high" ? text("较高置信度", "Higher confidence") : text("需人工复核", "Review required")}</small></div>
+              <div className="qe-recommendation-summary">
+                <span><small>{text("体系判断", "System class")}</small><strong>{qeRecommendation.systemClass === "molecular-crystal" ? text("分子晶体", "Molecular crystal") : qeRecommendation.systemClass === "metallic-candidate" ? text("金属候选", "Metallic candidate") : qeRecommendation.systemClass === "mixed-solid" ? text("混合 / 配位固体", "Mixed / coordination solid") : text("无机周期固体", "Inorganic periodic solid")}</strong></span>
+                <span><small>{text("建议方法", "Method")}</small><strong>{qeRecommendation.inputDft}{qeRecommendation.dispersion === "d3-bj" ? " + D3(BJ)" : ""}</strong></span>
+                <span><small>{text("平面波截断能", "Plane-wave cutoffs")}</small><strong>{qeRecommendation.ecutwfcRy} / {qeRecommendation.ecutrhoRy} Ry</strong></span>
+                <span><small>k-point mesh</small><strong>{qeMeshKey(qeRecommendation.kPoints)}</strong></span>
+                <span><small>{text("占据", "Occupations")}</small><strong>{qeRecommendation.occupations}</strong></span>
+              </div>
+              <ul className="qe-rationale-list">{(english ? qeRecommendation.reasonsEn : qeRecommendation.reasonsZh).map((reason) => <li key={reason}>{reason}</li>)}</ul>
+              <div className="gaussian-actions"><button type="button" className="primary" onClick={applyQuantumEspressoRecommendation}>{text("一键采用建议", "Apply recommendation")}</button></div>
+              {(english ? qeRecommendation.warningsEn : qeRecommendation.warningsZh).map((warning) => <div className="utility-warning" key={warning}><p>{warning}</p></div>)}
+            </section>
+
+            <section className="utility-section">
+              <div className="utility-section-head"><span>{text("周期输入设置", "Periodic input settings")}</span><small>{qePreparedInput.diagnostics.atomCount} {text("原子", "atoms")} · {qePreparedInput.diagnostics.elementCount} {text("元素", "elements")}</small></div>
+              <div className="gaussian-form-grid qe-form-grid">
+                <label className="span-two"><span>{text("任务标题", "Job title")}</span><input value={qeOptions.title} onChange={(event) => setQeOptions((current) => ({ ...current, title: event.target.value }))} /></label>
+                <label><span>{text("计算类型", "Calculation")}</span><select value={qeOptions.calculation} onChange={(event) => setQeOptions((current) => ({ ...current, calculation: event.target.value as QuantumEspressoInputOptions["calculation"] }))}>
+                  <option value="scf">SCF — {text("自洽单点", "self-consistent single point")}</option>
+                  <option value="relax">relax — {text("固定晶胞优化原子", "relax ions at fixed cell")}</option>
+                  <option value="vc-relax">vc-relax — {text("优化晶胞与原子", "relax cell and ions")}</option>
+                  <option value="md">MD — {text("固定晶胞动力学", "fixed-cell dynamics")}</option>
+                  <option value="vc-md">vc-MD — {text("可变晶胞动力学", "variable-cell dynamics")}</option>
+                </select></label>
+                <label><span>{text("交换-相关理论方法", "Exchange-correlation method")}</span><select value={qeOptions.inputDft} onChange={(event) => setQeOptions((current) => ({ ...current, inputDft: event.target.value as QuantumEspressoInputOptions["inputDft"] }))}>
+                  {(["UPF", "LDA", "GGA", "meta-GGA", "hybrid"] as const).map((family) => <optgroup key={family} label={family}>{quantumEspressoMethodCatalog.filter((method) => method.family === family).map((method) => <option value={method.id} key={method.id}>{method.label} — {english ? method.summaryEn : method.summaryZh}</option>)}</optgroup>)}
+                </select></label>
+                <label className="span-two qe-explained-select"><span>{text("当前方法说明", "Selected method")}</span><div><strong>{selectedQeMethodInfo.label} · {selectedQeMethodInfo.family}</strong><p>{english ? selectedQeMethodInfo.summaryEn : selectedQeMethodInfo.summaryZh}</p><small>{english ? selectedQeMethodInfo.cautionEn : selectedQeMethodInfo.cautionZh}</small></div></label>
+                <label><span>{text("平面波基组 / 截断能方案", "Plane-wave basis / cutoff scheme")}</span><select value={qeBasisPreset} onChange={(event) => applyQuantumEspressoBasisPreset(event.target.value as QuantumEspressoBasisPreset)}>{quantumEspressoBasisCatalog.map((basis) => <option value={basis.id} key={basis.id}>{english ? basis.labelEn : basis.labelZh} — {english ? basis.summaryEn : basis.summaryZh}</option>)}</select></label>
+                <label><span>{text("色散修正", "Dispersion correction")}</span><select value={qeOptions.dispersion} onChange={(event) => setQeOptions((current) => ({ ...current, dispersion: event.target.value as QuantumEspressoInputOptions["dispersion"] }))}><option value="d3-bj">Grimme D3(BJ) — {text("分子晶体 / 层状体系", "molecular / layered solids")}</option><option value="none">None — {text("无色散修正", "no dispersion correction")}</option></select></label>
+                <label className="span-two qe-explained-select"><span>{text("当前平面波方案说明", "Selected plane-wave scheme")}</span><div><strong>{english ? selectedQeBasisInfo.labelEn : selectedQeBasisInfo.labelZh}</strong><p>{english ? selectedQeBasisInfo.summaryEn : selectedQeBasisInfo.summaryZh}</p><small>{text("QE 不使用 Gaussian 型局域基组；这里的“基组大小”由 UPF 赝势以及 ecutwfc / ecutrho 共同决定。", "QE does not use Gaussian-type localized basis sets; UPF pseudopotentials together with ecutwfc / ecutrho define the effective basis size.")}</small></div></label>
+                <label><span>{text("占据方式", "Occupations")}</span><select value={qeOptions.occupations} onChange={(event) => setQeOptions((current) => ({ ...current, occupations: event.target.value as QuantumEspressoInputOptions["occupations"] }))}><option value="fixed">fixed — {text("绝缘体 / 半导体", "insulator / semiconductor")}</option><option value="smearing">smearing — {text("金属或小带隙候选", "metal / small-gap candidate")}</option></select></label>
+                {qeOptions.occupations === "smearing" && <label><span>{text("展宽方法", "Smearing")}</span><select value={qeOptions.smearing} onChange={(event) => setQeOptions((current) => ({ ...current, smearing: event.target.value as QuantumEspressoInputOptions["smearing"] }))}><option value="mv">Marzari–Vanderbilt (cold)</option><option value="mp">Methfessel–Paxton</option><option value="gaussian">Gaussian</option><option value="fd">Fermi–Dirac</option></select></label>}
+                {qeOptions.occupations === "smearing" && <label><span>degauss（Ry）</span><input type="number" min="0.0001" step="0.005" value={qeOptions.degaussRy} onChange={(event) => setQeOptions((current) => ({ ...current, degaussRy: Math.max(0.0001, Number(event.target.value) || 0.01) }))} /></label>}
+                <label><span>ecutwfc（Ry）</span><input type="number" min="1" step="5" value={qeOptions.ecutwfcRy} onChange={(event) => { setQeBasisPreset("custom"); setQeOptions((current) => ({ ...current, ecutwfcRy: Number(event.target.value) || 1 })); }} /></label>
+                <label><span>ecutrho（Ry）</span><input type="number" min="1" step="10" value={qeOptions.ecutrhoRy} onChange={(event) => { setQeBasisPreset("custom"); setQeOptions((current) => ({ ...current, ecutrhoRy: Number(event.target.value) || 1 })); }} /></label>
+                <label className="span-two"><span>k-point mesh</span><div className="qe-triplet-input">{qeOptions.kPoints.map((value, axis) => <input key={axis} aria-label={`k${axis + 1}`} type="number" min="1" step="1" value={value} onChange={(event) => setQeOptions((current) => ({ ...current, kPoints: current.kPoints.map((item, index) => index === axis ? Math.max(1, Math.round(Number(event.target.value) || 1)) : item) as [number, number, number] }))} />)}</div></label>
+                <label><span>SCF conv_thr</span><input type="number" min="1e-14" step="1e-9" value={qeOptions.convThr} onChange={(event) => setQeOptions((current) => ({ ...current, convThr: Number(event.target.value) || 1e-8 }))} /></label>
+                <label><span>{text("任务前缀", "Job prefix")}</span><input value={qeOptions.prefix} onChange={(event) => setQeOptions((current) => ({ ...current, prefix: event.target.value }))} /></label>
+                {(qeOptions.calculation === "md" || qeOptions.calculation === "vc-md") && <><label><span>{text("动力学步数", "MD steps")}</span><input type="number" min="1" step="10" value={qeOptions.mdSteps ?? 100} onChange={(event) => setQeOptions((current) => ({ ...current, mdSteps: Math.max(1, Math.round(Number(event.target.value) || 1)) }))} /></label><label><span>{text("时间步长（原子单位）", "Time step (a.u.)")}</span><input type="number" min="0.1" step="1" value={qeOptions.mdTimeStepAu ?? 20} onChange={(event) => setQeOptions((current) => ({ ...current, mdTimeStepAu: Math.max(0.1, Number(event.target.value) || 20) }))} /></label><label><span>{text("目标温度（K）", "Target temperature (K)")}</span><input type="number" min="0.1" step="10" value={qeOptions.temperatureK ?? 300} onChange={(event) => setQeOptions((current) => ({ ...current, temperatureK: Math.max(0.1, Number(event.target.value) || 300) }))} /></label></>}
+              </div>
+            </section>
+
+            <section className="utility-section">
+              <div className="utility-section-head"><span>{text("赝势文件清单", "Pseudopotential file manifest")}</span><small>UPF · {qeOptions.inputDft === "auto" ? "Auto" : qeOptions.inputDft}</small></div>
+              <datalist id="qe-pseudopotential-export-files">{(qeStatus?.pseudopotentials ?? []).map((file) => <option value={file} key={file} />)}</datalist>
+              <div className="qe-pseudo-grid">{qePreparedInput.diagnostics.elements.map((element) => { const file = qeOptions.pseudopotentials[element] ?? ""; const verified = Boolean(qeStatus?.pseudoRoot && availableQePseudoNames.has(file.toLocaleLowerCase())); return <label key={element} className={verified ? "available" : "unverified"}><strong>{element}</strong><input list="qe-pseudopotential-export-files" value={file} onChange={(event) => setQeOptions((current) => ({ ...current, pseudopotentials: { ...current.pseudopotentials, [element]: event.target.value } }))} /><i>{verified ? "✓" : "?"}</i></label>; })}</div>
+              <details className="utility-help"><summary>？ {text("如何选择赝势", "How to choose pseudopotentials")}</summary><p>{text("同一任务中的 UPF 应来自兼容的赝势库并采用相同交换-相关泛函。推荐优先使用 SSSP PBE Efficiency 或 Precision 集合；带重元素时核对相对论处理，带过渡金属时核对半芯态。文件名只是清单，运行前须把实际 UPF 放入 input 中 pseudo_dir 指向的目录。", "UPFs in one job should come from a compatible library and use the same exchange-correlation functional. Prefer an SSSP PBE Efficiency or Precision set; verify relativistic treatment for heavy elements and semicore states for transition metals. Filenames are a manifest only: place the actual UPFs in the directory referenced by pseudo_dir before running.")}</p></details>
+            </section>
+
+            <section className="utility-section qe-convergence-section">
+              <div className="utility-section-head"><span>{text("收敛测试输入集", "Convergence-test input set")}</span><small>{Math.max(0, qeConvergenceInputFiles.length - 1)} × SCF</small></div>
+              <div className="qe-convergence-tabs" role="tablist"><button type="button" role="tab" aria-selected={qeConvergenceMode === "k-point"} className={qeConvergenceMode === "k-point" ? "active" : ""} onClick={() => setQeConvergenceMode("k-point")}>{text("k 点网格", "k-point meshes")}</button><button type="button" role="tab" aria-selected={qeConvergenceMode === "cutoff"} className={qeConvergenceMode === "cutoff" ? "active" : ""} onClick={() => setQeConvergenceMode("cutoff")}>{text("截断能", "cutoffs")}</button></div>
+              {qeConvergenceMode === "k-point" ? <div className="qe-convergence-builder"><p>{text("按倒易晶格自动生成各向异性的 Monkhorst–Pack 网格。选择要导出的点；所有输入固定当前结构与截断能。", "Anisotropic Monkhorst-Pack meshes are generated from reciprocal-vector lengths. Select export points; every input fixes the current structure and cutoffs.")}</p><div className="qe-kpoint-candidates">{qeKPointCandidates.map((candidate) => { const key = qeMeshKey(candidate.kPoints); const selected = qeSelectedKMeshes.includes(key); return <label key={key} className={selected ? "selected" : ""}><input type="checkbox" checked={selected} onChange={(event) => setQeSelectedKMeshes((current) => event.target.checked ? [...new Set([...current, key])] : current.filter((item) => item !== key))} /><strong>{key}</strong><small>{candidate.targetSpacingInverseAngstrom ? `≈${candidate.targetSpacingInverseAngstrom.toFixed(2)} Å⁻¹` : "Γ"}</small></label>; })}</div></div> : <div className="qe-convergence-builder"><p>{text("固定当前 k 点，逐步提高 ecutwfc；ecutrho 按所设倍数同步生成。", "Keep the current k-point mesh fixed while increasing ecutwfc; ecutrho follows the selected multiplier.")}</p><div className="gaussian-form-grid qe-convergence-inputs"><label><span>{text("起始值（Ry）", "Start (Ry)")}</span><input type="number" min="1" step="5" value={qeCutoffRange.startRy} onChange={(event) => setQeCutoffRange((current) => ({ ...current, startRy: Math.max(1, Number(event.target.value) || 1) }))} /></label><label><span>{text("终止值（Ry）", "End (Ry)")}</span><input type="number" min="1" step="5" value={qeCutoffRange.endRy} onChange={(event) => setQeCutoffRange((current) => ({ ...current, endRy: Math.max(1, Number(event.target.value) || 1) }))} /></label><label><span>{text("步长（Ry）", "Step (Ry)")}</span><input type="number" min="1" step="5" value={qeCutoffRange.stepRy} onChange={(event) => setQeCutoffRange((current) => ({ ...current, stepRy: Math.max(1, Number(event.target.value) || 1) }))} /></label><label><span>ecutrho / ecutwfc</span><input type="number" min="4" max="20" step="1" value={qeCutoffRange.densityMultiplier} onChange={(event) => setQeCutoffRange((current) => ({ ...current, densityMultiplier: Math.max(4, Number(event.target.value) || 4) }))} /></label></div><div className="qe-cutoff-candidates">{qeCutoffCandidates.map((candidate) => <span key={`${candidate.ecutwfcRy}-${candidate.ecutrhoRy}`}><strong>{candidate.ecutwfcRy}</strong><small>/ {candidate.ecutrhoRy} Ry</small></span>)}</div></div>}
+              <div className="gaussian-actions"><button type="button" className="primary" disabled={qePreparedInput.diagnostics.blockingIssues.length > 0 || qeConvergenceInputFiles.length < 3} onClick={() => downloadTextArchive(`${qeOptions.prefix || "symviz-qe"}-${qeConvergenceMode}-study.zip`, qeConvergenceInputFiles)}>{text("下载输入集 ZIP", "Download input-set ZIP")}</button></div>
+              <details className="utility-help"><summary>？ {text("推荐的收敛顺序", "Recommended convergence order")}</summary><p>{text("先用较疏 k 点收敛 ecutwfc/ecutrho，再固定截断能收敛 k 点；比较每原子能量的同时检查最大原子力与应力。ZIP 中含独立 .in 文件和 README，不包含赝势。", "First converge ecutwfc/ecutrho with a coarse k mesh, then converge k-points at fixed cutoffs. Check maximum force and stress as well as energy per atom. The ZIP contains independent .in files and a README, but no pseudopotentials.")}</p></details>
+            </section>
+
+            <section className="utility-section gaussian-input-preview">
+              <div className="utility-section-head"><span>Quantum ESPRESSO input (.in)</span><small>{qePreparedInput.input.split("\n").length} {text("行", "lines")}</small></div>
+              <div className="gaussian-model-diagnostics"><span><small>{text("晶胞原子", "Cell atoms")}</small><strong>{qePreparedInput.diagnostics.atomCount}</strong></span><span className={qePreparedInput.diagnostics.partialOccupancyLabels.length ? "problem" : "ok"}><small>{text("部分占有", "Partial occupancy")}</small><strong>{qePreparedInput.diagnostics.partialOccupancyLabels.length}</strong></span><span className={structure.disorder.explicit ? "problem" : "ok"}><small>{text("无序", "Disorder")}</small><strong>{structure.disorder.explicit ? text("需处理", "Resolve") : text("无", "None")}</strong></span><span><small>{text("赝势文件名", "Pseudo filenames")}</small><strong>{qePreparedInput.requiredPseudopotentials.length}</strong></span></div>
+              {qePreparedInput.diagnostics.blockingIssues.map((issue) => <div className="utility-warning gaussian-export-blocker" key={issue}><strong>{text("已阻止导出", "Export blocked")}</strong><p>{issue}</p></div>)}
+              {qePreparedInput.diagnostics.warnings.map((warning) => <div className="utility-warning" key={warning}><p>{warning}</p></div>)}
+              <textarea readOnly spellCheck={false} value={qePreparedInput.input} aria-label="Quantum ESPRESSO input preview" />
+              <div className="gaussian-actions"><button type="button" className="primary" disabled={qePreparedInput.diagnostics.blockingIssues.length > 0} onClick={() => downloadTextFile(`${qeOptions.prefix || "symviz-qe"}.in`, qePreparedInput.input)}>{text("下载 .in", "Download .in")}</button><button type="button" onClick={() => void navigator.clipboard.writeText(qePreparedInput.input)}>{text("复制输入", "Copy input")}</button></div>
+            </section>
+
+            <details className="utility-help"><summary>？ {text("自动推荐的边界", "Limits of automatic recommendations")}</summary><p>{text("CIF 通常不包含可靠的金属性、磁序、氧化态、Hubbard U、自旋轨道耦合选择或目标精度。SymViz 只据结构与元素给出保守起点；涉及磁性、强关联、缺陷、带电晶胞、声子、Berry-phase 极化或高压时必须由研究者补充专用设置。", "A CIF normally does not determine metallicity, magnetic order, oxidation states, Hubbard U, spin-orbit choices, or target precision. SymViz provides conservative structural/compositional starting points only; magnetic, correlated, defective, charged, phonon, Berry-phase, and high-pressure work requires specialist settings.")}</p></details>
+          </>}
+
+          {false && <>
             <section className="utility-section bridge-card desktop-gaussian-card qe-desktop-card">
               <div className="utility-section-head"><span>{text("SymViz 桌面版 · Quantum ESPRESSO", "SymViz Desktop · Quantum ESPRESSO")}</span><small className={qeStatus?.available ? "bridge-online" : "bridge-offline"}>{qeStatus?.available ? (qeStatus.runtime === "wsl" ? `WSL2 · ${qeStatus.wslDistro}${qeStatus.qeVersion ? ` · QE ${qeStatus.qeVersion}` : ""}` : text("Windows 原生", "Windows native")) : text("未检测到", "Not detected")}</small></div>
               <div className="desktop-gaussian-status">
@@ -3912,11 +4698,17 @@ export default function Home() {
               <div className="gaussian-form-grid qe-form-grid">
                 <label className="span-two"><span>{text("任务标题", "Job title")}</span><input value={qeOptions.title} onChange={(event) => setQeOptions((current) => ({ ...current, title: event.target.value }))} /></label>
                 <label><span>{text("计算类型", "Calculation")}</span><select value={qeOptions.calculation} onChange={(event) => setQeOptions((current) => ({ ...current, calculation: event.target.value as QuantumEspressoInputOptions["calculation"] }))}>
-                  <option value="scf">SCF</option>
-                  <option value="relax">relax</option>
-                  <option value="vc-relax">vc-relax</option>
+                  <optgroup label={text("电子结构", "Electronic structure")}><option value="scf">SCF · {text("自洽单点能", "self-consistent single point")}</option></optgroup>
+                  <optgroup label={text("结构优化", "Structure optimization")}><option value="relax">relax · {text("固定晶胞优化原子", "relax ions at fixed cell")}</option><option value="vc-relax">vc-relax · {text("同时优化晶胞与原子", "relax cell and ions")}</option></optgroup>
+                  <optgroup label={text("分子动力学", "Molecular dynamics")}><option value="md">MD · {text("固定晶胞", "fixed cell")}</option><option value="vc-md">vc-MD · {text("可变晶胞", "variable cell")}</option></optgroup>
                 </select></label>
-                <label><span>{text("交换-相关泛函", "Exchange-correlation")}</span><select value={qeOptions.inputDft} disabled><option value="PBE">PBE</option></select></label>
+                <label><span>{text("交换-相关泛函", "Exchange-correlation")}</span><select value={qeOptions.inputDft} onChange={(event) => setQeOptions((current) => ({ ...current, inputDft: event.target.value as QuantumEspressoInputOptions["inputDft"] }))}>
+                  <option value="auto">{text("从赝势读取（推荐）", "Read from UPF (recommended)")}</option>
+                  <optgroup label="LDA"><option value="PZ">PZ · Perdew–Zunger</option></optgroup>
+                  <optgroup label="GGA"><option value="PBE">PBE</option><option value="PBEsol">PBEsol</option><option value="PW91">PW91</option><option value="BLYP">BLYP</option></optgroup>
+                  <optgroup label="meta-GGA"><option value="SCAN">SCAN</option></optgroup>
+                  <optgroup label={text("混合泛函（高成本）", "Hybrid (high cost)")}><option value="PBE0">PBE0</option><option value="HSE">HSE</option><option value="B3LYP">B3LYP</option></optgroup>
+                </select></label>
                 <label><span>{text("色散修正", "Dispersion correction")}</span><select value={qeOptions.dispersion} onChange={(event) => setQeOptions((current) => ({ ...current, dispersion: event.target.value as QuantumEspressoInputOptions["dispersion"] }))}>
                   <option value="d3-bj">Grimme D3(BJ)</option><option value="none">None</option>
                 </select></label>
@@ -3928,11 +4720,16 @@ export default function Home() {
                 <label className="span-two"><span>k-point mesh</span><div className="qe-triplet-input">{qeOptions.kPoints.map((value, axis) => <input key={axis} aria-label={`k${axis + 1}`} type="number" min="1" step="1" value={value} onChange={(event) => setQeOptions((current) => ({ ...current, kPoints: current.kPoints.map((item, index) => index === axis ? Math.max(1, Math.round(Number(event.target.value) || 1)) : item) as [number, number, number] }))} />)}</div></label>
                 <label><span>SCF conv_thr</span><input type="number" min="1e-14" step="1e-9" value={qeOptions.convThr} onChange={(event) => setQeOptions((current) => ({ ...current, convThr: Number(event.target.value) || 1e-8 }))} /></label>
                 <label><span>{text("任务前缀", "Job prefix")}</span><input value={qeOptions.prefix} onChange={(event) => setQeOptions((current) => ({ ...current, prefix: event.target.value }))} /></label>
+                {(qeOptions.calculation === "md" || qeOptions.calculation === "vc-md") && <>
+                  <label><span>{text("动力学步数", "MD steps")}</span><input type="number" min="1" step="10" value={qeOptions.mdSteps ?? 100} onChange={(event) => setQeOptions((current) => ({ ...current, mdSteps: Math.max(1, Math.round(Number(event.target.value) || 1)) }))} /></label>
+                  <label><span>{text("时间步长（原子单位）", "Time step (a.u.)")}</span><input type="number" min="0.1" step="1" value={qeOptions.mdTimeStepAu ?? 20} onChange={(event) => setQeOptions((current) => ({ ...current, mdTimeStepAu: Math.max(0.1, Number(event.target.value) || 20) }))} /></label>
+                  <label><span>{text("目标温度（K）", "Target temperature (K)")}</span><input type="number" min="0.1" step="10" value={qeOptions.temperatureK ?? 300} onChange={(event) => setQeOptions((current) => ({ ...current, temperatureK: Math.max(0.1, Number(event.target.value) || 300) }))} /></label>
+                </>}
               </div>
             </section>
 
             <section className="utility-section">
-              <div className="utility-section-head"><span>{text("元素与赝势", "Elements and pseudopotentials")}</span><small>PBE · UPF</small></div>
+              <div className="utility-section-head"><span>{text("元素与赝势", "Elements and pseudopotentials")}</span><small>{qeOptions.inputDft === "auto" ? text("由 UPF 决定", "Defined by UPF") : qeOptions.inputDft} · UPF</small></div>
               <datalist id="qe-pseudopotential-files">{(qeStatus?.pseudopotentials ?? []).map((file) => <option value={file} key={file} />)}</datalist>
               <div className="qe-pseudo-grid">{qePreparedInput.diagnostics.elements.map((element) => {
                 const file = qeOptions.pseudopotentials[element] ?? "";
@@ -3940,6 +4737,49 @@ export default function Home() {
                 return <label key={element} className={available ? "available" : "missing"}><strong>{element}</strong><input list="qe-pseudopotential-files" value={file} onChange={(event) => setQeOptions((current) => ({ ...current, pseudopotentials: { ...current.pseudopotentials, [element]: event.target.value } }))} /><i>{available ? "✓" : "!"}</i></label>;
               })}</div>
               {unavailableQePseudopotentials.length > 0 && <div className="utility-warning"><strong>{text("赝势尚未就绪", "Pseudopotentials not ready")}</strong><p>{text("请连接 UPF 文件夹，并为每种元素选择实际存在且与 PBE 匹配的赝势。", "Connect an UPF folder and select an existing PBE-compatible pseudopotential for every element.")} {unavailableQePseudopotentials.join(", ")}</p></div>}
+            </section>
+
+            <section className="utility-section qe-convergence-section">
+              <div className="utility-section-head"><span>{text("参数收敛性测试", "Parameter convergence studies")}</span><small>SCF · meV/atom</small></div>
+              <div className="qe-convergence-tabs" role="tablist" aria-label={text("收敛测试类型", "Convergence study type")}>
+                <button type="button" role="tab" aria-selected={qeConvergenceMode === "k-point"} className={qeConvergenceMode === "k-point" ? "active" : ""} onClick={() => setQeConvergenceMode("k-point")}>{text("k 点选择优化", "k-point optimization")}</button>
+                <button type="button" role="tab" aria-selected={qeConvergenceMode === "cutoff"} className={qeConvergenceMode === "cutoff" ? "active" : ""} onClick={() => setQeConvergenceMode("cutoff")}>{text("截断能收敛", "Cutoff convergence")}</button>
+              </div>
+
+              {qeConvergenceMode === "k-point" ? <div className="qe-convergence-builder">
+                <p>{text("固定当前截断能和晶体结构，按倒易晶格长度生成由疏到密的各向异性 Monkhorst–Pack 网格。", "Keep the current cutoffs and structure fixed while testing anisotropic Monkhorst-Pack meshes derived from reciprocal-vector lengths.")}</p>
+                <div className="qe-kpoint-candidates">{qeKPointCandidates.map((candidate) => {
+                  const key = qeMeshKey(candidate.kPoints);
+                  const selected = qeSelectedKMeshes.includes(key);
+                  return <label key={key} className={selected ? "selected" : ""}><input type="checkbox" checked={selected} onChange={(event) => setQeSelectedKMeshes((current) => event.target.checked ? [...new Set([...current, key])] : current.filter((item) => item !== key))} /><strong>{key}</strong><small>{candidate.pointCount} {text("网格点", "grid points")}{candidate.targetSpacingInverseAngstrom ? ` · ≈${candidate.targetSpacingInverseAngstrom.toFixed(2)} Å⁻¹` : " · Γ"}</small></label>;
+                })}</div>
+                <div className="qe-study-fixed"><span>{text("固定截断能", "Fixed cutoffs")}</span><strong>{qeOptions.ecutwfcRy} / {qeOptions.ecutrhoRy} Ry</strong></div>
+              </div> : <div className="qe-convergence-builder">
+                <p>{text("固定当前 k 点网格和晶体结构，逐步提高波函数截断能；电荷密度截断能按固定倍数同步提高。", "Keep the current k-point mesh and structure fixed while increasing the wavefunction cutoff and maintaining a fixed charge-density multiplier.")}</p>
+                <div className="gaussian-form-grid qe-convergence-inputs">
+                  <label><span>{text("起始 ecutwfc（Ry）", "Start ecutwfc (Ry)")}</span><input type="number" min="1" step="5" value={qeCutoffRange.startRy} onChange={(event) => setQeCutoffRange((current) => ({ ...current, startRy: Math.max(1, Number(event.target.value) || 1) }))} /></label>
+                  <label><span>{text("终止 ecutwfc（Ry）", "End ecutwfc (Ry)")}</span><input type="number" min="1" step="5" value={qeCutoffRange.endRy} onChange={(event) => setQeCutoffRange((current) => ({ ...current, endRy: Math.max(1, Number(event.target.value) || 1) }))} /></label>
+                  <label><span>{text("步长（Ry）", "Step (Ry)")}</span><input type="number" min="1" step="5" value={qeCutoffRange.stepRy} onChange={(event) => setQeCutoffRange((current) => ({ ...current, stepRy: Math.max(1, Number(event.target.value) || 1) }))} /></label>
+                  <label><span>ecutrho / ecutwfc</span><input type="number" min="4" max="20" step="1" value={qeCutoffRange.densityMultiplier} onChange={(event) => setQeCutoffRange((current) => ({ ...current, densityMultiplier: Math.max(4, Number(event.target.value) || 4) }))} /></label>
+                </div>
+                <div className="qe-cutoff-candidates">{qeCutoffCandidates.map((candidate) => <span key={`${candidate.ecutwfcRy}-${candidate.ecutrhoRy}`}><strong>{candidate.ecutwfcRy}</strong><small>/ {candidate.ecutrhoRy} Ry</small></span>)}</div>
+                <div className="qe-study-fixed"><span>{text("固定 k 点", "Fixed k-points")}</span><strong>{qeMeshKey(qeOptions.kPoints)}</strong></div>
+              </div>}
+
+              <div className="qe-convergence-controls">
+                <label><span>{text("能量阈值（meV/atom）", "Energy threshold (meV/atom)")}</span><input type="number" min="0.01" step="0.1" value={qeConvergenceTolerance} onChange={(event) => setQeConvergenceTolerance(Math.max(0.01, Number(event.target.value) || 1))} /></label>
+                <button type="button" className="primary" disabled={!qeStatus?.available || qeQueueBusy || qePreparedInput.diagnostics.blockingIssues.length > 0 || unavailableQePseudopotentials.length > 0 || (qeConvergenceMode === "k-point" ? qeSelectedKMeshes.length : qeCutoffCandidates.length) < 2} onClick={() => void submitQuantumEspressoConvergenceStudy(qeConvergenceMode)}>{qeQueueBusy ? text("QE 队列运行中", "QE queue is busy") : text(`开始 ${qeConvergenceMode === "k-point" ? qeSelectedKMeshes.length : qeCutoffCandidates.length} 点测试`, `Run ${qeConvergenceMode === "k-point" ? qeSelectedKMeshes.length : qeCutoffCandidates.length}-point study`)}</button>
+              </div>
+              {qePreparedInput.diagnostics.atomCount > 200 && <div className="utility-warning"><strong>{text("大型体系", "Large model")}</strong><p>{text(`当前有 ${qePreparedInput.diagnostics.atomCount} 个原子。每个参数点都是完整 SCF 任务，建议先只选较疏的 2–3 个网格试运行，避免再次触发内存交换。`, `The model has ${qePreparedInput.diagnostics.atomCount} atoms. Every parameter point is a full SCF job; start with only 2–3 coarse meshes to avoid memory swapping.`)}</p></div>}
+
+              {qeConvergenceStudies.length > 0 && <div className="qe-convergence-results">
+                <div className="qe-study-selector"><label><span>{text("结果组", "Study results")}</span><select value={selectedQeStudy?.id ?? ""} onChange={(event) => setSelectedQeStudyId(event.target.value)}>{qeConvergenceStudies.map((study) => <option value={study.id} key={study.id}>{study.kind === "k-point" ? text("k 点", "k-point") : text("截断能", "cutoff")} · {new Date(study.createdAt).toLocaleString(language)}</option>)}</select></label><small>{selectedQeStudy?.jobs.length ?? 0}/{selectedQeStudy?.jobs[0]?.study?.sequenceTotal ?? 0}</small></div>
+                {recommendedQeStudyJob ? <div className="qe-recommendation"><span><small>{text("推荐的最低收敛参数", "Lowest converged recommendation")}</small><strong>{recommendedQeStudyJob.study ? qeStudyParameterLabel(recommendedQeStudyJob.study) : "—"}</strong></span><button type="button" onClick={() => applyQuantumEspressoConvergenceRecommendation(recommendedQeStudyJob)}>{text("采用参数", "Apply")}</button></div>
+                  : selectedQeStudyAnalysis?.complete && <div className="utility-warning"><strong>{text("当前范围尚未收敛", "Current range is not converged")}</strong><p>{text("最高精度点之间仍超过所设阈值，请扩展网格或截断能范围。", "The high-accuracy points still exceed the selected tolerance; extend the mesh or cutoff range.")}</p></div>}
+                <div className="qe-convergence-table-wrap"><table className="qe-convergence-table"><thead><tr><th>{text("参数", "Parameter")}</th><th>{text("状态", "Status")}</th><th>E (Ry)</th><th>ΔE (meV/atom)</th><th>Fmax (Ry/Bohr)</th><th>P (kbar)</th></tr></thead><tbody>{selectedQeStudyAnalysis?.rows.map(({ job, deltaMevPerAtom }, index) => <tr key={job.id} className={recommendedQeStudyJob?.id === job.id ? "recommended" : ""} onClick={() => setSelectedQeJobId(job.id)}><td><strong>{job.study ? qeStudyParameterLabel(job.study) : "—"}</strong>{index === selectedQeStudyAnalysis.rows.length - 1 && <small>{text("参考", "reference")}</small>}</td><td>{gaussianJobStatusText(job.status, language)}</td><td>{job.summary?.totalEnergyRy?.toFixed(8) ?? "—"}</td><td>{deltaMevPerAtom?.toFixed(3) ?? "—"}</td><td>{job.summary?.maximumForceRyBohr?.toExponential(2) ?? "—"}</td><td>{job.summary?.pressureKbar?.toFixed(3) ?? "—"}</td></tr>)}</tbody></table></div>
+                <p className="qe-convergence-note">{text("ΔE 以该组最高网格或最高截断能为参考；只有所有任务正常完成且从某一点起后续结果均低于阈值时才给出推荐。", "ΔE is referenced to the densest mesh or highest cutoff. A recommendation appears only after every job completes and all subsequent points remain below the tolerance.")}</p>
+              </div>}
+              <details className="utility-help"><summary>？ {text("如何使用收敛测试", "How convergence studies work")}</summary><p>{text("先完成截断能测试，再在推荐截断能下测试 k 点。金属、强磁性体系以及压力或声子计算通常需要比 1 meV/atom 更严格的专门判据；能量收敛也不自动保证力和应力已经收敛，因此表中同时给出最大原子力和压力。", "Converge the cutoffs first, then test k-points at the recommended cutoffs. Metals, strongly magnetic systems, and pressure or phonon work often need stricter dedicated criteria than 1 meV/atom. Energy convergence does not guarantee converged forces or stress, so the table also reports maximum atomic force and pressure.")}</p></details>
             </section>
 
             <section className="utility-section gaussian-input-preview">
@@ -3964,6 +4804,7 @@ export default function Home() {
               {qeJobs.length === 0 ? <div className="utility-empty"><strong>{text("尚无周期计算任务", "No periodic jobs yet")}</strong><p>{text("连接 pw.x 和赝势后，即可运行当前预览。", "Connect pw.x and pseudopotentials, then run the current preview.")}</p></div>
                 : <div className="gaussian-job-list">{qeJobs.map((job) => <article key={job.id} className={`gaussian-job-card status-${job.status}`}>
                   <button type="button" className="job-main" onClick={() => setSelectedQeJobId(job.id)}><span><i />{job.name}</span><small>{new Date(job.createdAt).toLocaleString(language)}</small><b>{gaussianJobStatusText(job.status, language)}</b></button>
+                  {job.status === "failed" && job.error && <p className="qe-job-error"><strong>{text("启动或运行错误：", "Startup or runtime error: ")}</strong>{quantumEspressoErrorText(job.error, language)}</p>}
                   <div className="job-actions">
                     {job.status === "running" && <button type="button" onClick={() => void cancelQuantumEspressoJob(job)}>{text("取消", "Cancel")}</button>}
                     <button type="button" onClick={() => void window.symvizDesktop?.revealQeJob(job.remoteId)}>{text("打开目录", "Open folder")}</button>
@@ -3976,6 +4817,8 @@ export default function Home() {
               <pre ref={liveQeOutputRef} className="gaussian-live-output" role="log" tabIndex={0}>{visibleLiveQeOutput.text || text("Quantum ESPRESSO 正在初始化……", "Quantum ESPRESSO is starting…")}</pre>
               <div className="gaussian-actions gaussian-live-actions"><button type="button" onClick={() => setFollowQeOutput((current) => !current)}>{followQeOutput ? text("暂停自动滚动", "Pause auto-scroll") : text("继续自动滚动", "Resume auto-scroll")}</button><button type="button" disabled={!visibleLiveQeOutput.text} onClick={() => void navigator.clipboard.writeText(visibleLiveQeOutput.text)}>{text("复制输出", "Copy output")}</button></div>
             </section>}
+
+            {selectedQeJob?.status === "failed" && selectedQeJob.error && <section className="utility-warning gaussian-export-blocker qe-selected-error" role="alert"><strong>{text("Quantum ESPRESSO 未正常完成", "Quantum ESPRESSO did not finish normally")}</strong><p>{quantumEspressoErrorText(selectedQeJob.error, language)}</p></section>}
 
             {selectedQeJob?.summary && <section className="gaussian-results qe-results">
               <div className={`termination-banner ${selectedQeJob.summary.status}`}><i>{selectedQeJob.summary.jobDone ? "✓" : selectedQeJob.summary.status === "failed" ? "!" : "…"}</i><span><strong>{selectedQeJob.name}</strong><small>{selectedQeJob.summary.jobDone ? "JOB DONE" : selectedQeJob.summary.errorMessage || text("输出尚未完成", "Output incomplete")}</small></span></div>
@@ -4236,6 +5079,90 @@ export default function Home() {
             </details>
           </>}
 
+          {quantumSubview === "multiwfn" && <>
+            {!desktopMode ? <div className="utility-warning"><strong>{text("仅桌面版可用", "Desktop only")}</strong><p>{text("Multiwfn 是本机可执行程序。请从 SymViz 桌面版打开此工作台；网页版本不会上传或执行波函数文件。", "Multiwfn is a local executable. Open this workbench in SymViz Desktop; the web version neither uploads nor executes wavefunction files.")}</p></div> : <>
+              <section className="utility-section multiwfn-runtime-card">
+                <div className="utility-section-head"><span>Multiwfn {multiwfnStatus?.multiwfnVersion || ""}</span><small className={multiwfnStatus?.available ? "bridge-online" : "bridge-offline"}>{multiwfnStatus?.available ? text("已检测，可运行", "Detected and ready") : text("未检测", "Not detected")}</small></div>
+                <div className="desktop-gaussian-status">
+                  <span><small>{text("程序目录", "Program folder")}</small><code>{multiwfnStatus?.multiwfnRoot || text("尚未选择", "Not selected")}</code></span>
+                  <span><small>{text("任务目录", "Job folder")}</small><code>{multiwfnStatus?.workRoot || "—"}</code></span>
+                </div>
+                <div className="desktop-binary-status">
+                  <span className={multiwfnStatus?.binaries.multiwfn?.available ? "available" : "missing"}><i />Multiwfn.exe</span>
+                  <span className={multiwfnStatus?.binaries.settings?.available ? "available" : "missing"}><i />settings.ini</span>
+                </div>
+                <button type="button" className="multiwfn-visualizer-launch" onClick={() => void window.symvizDesktop?.openMultiwfnVisualizer()}>
+                  <span aria-hidden="true">◈</span>
+                  <span><b>{text("打开独立三维窗口", "Open separate 3D window")}</b><small>{text("查看 Cube、电子密度与 HOMO/LUMO 等值面", "View Cube, density and HOMO/LUMO isosurfaces")}</small></span>
+                  <em aria-hidden="true">↗</em>
+                </button>
+                <div className="gaussian-actions">
+                  <button type="button" onClick={() => void refreshMultiwfnJobs()}>{text("重新检测 / 刷新", "Detect / refresh")}</button>
+                  <button type="button" onClick={() => void chooseMultiwfnRoot()}>{text("选择 Multiwfn 文件夹…", "Choose Multiwfn folder…")}</button>
+                </div>
+              </section>
+
+              <section className="utility-section multiwfn-builder">
+                <div className="utility-section-head"><span>{text("新建分析", "New analysis")}</span><small>{text("一个任务一次只运行一个流程", "One workflow per job")}</small></div>
+                <label className="gaussian-field full"><span>{text("波函数 / 结构输入", "Wavefunction / structure input")}</span><button type="button" className="multiwfn-file-picker" onClick={() => void chooseMultiwfnInput()}><b>{multiwfnInput?.name || text("选择 .fchk / .wfn / .wfx / .mwfn…", "Choose .fchk / .wfn / .wfx / .mwfn…")}</b><small>{multiwfnInput?.path || text("也支持 .molden、Gaussian 输出、PDB、MOL2、XYZ 和 Cube", "Also supports .molden, Gaussian output, PDB, MOL2, XYZ and Cube")}</small></button></label>
+                <div className="gaussian-form-grid">
+                  <label><span>{text("任务名称", "Job name")}</span><input value={multiwfnJobName} onChange={(event) => setMultiwfnJobName(event.target.value)} /></label>
+                  <label><span>{text("分析流程", "Analysis workflow")}</span><select value={multiwfnTaskId} onChange={(event) => setMultiwfnTaskId(event.target.value)}>
+                    {(multiwfnStatus?.templates ?? [
+                      { id: "summary", label: "Wavefunction and structure summary", description: "" },
+                      { id: "aim", label: "AIM topology and critical points", description: "" },
+                      { id: "esp-extrema", label: "ESP grid extrema", description: "" },
+                      { id: "resp", label: "RESP atomic charges", description: "" },
+                      { id: "frontier-orbitals", label: "HOMO-LUMO energy levels", description: "" },
+                      { id: "homo-cube", label: "HOMO orbital Cube", description: "" },
+                      { id: "lumo-cube", label: "LUMO orbital Cube", description: "" },
+                      { id: "density-cube", label: "Electron-density Cube", description: "" },
+                      { id: "esp-cube", label: "Electrostatic-potential Cube", description: "" },
+                      { id: "custom", label: "Custom command script", description: "" },
+                    ]).map((template) => <option key={template.id} value={template.id}>{multiwfnTemplateLabel(template.id, template.label)}</option>)}
+                  </select></label>
+                </div>
+                <p className="multiwfn-template-description">{multiwfnPresetDescriptions[multiwfnTaskId as keyof typeof multiwfnPresetDescriptions]
+                  ? text(multiwfnPresetDescriptions[multiwfnTaskId as keyof typeof multiwfnPresetDescriptions].zh, multiwfnPresetDescriptions[multiwfnTaskId as keyof typeof multiwfnPresetDescriptions].en)
+                  : ""}</p>
+                {multiwfnTaskId === "custom" && <label className="gaussian-field full"><span>{text("Multiwfn 菜单回答（每行一项）", "Multiwfn menu responses (one per line)")}</span><textarea className="multiwfn-script-editor" spellCheck={false} value={multiwfnScript} onChange={(event) => setMultiwfnScript(event.target.value)} placeholder={text("例如：\n5\n1\n...\nq", "Example:\n5\n1\n...\nq")} /></label>}
+                <div className="gaussian-actions"><button type="button" className="primary" disabled={!multiwfnStatus?.available || !multiwfnInput || (multiwfnTaskId === "custom" && !multiwfnScript.trim())} onClick={() => void submitMultiwfnJob()}>{text("加入 Multiwfn 本地队列", "Add to local Multiwfn queue")}</button></div>
+                <details className="utility-help"><summary>？ {text("为什么采用预设 + 自定义脚本", "Why presets plus custom scripts")}</summary><p>{text("Multiwfn 2026.7.15 包含数百个多层菜单。预设只采用当前随附版本的官方批处理序列；自定义脚本把每一行原样发送给 Multiwfn，可使用手册中的任何功能，而不把旧版菜单编号误当成当前版本。", "Multiwfn 2026.7.15 contains hundreds of nested menu paths. Presets use official batch sequences bundled with this exact version. A custom script sends each line directly to Multiwfn, giving access to any manual workflow without assuming that old menu numbers are still valid.")}</p></details>
+              </section>
+
+              <section className="utility-section">
+                <div className="utility-section-head"><span>{text("Multiwfn 任务", "Multiwfn jobs")}</span><small>{multiwfnJobs.length}</small></div>
+                {multiwfnJobs.length === 0 ? <div className="utility-empty"><strong>{text("尚无任务", "No jobs yet")}</strong><p>{text("选择波函数文件和分析流程后加入队列。", "Choose a wavefunction file and workflow, then add it to the queue.")}</p></div> : <div className="gaussian-job-list">{multiwfnJobs.map((job) => <article key={job.id} className={`gaussian-job-card status-${job.status} ${selectedMultiwfnJob?.id === job.id ? "selected" : ""}`}>
+                  <button type="button" className="job-main" onClick={() => void selectMultiwfnJob(job)}><span><i />{job.name}</span><small>{job.inputName} · {new Date(job.submittedAt).toLocaleString(language)}</small><b>{gaussianJobStatusText(job.status, language)}</b></button>
+                  <div className="job-actions">
+                    {job.status === "running" && <button type="button" onClick={() => void cancelMultiwfnJob(job)}>{text("取消", "Cancel")}</button>}
+                    {job.status === "completed" && !job.artifacts.some((artifact) => /^density\.cub(e)?$/i.test(artifact.name)) && <button type="button" onClick={() => void submitMultiwfnCubeFromJob(job, "density-cube")}>{text("密度 Cube", "Density Cube")}</button>}
+                    {job.status === "completed" && !job.artifacts.some((artifact) => /^totesp\.cub(e)?$/i.test(artifact.name)) && <button type="button" onClick={() => void submitMultiwfnCubeFromJob(job, "esp-cube")}>{text("ESP Cube", "ESP Cube")}</button>}
+                    {job.status === "completed" && /\.(?:fch|fchk|wfn)$/i.test(job.inputName) && !job.artifacts.some((artifact) => /^HOMO\.cub(e)?$/i.test(artifact.name)) && <button type="button" onClick={() => void submitMultiwfnCubeFromJob(job, "homo-cube")}>HOMO Cube</button>}
+                    {job.status === "completed" && /\.(?:fch|fchk|wfn)$/i.test(job.inputName) && !job.artifacts.some((artifact) => /^LUMO\.cub(e)?$/i.test(artifact.name)) && <button type="button" onClick={() => void submitMultiwfnCubeFromJob(job, "lumo-cube")}>LUMO Cube</button>}
+                    <button type="button" onClick={() => void window.symvizDesktop?.revealMultiwfnJob(job.id)}>{text("打开目录", "Open folder")}</button>
+                  </div>
+                  {job.frontier && <div className="multiwfn-frontier-summary">
+                    <span><small>HOMO · MO {job.frontier.homo.index}</small><strong>{job.frontier.homo.energyEv.toFixed(4)} eV</strong></span>
+                    <span><small>LUMO{job.frontier.lumo ? ` · MO ${job.frontier.lumo.index}` : ""}</small><strong>{job.frontier.lumo ? `${job.frontier.lumo.energyEv.toFixed(4)} eV` : text("输入中缺失", "Not in input")}</strong></span>
+                    <span><small>{text("能隙", "Gap")}</small><strong>{job.frontier.gapEv === null ? "—" : `${job.frontier.gapEv.toFixed(4)} eV`}</strong></span>
+                    {job.frontier.note && <p>{text(job.frontier.note === "Standard WFN files commonly contain occupied orbitals only; no LUMO is present. Export an FCHK/FCH file containing virtual orbitals to generate the LUMO." ? "此 WFN 只含占据轨道，因此不能从中获得 LUMO；请从 Gaussian 导出包含虚轨道的 FCHK/FCH。" : job.frontier.note, job.frontier.note)}</p>}
+                  </div>}
+                  {job.artifacts.length > 0 && <div className="multiwfn-artifacts">{job.artifacts.map((artifact) => <button type="button" key={artifact.name} className={artifact.kind} onClick={() => artifact.kind === "cube" ? void window.symvizDesktop?.openMultiwfnVisualizer(job.id, artifact.name) : void window.symvizDesktop?.revealMultiwfnJob(job.id)}><i />{artifact.name}{artifact.kind === "cube" && <small>3D</small>}</button>)}</div>}
+                  {job.taskId === "resp" && job.status === "completed" && !job.artifacts.some((artifact) => artifact.kind === "cube") && <p className="multiwfn-no-cube-note">{text("RESP 已完成；.chg 是正常结果。若要三维观察，请点击“密度 Cube”或“ESP Cube”。", "RESP completed; .chg is the expected result. Choose Density Cube or ESP Cube for 3D visualization.")}</p>}
+                </article>)}</div>}
+              </section>
+
+              {(runningMultiwfnJob || selectedMultiwfnJob) && <section className="utility-section gaussian-live-section multiwfn-output-section">
+                <div className="utility-section-head"><span className={runningMultiwfnJob ? "gaussian-live-title" : ""}>{runningMultiwfnJob && <i />}{runningMultiwfnJob ? text("Multiwfn 实时输出", "Live Multiwfn output") : text("Multiwfn 输出", "Multiwfn output")}</span><small>{(runningMultiwfnJob ? visibleLiveMultiwfnOutput.updatedAt : selectedMultiwfnJob?.completedAt) ? new Date((runningMultiwfnJob ? visibleLiveMultiwfnOutput.updatedAt : selectedMultiwfnJob?.completedAt)!).toLocaleTimeString(language) : text("等待输出", "Waiting for output")}</small></div>
+                <pre ref={liveMultiwfnOutputRef} className="gaussian-live-output" role="log" tabIndex={0}>{runningMultiwfnJob ? visibleLiveMultiwfnOutput.text || text("Multiwfn 正在读取输入……", "Multiwfn is reading the input…") : selectedMultiwfnOutput || text("点击上方任务以载入完整输出。", "Select the job above to load its full output.")}</pre>
+                <div className="gaussian-actions gaussian-live-actions"><button type="button" onClick={() => setFollowMultiwfnOutput((current) => !current)}>{followMultiwfnOutput ? text("暂停自动滚动", "Pause auto-scroll") : text("继续自动滚动", "Resume auto-scroll")}</button><button type="button" disabled={!(runningMultiwfnJob ? visibleLiveMultiwfnOutput.text : selectedMultiwfnOutput)} onClick={() => void navigator.clipboard.writeText(runningMultiwfnJob ? visibleLiveMultiwfnOutput.text : selectedMultiwfnOutput)}>{text("复制输出", "Copy output")}</button></div>
+              </section>}
+
+              <details className="utility-help multiwfn-citation"><summary>？ {text("Multiwfn 引用与适用范围", "Multiwfn citation and scope")}</summary><p>{text("若研究中使用 Multiwfn，程序许可要求在正文中引用：T. Lu and F. Chen, J. Comput. Chem. 33, 580–592 (2012)，以及 T. Lu, J. Chem. Phys. 161, 082503 (2024)。SymViz 仅负责受控调用和可视化，不改变 Multiwfn 的算法或结果。", "If Multiwfn is used in research, its license requires citation in the main text of T. Lu and F. Chen, J. Comput. Chem. 33, 580–592 (2012), and T. Lu, J. Chem. Phys. 161, 082503 (2024). SymViz provides controlled execution and visualization without changing Multiwfn algorithms or results.")}</p></details>
+            </>}
+          </>}
+
           {quantumSubview === "cube" && <>
             <div className="gaussian-actions result-import-actions">
               <button type="button" className="primary" onClick={() => cubeInputRef.current?.click()}>{text("打开 .cube / .cub", "Open .cube / .cub")}</button>
@@ -4249,19 +5176,21 @@ export default function Home() {
                     <span>{text("等值（原子单位）", "Isovalue (atomic units)")}<output>{cubeIsovalue.toExponential(3)}</output></span>
                     <input
                       type="range"
-                      min={Math.max(1e-8, Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum)) / 1000)}
-                      max={Math.max(1e-7, Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum)) * 0.8)}
-                      step={Math.max(1e-8, Math.max(Math.abs(cube.minimum), Math.abs(cube.maximum)) / 500)}
+                      min={activeCubeIsovalueRange?.minimum ?? 1e-8}
+                      max={activeCubeIsovalueRange?.maximum ?? 1}
+                      step={activeCubeIsovalueRange?.step ?? 0.001}
                       value={cubeIsovalue}
                       onChange={(event) => setCubeIsovalue(Number(event.target.value))}
                     />
                   </label>
                   <div className="cube-phase-switch">
-                    <label><input type="checkbox" checked={cubePositive} onChange={(event) => setCubePositive(event.target.checked)} /><i className="positive" />{text("正相位", "Positive phase")}</label>
-                    <label><input type="checkbox" checked={cubeNegative} onChange={(event) => setCubeNegative(event.target.checked)} /><i className="negative" />{text("负相位", "Negative phase")}</label>
+                    <label title={text("使用完整网格重建，并以同色细边消除三角面接缝；不会移动或平滑标量数据本身", "Rebuild from the full grid and suppress triangle seams without moving the underlying scalar surface")}><input type="checkbox" checked={cubeSmoothSurface} onChange={(event) => setCubeSmoothSurface(event.target.checked)} />{text("平滑表面", "Smooth surface")}</label>
+                    <label><input type="checkbox" checked={cubeBonds} onChange={(event) => setCubeBonds(event.target.checked)} />{text("化学键", "Bonds")}</label>
+                    <label title={activeCubePhases && !activeCubePhases.positive ? text("当前 Cube 数据没有正值", "This Cube grid contains no positive values") : undefined}><input type="checkbox" checked={cubePositive} disabled={activeCubePhases ? !activeCubePhases.positive : true} onChange={(event) => setCubePositive(event.target.checked)} /><i className="positive" />{text("正相位", "Positive phase")}</label>
+                    <label title={activeCubePhases && !activeCubePhases.negative ? text("当前 Cube 数据没有负值", "This Cube grid contains no negative values") : undefined}><input type="checkbox" checked={cubeNegative} disabled={activeCubePhases ? !activeCubePhases.negative : true} onChange={(event) => setCubeNegative(event.target.checked)} /><i className="negative" />{text("负相位", "Negative phase")}</label>
                   </div>
                 </section>
-                <CubeSurfaceCanvas cube={cube} isovalue={cubeIsovalue} showPositive={cubePositive} showNegative={cubeNegative} language={language} />
+                <CubeSurfaceCanvas cube={cube} isovalue={cubeIsovalue} showPositive={cubePositive} showNegative={cubeNegative} showBonds={cubeBonds} smoothSurface={cubeSmoothSurface} language={language} />
                 <div className="cube-stats">
                   <span>min<strong>{cube.minimum.toExponential(4)}</strong></span>
                   <span>max<strong>{cube.maximum.toExponential(4)}</strong></span>
@@ -4271,7 +5200,7 @@ export default function Home() {
               </>}
             <details className="utility-help">
               <summary>？ {text("Cube 数据说明", "About Cube data")}</summary>
-              <p>{text("等值面来自网格线性插值。大型网格会自动降低预览采样密度，以保持交互流畅；原始数值不会被修改。轨道的正负颜色表示波函数相位，不表示正负电荷。", "The isosurface uses linear interpolation on the grid. Large grids are automatically downsampled for interactive preview without modifying the original values. Positive and negative orbital colors indicate wavefunction phase, not positive and negative charge.")}</p>
+              <p>{text("等值面来自网格线性插值。开启“平滑表面”时优先使用完整网格并隐藏三角边线，不移动等值面顶点；关闭后使用较快的抽样网格调试模式。轨道的正负颜色表示波函数相位，不表示正负电荷。", "The isosurface uses linear interpolation on the grid. Smooth surface prioritizes the full grid and suppresses triangle edges without moving isosurface vertices; disabling it uses the faster sampled diagnostic mode. Positive and negative orbital colors indicate wavefunction phase, not charge.")}</p>
             </details>
           </>}
         </div>}

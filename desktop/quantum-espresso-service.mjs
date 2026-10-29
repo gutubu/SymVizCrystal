@@ -6,11 +6,51 @@ import { basename, join, resolve } from "node:path";
 
 const wslExecutable = join(process.env.SystemRoot || "C:\\Windows", "System32", "wsl.exe");
 
-function decodeProcessOutput(buffer) {
+export function decodeProcessOutput(buffer) {
   if (!buffer?.length) return "";
   const sample = buffer.subarray(0, Math.min(buffer.length, 256));
   const nulBytes = [...sample].filter((value) => value === 0).length;
   return buffer.toString(nulBytes > sample.length / 8 ? "utf16le" : "utf8").replace(/^\uFEFF/, "");
+}
+
+function normalizedDiagnostic(value) {
+  return String(value || "").replace(/\0/g, "").replace(/\r\n?/g, "\n").trim();
+}
+
+function isWslProxyWarning(line) {
+  return /^wsl:/i.test(line) && /localhost/i.test(line) && /(?:proxy|代理)/i.test(line) && /(?:NAT|WSL)/i.test(line);
+}
+
+export function readableProcessError(value) {
+  const lines = normalizedDiagnostic(value).split("\n").map((line) => line.trim()).filter(Boolean);
+  const actionable = lines.filter((line) => !isWslProxyWarning(line));
+  return (actionable.length ? actionable : []).join("\n");
+}
+
+export function normalizeStoredQeError(value) {
+  const raw = String(value || "");
+  if (/w\0s\0l\0:/i.test(raw) && /l\0o\0c\0a\0l\0h\0o\0s\0t/i.test(raw)) {
+    return "pw.x did not start. The previous WSL launcher returned before executing the Quantum ESPRESSO command.";
+  }
+  return normalizedDiagnostic(raw) || null;
+}
+
+export function wslLaunchArguments({ distro, directory, pw }) {
+  return [
+    "--distribution", distro,
+    "--exec", "/usr/bin/setsid", "--wait", "/bin/bash", "-c",
+    "cd \"$1\" || { printf 'SymViz: cannot enter QE job directory: %s\\n' \"$1\" >&2; exit 125; }; echo $$ > .symviz-qe.pid; exec \"$2\"",
+    "symviz-qe", directory, pw,
+  ];
+}
+
+export function wslCancelArguments({ distro, directory }) {
+  return [
+    "--distribution", distro,
+    "--exec", "/bin/bash", "-c",
+    "cd \"$1\" || exit 125; if [ -s .symviz-qe.pid ]; then p=$(cat .symviz-qe.pid); kill -TERM -- -\"$p\" 2>/dev/null || true; for i in 1 2 3 4 5; do kill -0 \"$p\" 2>/dev/null || exit 0; sleep 0.2; done; kill -KILL -- -\"$p\" 2>/dev/null || true; fi",
+    "symviz-qe-cancel", directory,
+  ];
 }
 
 function runCapturedProcess(executable, args, { cwd, input, timeoutMs = 30_000 } = {}) {
@@ -152,6 +192,29 @@ function publicJob(job) {
     error: job.error,
     directory: job.directory,
     files: { ...job.files },
+    study: job.study ? { ...job.study } : null,
+  };
+}
+
+function normalizedStudyMetadata(value) {
+  if (!value || typeof value !== "object") return null;
+  const kind = value.kind === "k-point" || value.kind === "cutoff" ? value.kind : null;
+  const id = String(value.id || "").replace(/[^A-Za-z0-9_.-]+/g, "").slice(0, 80);
+  if (!kind || !id) return null;
+  const kPoints = Array.isArray(value.kPoints) && value.kPoints.length === 3
+    ? value.kPoints.map((item) => Math.max(1, Math.round(Number(item) || 1))).slice(0, 3)
+    : null;
+  const numeric = (item) => Number.isFinite(Number(item)) ? Number(item) : null;
+  return {
+    id,
+    kind,
+    label: String(value.label || "").slice(0, 120),
+    sequenceIndex: Math.max(0, Math.round(Number(value.sequenceIndex) || 0)),
+    sequenceTotal: Math.max(1, Math.round(Number(value.sequenceTotal) || 1)),
+    atomCount: Math.max(1, Math.round(Number(value.atomCount) || 1)),
+    kPoints,
+    ecutwfcRy: numeric(value.ecutwfcRy),
+    ecutrhoRy: numeric(value.ecutrhoRy),
   };
 }
 
@@ -207,7 +270,9 @@ export class QuantumEspressoDesktopService {
         this.jobs.set(stored.id, {
           ...stored,
           status: interrupted ? "failed" : stored.status,
-          error: interrupted ? "The previous desktop session ended before this Quantum ESPRESSO task completed." : stored.error,
+          error: interrupted
+            ? "The previous desktop session ended before this Quantum ESPRESSO task completed."
+            : normalizeStoredQeError(stored.error),
         });
       }
       await this.persist();
@@ -293,7 +358,7 @@ export class QuantumEspressoDesktopService {
     this.onUpdate(publicJob(job));
   }
 
-  async submit({ name, input, pseudopotentials = [] }) {
+  async submit({ name, input, pseudopotentials = [], study = null }) {
     const status = this.status();
     if (!status.available) throw new Error("Quantum ESPRESSO was not detected in Windows or WSL. Install pw.x in Ubuntu or select a native folder.");
     if (typeof input !== "string" || !input.trim()) throw new Error("Quantum ESPRESSO input is empty.");
@@ -315,10 +380,11 @@ export class QuantumEspressoDesktopService {
     const pseudoDirectory = join(directory, "pseudo");
     await mkdir(pseudoDirectory, { recursive: true });
     await mkdir(join(directory, "tmp"), { recursive: true });
+    const wslDirectory = status.runtime === "wsl" ? await this.windowsPathToWsl(directory) : null;
     if (pseudoSource === "native") {
       await Promise.all(required.map((file) => copyFile(byName.get(file.toLowerCase()), join(pseudoDirectory, file))));
     } else {
-      const destination = await this.windowsPathToWsl(pseudoDirectory);
+      const destination = `${wslDirectory}/pseudo`;
       for (const file of required) {
         const copied = await this.commandRunner(wslExecutable, [
           "--distribution", this.wslRuntime.distro, "--exec", "/bin/cp", "--",
@@ -340,8 +406,10 @@ export class QuantumEspressoDesktopService {
       runtime: status.runtime,
       wslDistro: status.wslDistro || null,
       wslPw: status.runtime === "wsl" ? this.wslRuntime.binaries.pw : null,
+      wslDirectory,
       directory,
       files: { input: join(directory, `${stem}.in`), output: join(directory, `${stem}.out`) },
+      study: normalizedStudyMetadata(study),
     };
     await writeFile(job.files.input, input, "utf8");
     this.jobs.set(id, job);
@@ -369,28 +437,39 @@ export class QuantumEspressoDesktopService {
       .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt))[0];
     if (!next) return;
     this.starting = true;
+    let startupFailed = false;
     try {
-      this.start(next);
+      await this.start(next);
+    } catch (error) {
+      startupFailed = true;
+      const message = error instanceof Error ? error.message : String(error || "Unknown WSL startup error.");
+      next.status = "failed";
+      next.completedAt = new Date().toISOString();
+      next.exitCode = null;
+      next.error = `Could not start pw.x: ${message}`;
+      await writeFile(next.files.output, `[SymViz QE startup error]\n${next.error}\n`, "utf8").catch(() => {});
+      await this.emit(next);
     } finally {
       this.starting = false;
     }
+    if (startupFailed) void this.pumpQueue();
   }
 
-  start(job) {
+  async start(job) {
     const nativeBinaries = quantumEspressoBinaries(this.qeRoot);
     const useWsl = job.runtime === "wsl" || (!nativeBinaries.pw && this.wslRuntime?.binaries?.pw);
+    if (useWsl && !job.wslDirectory) job.wslDirectory = await this.windowsPathToWsl(job.directory);
     mkdirSync(join(job.directory, "tmp"), { recursive: true });
     job.status = "running";
     job.startedAt = new Date().toISOString();
     void this.emit(job);
     const outputStream = createWriteStream(job.files.output, { flags: "w" });
     const executable = useWsl ? wslExecutable : nativeBinaries.pw;
-    const args = useWsl ? [
-      "--distribution", job.wslDistro || this.wslRuntime.distro,
-      "--cd", job.directory,
-      "--exec", "/usr/bin/setsid", "/bin/bash", "-c",
-      "echo $$ > .symviz-qe.pid; exec \"$1\"", "symviz-qe", job.wslPw || this.wslRuntime.binaries.pw,
-    ] : [];
+    const args = useWsl ? wslLaunchArguments({
+      distro: job.wslDistro || this.wslRuntime.distro,
+      directory: job.wslDirectory,
+      pw: job.wslPw || this.wslRuntime.binaries.pw,
+    }) : [];
     const child = spawn(executable, args, {
       cwd: job.directory,
       windowsHide: true,
@@ -400,7 +479,11 @@ export class QuantumEspressoDesktopService {
     let stderr = "";
     let spawnError = null;
     child.stdout.on("data", (chunk) => outputStream.write(chunk));
-    child.stderr.on("data", (chunk) => { stderr += chunk; outputStream.write(chunk); });
+    child.stderr.on("data", (chunk) => {
+      const decoded = decodeProcessOutput(Buffer.from(chunk));
+      stderr += decoded;
+      outputStream.write(decoded, "utf8");
+    });
     child.once("error", (error) => { spawnError = error; });
     void readFile(job.files.input).then((input) => child.stdin.end(input)).catch((error) => {
       spawnError = error;
@@ -418,9 +501,17 @@ export class QuantumEspressoDesktopService {
       }
       const output = await readFile(job.files.output, "utf8").catch(() => "");
       job.status = exitCode === 0 && /\bJOB DONE\.\s*$/im.test(output) ? "completed" : "failed";
-      job.error = job.status === "failed"
-        ? spawnError?.message || stderr.trim() || `pw.x exited with code ${exitCode ?? "unknown"}${signal ? ` (${signal})` : ""}.`
-        : null;
+      if (job.status === "failed") {
+        const diagnostic = readableProcessError(stderr);
+        const pwStarted = /Program\s+PWSCF\s+v\./i.test(output);
+        job.error = spawnError?.message
+          || diagnostic
+          || (!pwStarted
+            ? "pw.x did not start. WSL returned without executing the Quantum ESPRESSO command."
+            : `pw.x stopped before JOB DONE (exit code ${exitCode ?? "unknown"}${signal ? `, signal ${signal}` : ""}). Open the output for the final QE message.`);
+      } else {
+        job.error = null;
+      }
       await this.emit(job);
       await this.pumpQueue();
     });
@@ -433,15 +524,24 @@ export class QuantumEspressoDesktopService {
       job.status = "cancelled";
       job.completedAt = new Date().toISOString();
       await this.emit(job);
+      let wslStopError = null;
       if (job.runtime === "wsl" && job.wslDistro) {
-        const stopped = await this.commandRunner(wslExecutable, [
-          "--distribution", job.wslDistro, "--cd", job.directory, "--exec", "/bin/bash", "-c",
-          "if [ -s .symviz-qe.pid ]; then p=$(cat .symviz-qe.pid); kill -TERM -- -\"$p\" 2>/dev/null || true; for i in 1 2 3 4 5; do kill -0 \"$p\" 2>/dev/null || exit 0; sleep 0.2; done; kill -KILL -- -\"$p\" 2>/dev/null || true; fi",
-        ], { timeoutMs: 10_000 });
-        if (stopped.exitCode !== 0 && stopped.error) throw new Error(`Could not stop the WSL pw.x process: ${stopped.error.message}`);
+        try {
+          if (!job.wslDirectory) job.wslDirectory = await this.windowsPathToWsl(job.directory);
+          const stopped = await this.commandRunner(wslExecutable, wslCancelArguments({
+            distro: job.wslDistro,
+            directory: job.wslDirectory,
+          }), { timeoutMs: 10_000 });
+          if (stopped.exitCode !== 0) {
+            wslStopError = new Error(readableProcessError(stopped.stderr) || `WSL cancellation exited with code ${stopped.exitCode}.`);
+          }
+        } catch (error) {
+          wslStopError = error;
+        }
       }
       const treeTerminated = await terminateProcessTree(child);
       if (!treeTerminated) throw new Error("Windows could not confirm termination of the Quantum ESPRESSO process tree.");
+      if (wslStopError) throw new Error(`Could not stop the WSL pw.x process: ${wslStopError instanceof Error ? wslStopError.message : String(wslStopError)}`);
     } else if (job.status === "queued") {
       job.status = "cancelled";
       job.completedAt = new Date().toISOString();

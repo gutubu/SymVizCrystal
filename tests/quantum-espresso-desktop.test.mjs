@@ -5,11 +5,36 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   QuantumEspressoDesktopService,
+  decodeProcessOutput,
   discoverWslQuantumEspresso,
   detectQuantumEspressoRoot,
   listPseudopotentials,
   quantumEspressoBinaries,
+  readableProcessError,
+  normalizeStoredQeError,
+  wslCancelArguments,
+  wslLaunchArguments,
 } from "../desktop/quantum-espresso-service.mjs";
+
+test("WSL launch and cancellation enter the Linux job path inside Bash", () => {
+  const launch = wslLaunchArguments({ distro: "Ubuntu", directory: "/mnt/c/SymViz Jobs/task-1", pw: "/usr/bin/pw.x" });
+  const cancel = wslCancelArguments({ distro: "Ubuntu", directory: "/mnt/c/SymViz Jobs/task-1" });
+  assert.equal(launch.includes("--cd"), false);
+  assert.equal(cancel.includes("--cd"), false);
+  assert.equal(launch.includes("--wait"), true);
+  assert.match(launch.join(" "), /cd \"\$1\"/);
+  assert.match(launch.join(" "), /exec \"\$2\"/);
+  assert.match(cancel.join(" "), /kill -TERM/);
+});
+
+test("WSL UTF-16 diagnostics are readable and proxy-only warnings are not promoted as errors", () => {
+  const warning = "wsl: 检测到 localhost 代理配置，但未镜像到 WSL。NAT 模式下的 WSL 不支持 localhost 代理。\r\n";
+  const decoded = decodeProcessOutput(Buffer.from(warning, "utf16le"));
+  assert.equal(decoded, warning);
+  assert.equal(readableProcessError(decoded), "");
+  assert.equal(readableProcessError(`${decoded}pw.x: command not found\n`), "pw.x: command not found");
+  assert.match(normalizeStoredQeError("w\0s\0l\0:\0 l\0o\0c\0a\0l\0h\0o\0s\0t\0"), /pw\.x did not start/);
+});
 
 test("desktop Quantum ESPRESSO service discovers pw.x and SSSP through WSL", async () => {
   const root = await mkdtemp(join(tmpdir(), "symviz-qe-wsl-"));
@@ -52,8 +77,21 @@ test("desktop Quantum ESPRESSO service discovers pw.x and SSSP through WSL", asy
       name: "quartz-wsl",
       input: "&CONTROL\n calculation='scf'\n/\n",
       pseudopotentials: ["Si.pbe.UPF", "O.pbe.UPF"],
+      study: {
+        id: "study-k-1",
+        kind: "k-point",
+        label: "Quartz k-point convergence",
+        sequenceIndex: 0,
+        sequenceTotal: 3,
+        atomCount: 12,
+        kPoints: [1, 2, 3],
+        ecutwfcRy: 60,
+        ecutrhoRy: 480,
+      },
     });
     assert.equal(submitted.status, "running");
+    assert.equal(submitted.study.id, "study-k-1");
+    assert.deepEqual(submitted.study.kPoints, [1, 2, 3]);
     assert.ok(calls.some((args) => args.includes("/bin/cp")));
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -8,9 +8,10 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build",
+    "build": "node tools/build-symmetry-demo.mjs && vinext build",
+    "symmetry:build": "node tools/build-symmetry-demo.mjs",
     "start": "vinext start",
-    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/disorder-analysis.test.mjs tests/structure-formats.test.mjs tests/crystal-utilities.test.mjs tests/gaussian-tools.test.mjs tests/quantum-espresso-tools.test.mjs tests/desktop-runtime.test.mjs tests/quantum-espresso-desktop.test.mjs",
+    "test": "npm run build && node --experimental-strip-types --test tests/rendered-html.test.mjs tests/disorder-analysis.test.mjs tests/structure-formats.test.mjs tests/crystal-utilities.test.mjs tests/gaussian-tools.test.mjs tests/quantum-espresso-tools.test.mjs tests/desktop-runtime.test.mjs tests/quantum-espresso-desktop.test.mjs tests/multiwfn-desktop.test.mjs tests/symmetry-catalog.test.mjs tests/symmetry-demo-desktop.test.mjs tests/symmetry-demo-host.test.mjs tests/symmetry-viewer-math.test.mjs tests/symmetry-element-diagrams.test.mjs tests/symmetry-projection-diagrams.test.mjs tests/ferro-transition.test.mjs tests/symmetry-transition-routing.test.mjs",
     "gaussian:bridge": "node tools/gaussian-bridge.mjs",
     "desktop": "npm run build && electron .",
     "desktop:dev": "node tools/desktop-dev.mjs",
